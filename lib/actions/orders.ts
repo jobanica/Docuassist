@@ -96,8 +96,8 @@ async function computeExpectedDates(orderId: string) {
 
 /**
  * Advance an order to the next pipeline status (forward only). §4
- * NOTE: the `released → shipped` transition requires courier details and is
- * handled in Phase 4; here advancement is capped at `released`.
+ * `released → shipped` requires courier details, so it goes through
+ * markShipped(); `shipped → delivered` goes through markDelivered().
  */
 export async function advanceStatus(
   orderId: string,
@@ -118,8 +118,11 @@ export async function advanceStatus(
   if (!target) throw new Error("Order is already at the final stage.");
   if (target === "shipped") {
     throw new Error(
-      "Shipping details (courier + tracking number) are set up in Phase 4."
+      "Use “Mark as Shipped” — a courier and tracking number are required."
     );
+  }
+  if (target === "delivered") {
+    throw new Error("Use “Mark as Delivered” to record COD collection.");
   }
 
   const patch: Record<string, unknown> = { status: target };
@@ -221,6 +224,246 @@ export async function cancelOrder(
   await supabase.from("order_status_history").insert({
     order_id: orderId,
     status: "cancelled",
+    event_type: "status_change",
+    note: reason.trim(),
+    changed_by: staff.id,
+  });
+
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/orders");
+}
+
+/**
+ * released → shipped. Requires a courier and tracking number (§8). Records
+ * shipped_at and refreshes the expected delivery date from that moment.
+ */
+export async function markShipped(
+  orderId: string,
+  courierId: string,
+  trackingNumber: string,
+  note?: string
+): Promise<void> {
+  const staff = await requireStaff();
+  if (!courierId) throw new Error("Pick a courier.");
+  if (!trackingNumber.trim()) {
+    throw new Error("Enter the courier tracking number.");
+  }
+
+  const supabase = createClient();
+  const { data: order, error } = await supabase
+    .from("orders")
+    .select("status")
+    .eq("id", orderId)
+    .single();
+  if (error) throw new Error(error.message);
+  if (order.status !== "released") {
+    throw new Error("Only a released order can be marked as shipped.");
+  }
+
+  const now = new Date();
+  const { expected_delivery_date } = await computeShippingEstimate(
+    orderId,
+    now
+  );
+
+  const { error: upErr } = await supabase
+    .from("orders")
+    .update({
+      status: "shipped",
+      courier_id: courierId,
+      courier_tracking_number: trackingNumber.trim(),
+      shipped_at: now.toISOString(),
+      expected_delivery_date,
+    })
+    .eq("id", orderId);
+  if (upErr) throw new Error(upErr.message);
+
+  await supabase.from("order_status_history").insert({
+    order_id: orderId,
+    status: "shipped",
+    event_type: "status_change",
+    note: note?.trim() || null,
+    changed_by: staff.id,
+  });
+
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/orders");
+}
+
+/** Expected delivery = ship date + max(shipping_days_estimate) across items. */
+async function computeShippingEstimate(orderId: string, from: Date) {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("order_items")
+    .select("services(shipping_days_estimate)")
+    .eq("order_id", orderId);
+
+  let maxShipping = 7;
+  for (const row of (data ?? []) as any[]) {
+    const rel = row.services;
+    const svc = Array.isArray(rel) ? rel[0] : rel;
+    if (svc) maxShipping = Math.max(maxShipping, Number(svc.shipping_days_estimate));
+  }
+  return { expected_delivery_date: addDaysISO(from, maxShipping) };
+}
+
+/**
+ * Log a failed delivery attempt while shipped (§4). Increments
+ * delivery_attempts (capped at 3) and writes a failed_attempt history event.
+ */
+export async function logFailedAttempt(
+  orderId: string,
+  reason: string
+): Promise<{ attempts: number }> {
+  const staff = await requireStaff();
+  if (!reason.trim()) throw new Error("Pick or enter a reason.");
+
+  const supabase = createClient();
+  const { data: order, error } = await supabase
+    .from("orders")
+    .select("status, delivery_attempts")
+    .eq("id", orderId)
+    .single();
+  if (error) throw new Error(error.message);
+  if (order.status !== "shipped") {
+    throw new Error("Failed attempts can only be logged while shipped.");
+  }
+  if (order.delivery_attempts >= 3) {
+    throw new Error(
+      "This order already has 3 failed attempts — mark it as Returned."
+    );
+  }
+
+  const attempts = order.delivery_attempts + 1;
+  const { error: upErr } = await supabase
+    .from("orders")
+    .update({ delivery_attempts: attempts })
+    .eq("id", orderId);
+  if (upErr) throw new Error(upErr.message);
+
+  await supabase.from("order_status_history").insert({
+    order_id: orderId,
+    status: null,
+    event_type: "failed_attempt",
+    attempt_number: attempts,
+    note: reason.trim(),
+    changed_by: staff.id,
+  });
+
+  // Phase 6 wires the failed-attempt SMS nudge here (highest-priority send).
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/orders");
+  return { attempts };
+}
+
+/**
+ * shipped → delivered, with the COD outcome (§4/§11). `codCollected` marks
+ * payment_status; an uncollected delivery stays 'unpaid' for the ledger.
+ */
+export async function markDelivered(
+  orderId: string,
+  codCollected: boolean,
+  note?: string
+): Promise<void> {
+  const staff = await requireStaff();
+  const supabase = createClient();
+
+  const { data: order, error } = await supabase
+    .from("orders")
+    .select("status")
+    .eq("id", orderId)
+    .single();
+  if (error) throw new Error(error.message);
+  if (order.status !== "shipped") {
+    throw new Error("Only a shipped order can be marked as delivered.");
+  }
+
+  const { error: upErr } = await supabase
+    .from("orders")
+    .update({
+      status: "delivered",
+      delivered_at: new Date().toISOString(),
+      payment_status: codCollected ? "paid" : "unpaid",
+    })
+    .eq("id", orderId);
+  if (upErr) throw new Error(upErr.message);
+
+  await supabase.from("order_status_history").insert({
+    order_id: orderId,
+    status: "delivered",
+    event_type: "status_change",
+    note:
+      note?.trim() ||
+      (codCollected ? "COD collected" : "Delivered — COD not yet collected"),
+    changed_by: staff.id,
+  });
+
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/orders");
+}
+
+/** Toggle the COD payment status on a delivered order (§8). */
+export async function setPaymentStatus(
+  orderId: string,
+  paid: boolean
+): Promise<void> {
+  const staff = await requireStaff();
+  const supabase = createClient();
+
+  const { error } = await supabase
+    .from("orders")
+    .update({ payment_status: paid ? "paid" : "unpaid" })
+    .eq("id", orderId);
+  if (error) throw new Error(error.message);
+
+  await supabase.from("order_status_history").insert({
+    order_id: orderId,
+    status: null,
+    event_type: "status_change",
+    note: paid ? "COD marked as collected" : "COD marked as not collected",
+    changed_by: staff.id,
+  });
+
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/orders");
+}
+
+/**
+ * Mark an order returned to sender (§4). Reachable from `shipped` — normally
+ * after 3 failed attempts, but staff may return earlier (e.g. bad address).
+ * A lost sale: recorded with returned_at + reason for the §11 ledger.
+ */
+export async function markReturned(
+  orderId: string,
+  reason: string
+): Promise<void> {
+  const staff = await requireStaff();
+  if (!reason.trim()) throw new Error("A return reason is required.");
+
+  const supabase = createClient();
+  const { data: order, error } = await supabase
+    .from("orders")
+    .select("status")
+    .eq("id", orderId)
+    .single();
+  if (error) throw new Error(error.message);
+  if (order.status !== "shipped") {
+    throw new Error("Only a shipped order can be returned to sender.");
+  }
+
+  const { error: upErr } = await supabase
+    .from("orders")
+    .update({
+      status: "returned",
+      returned_at: new Date().toISOString(),
+      return_reason: reason.trim(),
+    })
+    .eq("id", orderId);
+  if (upErr) throw new Error(upErr.message);
+
+  await supabase.from("order_status_history").insert({
+    order_id: orderId,
+    status: "returned",
     event_type: "status_change",
     note: reason.trim(),
     changed_by: staff.id,

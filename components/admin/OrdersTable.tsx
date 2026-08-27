@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { peso } from "@/lib/money";
 import { fmtDate } from "@/lib/dates";
-import { aging } from "@/lib/status";
+import { aging, attemptBadgeClasses } from "@/lib/status";
 import type { OrderStatus, Service, StatusCode } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -156,6 +156,11 @@ export function OrdersTable({
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <StatusBadge code={o.status} label={o.status_label} />
+                      {o.delivery_attempts > 0 && o.status === "shipped" && (
+                        <Badge className={attemptBadgeClasses(o.delivery_attempts)}>
+                          Attempt {o.delivery_attempts}/3
+                        </Badge>
+                      )}
                       {age === "alert" && (
                         <Badge className="bg-red-100 text-red-700">Aging</Badge>
                       )}

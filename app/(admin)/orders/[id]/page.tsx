@@ -12,11 +12,13 @@ import { StatusBadge } from "@/components/admin/StatusBadge";
 import { StatusStepper } from "@/components/admin/StatusStepper";
 import { OrderActions } from "@/components/admin/OrderActions";
 import { TrackingPanel } from "@/components/admin/TrackingPanel";
+import { PaymentToggle } from "@/components/admin/PaymentToggle";
 import { qrDataUrl, trackingUrl } from "@/lib/qr";
 import { peso } from "@/lib/money";
 import { fmtDate, fmtDateTime, daysSince } from "@/lib/dates";
-import { aging } from "@/lib/status";
+import { aging, attemptBadgeClasses } from "@/lib/status";
 import type {
+  Courier,
   OrderStatus,
   OrderStatusHistory,
   FormFieldDef,
@@ -43,6 +45,7 @@ export default async function OrderDetailPage({
     .select(
       `*,
        customers (*),
+       couriers ( id, name, tracking_page_url ),
        order_items ( id, quantity, price_at_order, form_details,
                      services ( name, code, form_fields ) )`
     )
@@ -51,14 +54,20 @@ export default async function OrderDetailPage({
 
   if (!order) notFound();
 
-  const [{ data: statuses }, { data: history }] = await Promise.all([
-    supabase.from("order_statuses").select("*").order("sort_order"),
-    supabase
-      .from("order_status_history")
-      .select("*, staff_users ( name )")
-      .eq("order_id", params.id)
-      .order("created_at", { ascending: true }),
-  ]);
+  const [{ data: statuses }, { data: history }, { data: couriers }] =
+    await Promise.all([
+      supabase.from("order_statuses").select("*").order("sort_order"),
+      supabase
+        .from("order_status_history")
+        .select("*, staff_users ( name )")
+        .eq("order_id", params.id)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("couriers")
+        .select("*")
+        .eq("active", true)
+        .order("name"),
+    ]);
 
   const o = order as any;
   const cust = o.customers;
@@ -87,6 +96,15 @@ export default async function OrderDetailPage({
           {age === "alert" && (
             <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">
               {daysSince(o.status_since)}d in {statusLabel}
+            </span>
+          )}
+          {o.delivery_attempts > 0 && (
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${attemptBadgeClasses(
+                o.delivery_attempts
+              )}`}
+            >
+              Attempt {o.delivery_attempts}/3
             </span>
           )}
         </div>
@@ -127,10 +145,55 @@ export default async function OrderDetailPage({
                   orderId={o.id}
                   status={o.status}
                   statuses={statusList}
+                  couriers={(couriers ?? []) as Courier[]}
+                  deliveryAttempts={o.delivery_attempts}
+                  totalAmount={Number(o.total_amount)}
                 />
               </div>
             </CardContent>
           </Card>
+
+          {(o.courier_id || o.status === "delivered") && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Shipping &amp; payment</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {o.couriers && (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Info label="Courier" value={o.couriers.name} />
+                      <Info
+                        label="Tracking #"
+                        value={o.courier_tracking_number}
+                      />
+                      <Info label="Shipped" value={fmtDate(o.shipped_at)} />
+                      <Info label="Delivered" value={fmtDate(o.delivered_at)} />
+                    </div>
+                    {o.couriers.tracking_page_url && (
+                      <a
+                        href={o.couriers.tracking_page_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block text-xs text-primary hover:underline"
+                      >
+                        Open {o.couriers.name} tracking page ↗
+                      </a>
+                    )}
+                  </>
+                )}
+                {o.status === "delivered" && (
+                  <div className="border-t pt-3">
+                    <PaymentToggle
+                      orderId={o.id}
+                      paid={o.payment_status === "paid"}
+                      totalAmount={Number(o.total_amount)}
+                    />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>

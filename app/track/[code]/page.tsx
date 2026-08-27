@@ -8,6 +8,7 @@ import {
   clientIp,
 } from "@/lib/tracking";
 import { PublicStepper } from "@/components/track/PublicStepper";
+import { CourierTracking } from "@/components/track/CourierTracking";
 import { statusHelper, attemptNotice } from "@/lib/publicCopy";
 import { peso } from "@/lib/money";
 
@@ -139,17 +140,14 @@ export default async function TrackPage({
         </section>
       )}
 
-      {/* Courier info (interactive copy/track flow lands in Phase 4) */}
+      {/* Courier: copy the number, then open the courier's tracking page (§7).
+          Hidden entirely when no courier info was entered. */}
       {info.courier && (
-        <section className="mt-4 rounded-2xl bg-white p-4 text-sm shadow-sm">
-          <p className="text-slate-500">Courier</p>
-          <p className="font-medium text-slate-900">{info.courier.name}</p>
-          {info.courier.tracking_number && (
-            <p className="mt-1 font-mono text-slate-700">
-              {info.courier.tracking_number}
-            </p>
-          )}
-        </section>
+        <CourierTracking
+          courierName={info.courier.name}
+          trackingNumber={info.courier.tracking_number}
+          trackingPageUrl={info.courier.tracking_page_url}
+        />
       )}
 
       {/* Stepper */}

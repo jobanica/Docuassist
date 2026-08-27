@@ -67,3 +67,20 @@ export function statusBadgeClasses(code: StatusCode): string {
       return "bg-slate-100 text-slate-700";
   }
 }
+
+/** Badge styling for delivery attempts: 1/3 neutral, 2/3 amber, 3/3 red. §4 */
+export function attemptBadgeClasses(attempts: number): string {
+  if (attempts >= 3) return "bg-red-100 text-red-700";
+  if (attempts === 2) return "bg-amber-100 text-amber-800";
+  return "bg-slate-100 text-slate-700";
+}
+
+/** Common failed-delivery reasons offered to staff (§4). */
+export const FAILED_ATTEMPT_REASONS = [
+  "No one home",
+  "Wrong address",
+  "Refused / cancelled by customer",
+  "Customer unreachable",
+  "No cash for COD",
+  "Rescheduled by customer",
+];
