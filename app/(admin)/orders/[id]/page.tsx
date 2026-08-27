@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Printer } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import {
   Card,
@@ -81,12 +81,20 @@ export default async function OrderDetailPage({
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div>
-        <Link
-          href="/orders"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to orders
-        </Link>
+        <div className="flex items-center justify-between gap-3">
+          <Link
+            href="/orders"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" /> Back to orders
+          </Link>
+          <Link
+            href={`/orders/${params.id}/print`}
+            className="inline-flex items-center gap-2 rounded-lg bg-[#1e3a5f] px-3 py-2 text-sm font-medium text-white hover:bg-[#17304f]"
+          >
+            <Printer className="h-4 w-4" /> PSA forms
+          </Link>
+        </div>
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold">{cust?.full_name}</h1>
           <StatusBadge code={o.status} label={statusLabel} />

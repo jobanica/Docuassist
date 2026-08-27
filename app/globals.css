@@ -34,3 +34,40 @@
     -webkit-font-smoothing: antialiased;
   }
 }
+
+/* --- Printing the PSA application forms -----------------------------------
+   Only the .psa-sheet blocks reach the paper: the admin chrome (sidebar, nav,
+   buttons, notes) is hidden, each sheet starts on its own page, and colours
+   are forced so the black header bars and box rules actually print.        */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+  body {
+    background: #fff !important;
+  }
+  /* Collapse the app shell so the sheet isn't inset by the layout. */
+  aside,
+  header,
+  nav {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  .psa-sheet {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    break-after: page;
+    page-break-after: always;
+  }
+  .psa-sheet:last-of-type {
+    break-after: auto;
+    page-break-after: auto;
+  }
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
