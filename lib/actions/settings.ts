@@ -43,3 +43,52 @@ export async function setNotificationTemplate(
   if (error) throw new Error(error.message);
   revalidatePath("/settings/notifications");
 }
+
+/**
+ * Business branding shown on the public tracking page (§6/§7): the business
+ * name, the Messenger/Facebook link behind "Message us on Facebook", and an
+ * optional logo. Stored in app_settings, which is staff-only under RLS; the
+ * public page reads them through the whitelisted get_public_business_info RPC.
+ */
+export async function updateBusinessInfo(input: {
+  business_name: string;
+  messenger_url: string;
+  logo_url: string;
+}): Promise<void> {
+  await requireAdmin();
+
+  const name = input.business_name.trim();
+  if (!name) throw new Error("Business name cannot be empty.");
+
+  // Validate the links rather than letting a typo silently break the public
+  // page's only call-to-action.
+  for (const [label, raw] of [
+    ["Facebook / Messenger link", input.messenger_url],
+    ["Logo URL", input.logo_url],
+  ] as const) {
+    const v = raw.trim();
+    if (!v) continue;
+    let url: URL;
+    try {
+      url = new URL(v);
+    } catch {
+      throw new Error(`${label} must be a full URL starting with https://`);
+    }
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+      throw new Error(`${label} must start with https://`);
+    }
+  }
+
+  const supabase = createClient();
+  const rows = [
+    { key: "business_name", value: name },
+    { key: "messenger_url", value: input.messenger_url.trim() },
+    { key: "logo_url", value: input.logo_url.trim() },
+  ];
+  const { error } = await supabase
+    .from("app_settings")
+    .upsert(rows, { onConflict: "key" });
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/settings/business");
+}

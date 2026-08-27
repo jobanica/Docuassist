@@ -106,6 +106,6 @@ on conflict (event_key) do nothing;
 -- --- App settings -----------------------------------------------------------
 insert into app_settings (key, value) values
   ('business_name', 'DocuAssist PH'),
-  ('messenger_url', 'https://m.me/DocuAssistPH'),
+  ('messenger_url', 'https://www.facebook.com/docuassistphil'),
   ('logo_url', '')
 on conflict (key) do nothing;
