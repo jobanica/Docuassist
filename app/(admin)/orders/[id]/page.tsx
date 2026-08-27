@@ -11,6 +11,8 @@ import {
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { StatusStepper } from "@/components/admin/StatusStepper";
 import { OrderActions } from "@/components/admin/OrderActions";
+import { TrackingPanel } from "@/components/admin/TrackingPanel";
+import { qrDataUrl, trackingUrl } from "@/lib/qr";
 import { peso } from "@/lib/money";
 import { fmtDate, fmtDateTime, daysSince } from "@/lib/dates";
 import { aging } from "@/lib/status";
@@ -64,6 +66,8 @@ export default async function OrderDetailPage({
   const statusLabel =
     statusList.find((s) => s.code === o.status)?.label ?? o.status;
   const age = aging(o.status as StatusCode, o.status_since);
+  const publicUrl = trackingUrl(o.tracking_code);
+  const qr = await qrDataUrl(publicUrl);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -132,11 +136,12 @@ export default async function OrderDetailPage({
             <CardHeader>
               <CardTitle className="text-base">Tracking</CardTitle>
             </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              QR code + copy-link + public page arrive in Phase 3. Code:{" "}
-              <span className="font-mono text-foreground">
-                {o.tracking_code}
-              </span>
+            <CardContent>
+              <TrackingPanel
+                publicUrl={publicUrl}
+                qrDataUrl={qr}
+                code={o.tracking_code}
+              />
             </CardContent>
           </Card>
         </div>
