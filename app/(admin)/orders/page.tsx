@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Lock } from "lucide-react";
+import { getStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { buttonVariants } from "@/components/ui/button";
 import { OrdersTable, type OrderRow } from "@/components/admin/OrdersTable";
@@ -10,8 +11,9 @@ export const dynamic = "force-dynamic";
 export default async function OrdersPage() {
   const supabase = createClient();
 
-  const [{ data: statuses }, { data: services }, { data: orders }, { data: attempts }] =
+  const [staff, { data: statuses }, { data: services }, { data: orders }, { data: attempts }] =
     await Promise.all([
+      getStaff(),
       supabase.from("order_statuses").select("*").order("sort_order"),
       supabase.from("services").select("*").order("name"),
       supabase
@@ -77,6 +79,17 @@ export default async function OrdersPage() {
           <p className="text-sm text-muted-foreground">
             Filter, search, and track every order through the pipeline.
           </p>
+          {staff && staff.service_ids.length > 0 && (
+            <p className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2.5 py-1 text-xs text-amber-900">
+              <Lock className="h-3.5 w-3.5" />
+              Showing only{" "}
+              {(services ?? [])
+                .filter((s) => staff.service_ids.includes(s.id))
+                .map((s) => s.name)
+                .join(", ")}{" "}
+              — the documents your account covers.
+            </p>
+          )}
         </div>
         <Link href="/orders/new" className={buttonVariants()}>
           <Plus className="h-4 w-4" /> New order
@@ -86,7 +99,13 @@ export default async function OrdersPage() {
       <OrdersTable
         orders={rows}
         statuses={(statuses ?? []) as OrderStatus[]}
-        services={(services ?? []) as Service[]}
+        services={
+          staff && staff.service_ids.length > 0
+            ? ((services ?? []) as Service[]).filter((s) =>
+                staff.service_ids.includes(s.id)
+              )
+            : ((services ?? []) as Service[])
+        }
       />
     </div>
   );

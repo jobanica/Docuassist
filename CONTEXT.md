@@ -147,6 +147,14 @@ The business answers on more than one page — the VA handling TIN and PhilHealt
 - `staff_users.default_messenger_page_id` pre-selects a page per staff member, so the VA's orders carry hers without her remembering. Admins set it in **Settings → Staff accounts**.
 - Resolution is one SQL function, `resolve_messenger_page(order's page → default page → legacy setting)`, so the tracking page and the order screen can't disagree. The tracking RPC returns the resolved name + url; `messenger_pages` itself stays staff-only under RLS and anon never reaches it.
 - The button reads "Message {page name}" when a page is named, so the customer isn't surprised by which inbox opens.
+## 9c. Per-Staff Document Access
+A staff member can be limited to specific documents — e.g. the VA who only handles TIN and PhilHealth IDs has no business reading PSA birth applications, which carry parents' names, birthplaces and home addresses.
+- `staff_services (staff_id, service_id)` holds the limit. **No rows = no limit**, so every existing account keeps full access and "all documents" is a deliberate choice rather than something you fall into.
+- Enforcement is **RLS, not UI**. `staff_can_see_order()`, `staff_can_use_service()` and `staff_can_see_customer()` (SECURITY DEFINER) drive per-command policies on `orders`, `order_items`, `order_status_history`, `customers` and `notifications_log`. A limited account querying the API directly with its own token sees exactly what the app shows it.
+- Writes are scoped too: `order_items` INSERT/UPDATE is checked against `staff_can_use_service()`, so a limited account cannot encode — or convert an order into — a document it can't see.
+- Reads are scoped but inserts stay open to any staff, because intake creates a customer and an order one statement before the first item exists. Both helpers therefore treat a row with no children as visible; it stops being visible the moment its first item lands.
+- Admins are exempt (`is_admin()` short-circuits every helper), and an admin cannot limit their own account — that would blind the owner to their own business.
+- Screens follow the same scope so nothing is offered that the database would refuse: the New Order picker lists only their documents, the Orders board's service filter is narrowed, and both say plainly which documents the account covers so missing orders don't read as a bug.
 ## 10. Notifications (Semaphore SMS)
 - Provider: **Semaphore** (semaphore.co) — PH SMS gateway, API-key based, ~₱0.50/SMS.
 - Env: `SEMAPHORE_API_KEY`, `SEMAPHORE_SENDER_NAME`.

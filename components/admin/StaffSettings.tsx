@@ -11,6 +11,8 @@ import {
   RefreshCw,
   X,
   MessageCircle,
+  Lock,
+  Save,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { unwrap, type ActionResult } from "@/lib/action-result";
@@ -21,10 +23,11 @@ import {
   resetStaffPassword,
   setStaffActive,
   setStaffMessengerPage,
+  setStaffServices,
   setStaffRole,
   type StaffRow,
 } from "@/lib/actions/staff";
-import type { MessengerPage } from "@/lib/types";
+import type { MessengerPage, Service } from "@/lib/types";
 
 /** Readable password: two Filipino-ish words + 4 digits. Easy to dictate. */
 const WORDS = [
@@ -44,10 +47,12 @@ export function StaffSettings({
   staff,
   meId,
   messengerPages,
+  services,
 }: {
   staff: StaffRow[];
   meId: string;
   messengerPages: MessengerPage[];
+  services: Service[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -198,6 +203,7 @@ export function StaffSettings({
             <tr>
               <th className="px-4 py-3 font-medium">Name</th>
               <th className="px-4 py-3 font-medium">Role</th>
+              <th className="px-4 py-3 font-medium">Documents</th>
               {messengerPages.length > 1 && (
                 <th className="px-4 py-3 font-medium">Facebook page</th>
               )}
@@ -248,6 +254,15 @@ export function StaffSettings({
                       <option value="staff">Staff</option>
                       <option value="admin">Admin</option>
                     </select>
+                  </td>
+                  <td className="px-4 py-3">
+                    <ScopeCell
+                      staff={s}
+                      services={services}
+                      disabled={pending || isMe || !s.active}
+                      isMe={isMe}
+                      onSave={(ids) => run(() => setStaffServices(s.id, ids))}
+                    />
                   </td>
                   {messengerPages.length > 1 && (
                     <td className="px-4 py-3">
@@ -301,6 +316,17 @@ export function StaffSettings({
           </tbody>
         </table>
       </div>
+
+      <p className="flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>
+          Limiting someone to certain documents hides every other order,
+          customer and SMS log from them — in the database, not just on screen,
+          so it holds however they reach the data. They also can&apos;t encode
+          an order for a document they&apos;re not on. Leave it at{" "}
+          <strong>All documents</strong> for staff who handle everything.
+        </span>
+      </p>
 
       {messengerPages.length > 1 && (
       <p className="flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
@@ -502,6 +528,106 @@ function ResetPasswordDialog({
             </>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Which documents one staff member may see. Empty list = everything. */
+function ScopeCell({
+  staff,
+  services,
+  disabled,
+  isMe,
+  onSave,
+}: {
+  staff: StaffRow;
+  services: Service[];
+  disabled: boolean;
+  isMe: boolean;
+  onSave: (serviceIds: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState<string[]>(staff.service_ids);
+
+  const limited = staff.service_ids.length > 0;
+  const names = services
+    .filter((s) => staff.service_ids.includes(s.id))
+    .map((s) => s.name);
+
+  function toggle(id: string) {
+    setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  }
+
+  if (!open) {
+    return (
+      <div className="max-w-[220px]">
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => {
+            setPicked(staff.service_ids);
+            setOpen(true);
+          }}
+          title={
+            isMe ? "You can't limit your own account." : "Change what they see"
+          }
+          className="flex w-full items-center gap-1.5 rounded-md border border-input px-2 py-1.5 text-left text-sm hover:bg-accent disabled:opacity-60"
+        >
+          {limited ? (
+            <>
+              <Lock className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+              <span className="truncate">
+                {names.length} document{names.length === 1 ? "" : "s"}
+              </span>
+            </>
+          ) : (
+            <span className="text-slate-600">All documents</span>
+          )}
+        </button>
+        {limited && (
+          <p className="mt-1 truncate text-[11px] text-slate-500" title={names.join(", ")}>
+            {names.join(", ")}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-[240px] space-y-2 rounded-lg border bg-white p-2 shadow-sm">
+      <p className="text-[11px] text-slate-500">
+        Tick nothing for full access.
+      </p>
+      <div className="max-h-44 space-y-1 overflow-y-auto">
+        {services.map((s) => (
+          <label
+            key={s.id}
+            className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm hover:bg-slate-50"
+          >
+            <input
+              type="checkbox"
+              className="h-4 w-4"
+              checked={picked.includes(s.id)}
+              onChange={() => toggle(s.id)}
+            />
+            <span className="truncate">{s.name}</span>
+          </label>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          onClick={() => {
+            onSave(picked);
+            setOpen(false);
+          }}
+        >
+          <Save className="h-3.5 w-3.5" /> Save
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+          Cancel
+        </Button>
       </div>
     </div>
   );

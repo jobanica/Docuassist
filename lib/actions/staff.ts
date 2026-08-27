@@ -187,6 +187,42 @@ export async function setStaffMessengerPage(
   });
 }
 
+/**
+ * Limit a staff member to specific documents. An empty list means no limit —
+ * they see everything, which is what every account does by default.
+ *
+ * The real enforcement is RLS (migration 0018); this only writes the rows the
+ * policies read, so a stale browser tab can't see anything it shouldn't.
+ */
+export async function setStaffServices(
+  id: string,
+  serviceIds: string[]
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    const me = await requireAdmin();
+    if (id === me.id && serviceIds.length > 0) {
+      throw new Error(
+        "You can't limit your own account — you'd lose sight of the rest of the business."
+      );
+    }
+
+    const db = createAdminClient();
+    const { error: delErr } = await db
+      .from("staff_services")
+      .delete()
+      .eq("staff_id", id);
+    if (delErr) throw new Error(delErr.message);
+
+    if (serviceIds.length > 0) {
+      const { error } = await db
+        .from("staff_services")
+        .insert(serviceIds.map((service_id) => ({ staff_id: id, service_id })));
+      if (error) throw new Error(error.message);
+    }
+    revalidatePath("/settings/staff");
+  });
+}
+
 export interface StaffRow {
   id: string;
   name: string;
@@ -196,16 +232,29 @@ export interface StaffRow {
   created_at: string;
   /** Page pre-selected on orders this person creates. */
   default_messenger_page_id: string | null;
+  /** Documents this account may see. Empty = no limit. */
+  service_ids: string[];
 }
 
 export async function listStaff(): Promise<StaffRow[]> {
   await requireAdmin();
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from("staff_users")
-    .select("id, name, email, role, active, created_at, default_messenger_page_id")
-    .order("active", { ascending: false })
-    .order("created_at");
+  const [{ data, error }, { data: scopes }] = await Promise.all([
+    supabase
+      .from("staff_users")
+      .select("id, name, email, role, active, created_at, default_messenger_page_id")
+      .order("active", { ascending: false })
+      .order("created_at"),
+    supabase.from("staff_services").select("staff_id, service_id"),
+  ]);
   if (error) throw new Error(error.message);
-  return (data ?? []) as StaffRow[];
+
+  const byStaff = new Map<string, string[]>();
+  for (const r of scopes ?? []) {
+    byStaff.set(r.staff_id, [...(byStaff.get(r.staff_id) ?? []), r.service_id]);
+  }
+  return (data ?? []).map((r) => ({
+    ...r,
+    service_ids: byStaff.get(r.id) ?? [],
+  })) as StaffRow[];
 }

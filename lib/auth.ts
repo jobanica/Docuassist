@@ -9,6 +9,9 @@ export interface StaffContext {
   role: Role;
   /** Facebook page pre-selected on orders this person creates. */
   default_messenger_page_id: string | null;
+  /** Documents this account may see. Empty = no limit. RLS enforces it; this
+   *  is only so screens don't offer what the database would refuse. */
+  service_ids: string[];
 }
 
 /**
@@ -28,11 +31,14 @@ export const getStaff = cache(async (): Promise<StaffContext | null> => {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data: staff } = await supabase
-    .from("staff_users")
-    .select("name, email, role, active, default_messenger_page_id")
-    .eq("id", user.id)
-    .maybeSingle();
+  const [{ data: staff }, { data: scope }] = await Promise.all([
+    supabase
+      .from("staff_users")
+      .select("name, email, role, active, default_messenger_page_id")
+      .eq("id", user.id)
+      .maybeSingle(),
+    supabase.from("staff_services").select("service_id").eq("staff_id", user.id),
+  ]);
 
   // A deactivated account has a valid session but no access. is_staff() in the
   // database enforces the same thing, so this is the UI half of one rule.
@@ -43,6 +49,7 @@ export const getStaff = cache(async (): Promise<StaffContext | null> => {
     email: staff.email ?? user.email ?? null,
     role: staff.role as Role,
     default_messenger_page_id: staff.default_messenger_page_id ?? null,
+    service_ids: (scope ?? []).map((r) => r.service_id),
   };
 });
 

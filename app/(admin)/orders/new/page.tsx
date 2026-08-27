@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { NewOrderForm } from "@/components/admin/NewOrderForm";
 import { getStaff } from "@/lib/auth";
@@ -16,6 +16,14 @@ export default async function NewOrderPage() {
     listMessengerPages(),
   ]);
 
+  // Offer only what RLS would let them insert, so the order can't fail at the
+  // last step with a policy error.
+  const all = (services ?? []) as Service[];
+  const allowed =
+    staff && staff.service_ids.length > 0
+      ? all.filter((s) => staff.service_ids.includes(s.id))
+      : all;
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
@@ -29,9 +37,15 @@ export default async function NewOrderPage() {
         <p className="text-sm text-muted-foreground">
           Name, document, paste their reply — that&apos;s the whole intake.
         </p>
+        {staff && staff.service_ids.length > 0 && (
+          <p className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2.5 py-1 text-xs text-amber-900">
+            <Lock className="h-3.5 w-3.5" />
+            Your account covers {allowed.map((s) => s.name).join(", ")} only.
+          </p>
+        )}
       </div>
       <NewOrderForm
-        services={(services ?? []) as Service[]}
+        services={allowed}
         messengerPages={pages.filter((p) => p.active)}
         defaultPageId={
           staff?.default_messenger_page_id ??
