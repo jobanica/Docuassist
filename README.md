@@ -50,11 +50,24 @@ npm run dev
 ```
 app/(admin)/      staff area (auth-guarded): dashboard, orders, customers, settings
 app/login         staff sign-in
-app/track/[code]  public tracking page (no auth) — built in Phase 3
+app/track/[code]  public tracking page (no auth, mobile-first)
 app/api/track     public lookup route (rate-limited, whitelisted fields only)
+lib/parse/        Paste & Parse — Tier-1 rule-based + Tier-2 Anthropic fallback
+lib/sms/          Semaphore SMS (stubs without a key) + PH phone normalization
+lib/sales.ts      sales figures, all computed by query (no stored totals)
 lib/supabase      server / browser / service-role clients + session middleware
-supabase/migrations   SQL schema, RLS, tracking RPC, seed
+supabase/migrations   SQL schema, RLS, RPCs, seed
 scripts/create-staff.ts   bootstrap the first staff account
+```
+
+## Tests
+
+No test-runner dependency — both suites are plain scripts:
+
+```bash
+npm run test:parser   # Tier-1 label parsing, Taglish/typos, dates, fences (23 cases)
+npm run test:sms      # PH phone normalization + SMS template tokens (16 cases)
+npm run build         # type-checks the whole app
 ```
 
 ## Security model
@@ -63,3 +76,16 @@ scripts/create-staff.ts   bootstrap the first staff account
 - The public tracking page has **no table access** — it calls one
   `SECURITY DEFINER` RPC (`get_tracking_info`) that returns only the
   whitelisted fields from CONTEXT.md §13, behind a rate-limited route.
+  (`get_public_business_info` and `get_public_pipeline` are the only other
+  anon-executable functions; both return non-sensitive branding/labels.)
+- Sales reporting RPCs are `SECURITY INVOKER`, so RLS applies and `anon`
+  cannot execute them.
+
+## Known gaps
+
+- **Services & couriers CRUD screens** (CONTEXT.md §8.5) are not built. The
+  seeded services, prices, durations, `form_fields`, and couriers are editable
+  via SQL for now. SMS templates/toggles *do* have a settings screen.
+- Optional cost fields (`processing_cost`, `shipping_cost`) from §11 are marked
+  v1.1 in the spec and are not implemented, so the dashboard reports revenue,
+  not profit.
