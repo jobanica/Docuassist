@@ -7,10 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "create-staff": "tsx scripts/create-staff.ts"
+    "create-staff": "tsx scripts/create-staff.ts",
+    "test:parser": "tsx lib/parse/__tests__/parser.test.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.32.1",
+    "@anthropic-ai/sdk": "^0.121.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.4",
     "class-variance-authority": "^0.7.0",

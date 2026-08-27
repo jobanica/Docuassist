@@ -16,11 +16,17 @@ import {
 import { peso } from "@/lib/money";
 import { searchCustomers, createCustomer } from "@/lib/actions/customers";
 import { createOrder } from "@/lib/actions/orders";
+import { PasteParseBox } from "./PasteParseBox";
+import type { ParseResult } from "@/lib/actions/parse";
 import type { Customer, Service, FormFieldDef } from "@/lib/types";
 
 type SelectedService = {
   quantity: number;
   form_details: Record<string, string>;
+  /** keys auto-filled by Paste & Parse — highlighted until staff edits them */
+  parsedKeys: string[];
+  /** required keys the parser could not find — flagged for staff */
+  missingKeys: string[];
 };
 
 const emptyNewCustomer = {
@@ -71,7 +77,12 @@ export function NewOrderForm({ services }: { services: Service[] }) {
       if (next[svc.id]) {
         delete next[svc.id];
       } else {
-        next[svc.id] = { quantity: 1, form_details: {} };
+        next[svc.id] = {
+          quantity: 1,
+          form_details: {},
+          parsedKeys: [],
+          missingKeys: [],
+        };
       }
       return next;
     });
@@ -83,8 +94,43 @@ export function NewOrderForm({ services }: { services: Service[] }) {
       [svcId]: {
         ...prev[svcId],
         form_details: { ...prev[svcId].form_details, [key]: value },
+        // Staff has reviewed this field — drop the auto-filled highlight.
+        parsedKeys: prev[svcId].parsedKeys.filter((k) => k !== key),
+        missingKeys: value.trim()
+          ? prev[svcId].missingKeys.filter((k) => k !== key)
+          : prev[svcId].missingKeys,
       },
     }));
+  }
+
+  /**
+   * Apply a parse result into the editable form (§9) — never auto-saved.
+   * Existing typed values are preserved; only blank fields are filled.
+   */
+  function applyParse(serviceId: string, result: ParseResult) {
+    setSelected((prev) => {
+      const current = prev[serviceId];
+      if (!current) return prev;
+      const details = { ...current.form_details };
+      const newlyFilled: string[] = [];
+      for (const [key, value] of Object.entries(result.values)) {
+        if (!details[key]?.trim()) {
+          details[key] = value;
+          newlyFilled.push(key);
+        }
+      }
+      return {
+        ...prev,
+        [serviceId]: {
+          ...current,
+          form_details: details,
+          parsedKeys: Array.from(
+            new Set([...current.parsedKeys, ...newlyFilled])
+          ),
+          missingKeys: result.missingRequired,
+        },
+      };
+    });
   }
 
   function setQty(svcId: string, qty: number) {
@@ -143,13 +189,8 @@ export function NewOrderForm({ services }: { services: Service[] }) {
 
   return (
     <div className="space-y-6">
-      {/* Paste & Parse placeholder (built in Phase 5) */}
-      <Card className="border-dashed">
-        <CardContent className="py-4 text-sm text-muted-foreground">
-          📋 Paste &amp; Parse (auto-fill from a Messenger reply) arrives in
-          Phase 5. For now, encode the fields manually below.
-        </CardContent>
-      </Card>
+      {/* Paste & Parse (§9) — fills the editable form below, never auto-saves */}
+      <PasteParseBox services={chosen} onParsed={applyParse} />
 
       {/* Step 1: Customer */}
       <Card>
@@ -365,26 +406,45 @@ export function NewOrderForm({ services }: { services: Service[] }) {
                 </div>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                {(s.form_fields ?? []).map((f: FormFieldDef) => (
-                  <Field
-                    key={f.key}
-                    label={f.required ? `${f.label} *` : f.label}
-                    className={f.type === "textarea" ? "sm:col-span-2" : ""}
-                  >
-                    {f.type === "textarea" ? (
-                      <Textarea
-                        value={selected[s.id].form_details[f.key] ?? ""}
-                        onChange={(e) => setField(s.id, f.key, e.target.value)}
-                      />
-                    ) : (
-                      <Input
-                        type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
-                        value={selected[s.id].form_details[f.key] ?? ""}
-                        onChange={(e) => setField(s.id, f.key, e.target.value)}
-                      />
-                    )}
-                  </Field>
-                ))}
+                {(s.form_fields ?? []).map((f: FormFieldDef) => {
+                  const wasParsed = selected[s.id].parsedKeys.includes(f.key);
+                  const isMissing = selected[s.id].missingKeys.includes(f.key);
+                  const tone = wasParsed
+                    ? "border-amber-400 bg-amber-50"
+                    : isMissing
+                      ? "border-red-300 bg-red-50"
+                      : "";
+                  return (
+                    <Field
+                      key={f.key}
+                      label={f.required ? `${f.label} *` : f.label}
+                      hint={
+                        wasParsed
+                          ? "auto-filled — please check"
+                          : isMissing
+                            ? "not found — enter manually"
+                            : undefined
+                      }
+                      hintTone={wasParsed ? "parsed" : "missing"}
+                      className={f.type === "textarea" ? "sm:col-span-2" : ""}
+                    >
+                      {f.type === "textarea" ? (
+                        <Textarea
+                          className={tone}
+                          value={selected[s.id].form_details[f.key] ?? ""}
+                          onChange={(e) => setField(s.id, f.key, e.target.value)}
+                        />
+                      ) : (
+                        <Input
+                          className={tone}
+                          type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
+                          value={selected[s.id].form_details[f.key] ?? ""}
+                          onChange={(e) => setField(s.id, f.key, e.target.value)}
+                        />
+                      )}
+                    </Field>
+                  );
+                })}
               </div>
             </div>
           ))}
@@ -436,14 +496,29 @@ function Field({
   label,
   children,
   className,
+  hint,
+  hintTone,
 }: {
   label: string;
   children: React.ReactNode;
   className?: string;
+  hint?: string;
+  hintTone?: "parsed" | "missing";
 }) {
   return (
     <div className={`space-y-1.5 ${className ?? ""}`}>
-      <Label>{label}</Label>
+      <div className="flex items-baseline justify-between gap-2">
+        <Label>{label}</Label>
+        {hint && (
+          <span
+            className={`text-[11px] ${
+              hintTone === "missing" ? "text-red-600" : "text-amber-700"
+            }`}
+          >
+            {hint}
+          </span>
+        )}
+      </div>
       {children}
     </div>
   );
