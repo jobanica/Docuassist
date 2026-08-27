@@ -33,7 +33,10 @@ export default async function AdminLayout({
   return (
     <div className="flex min-h-screen bg-[#eef1f6]">
       {/* Sidebar */}
-      <aside className="hidden w-64 shrink-0 flex-col bg-[#1e3a5f] text-white md:flex">
+      {/* Pinned to the viewport so the nav stays put while the page scrolls.
+          h-screen + overflow-y-auto means a short window scrolls the sidebar
+          itself rather than clipping Sign out off the bottom. */}
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-y-auto bg-[#1e3a5f] text-white md:flex">
         <div className="flex flex-col items-center px-6 py-8 text-center">
           <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white/10 ring-4 ring-white/15">
             <User className="h-10 w-10 text-white/90" />
@@ -71,7 +74,7 @@ export default async function AdminLayout({
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Mobile top bar */}
-        <header className="flex items-center justify-between bg-[#1e3a5f] px-4 py-3 text-white md:hidden">
+        <header className="sticky top-0 z-20 flex items-center justify-between bg-[#1e3a5f] px-4 py-3 text-white md:hidden">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10">
               <User className="h-4 w-4" />
@@ -86,7 +89,7 @@ export default async function AdminLayout({
         </header>
 
         {/* Mobile nav strip */}
-        <nav className="flex gap-1 overflow-x-auto bg-[#17304f] px-2 py-2 md:hidden">
+        <nav className="sticky top-[52px] z-20 flex gap-1 overflow-x-auto bg-[#17304f] px-2 py-2 md:hidden">
           {items.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
