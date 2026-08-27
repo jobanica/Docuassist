@@ -38,14 +38,11 @@ export default async function NotificationSettingsPage() {
   const smsConfigured = Boolean(process.env.SEMAPHORE_API_KEY);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">SMS notifications</h1>
-        <p className="text-sm text-muted-foreground">
-          Semaphore SMS to customers. Messenger stays the primary channel — SMS
-          is the backup that doesn&apos;t need the customer to open Messenger.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <p className="text-sm text-slate-500">
+        Semaphore SMS to customers. Messenger stays the primary channel — SMS is
+        the backup that doesn&apos;t need the customer to open Messenger.
+      </p>
 
       {!smsConfigured && (
         <p className="rounded-md bg-slate-100 p-3 text-sm text-slate-700">

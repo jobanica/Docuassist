@@ -16,7 +16,7 @@ const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, adminOnly: true },
   { href: "/orders", label: "Orders", icon: Package, adminOnly: false },
   { href: "/customers", label: "Customers", icon: Users, adminOnly: false },
-  { href: "/settings/notifications", label: "Settings", icon: Settings, adminOnly: false },
+  { href: "/settings/services", label: "Settings", icon: Settings, adminOnly: false },
 ];
 
 export default async function AdminLayout({
