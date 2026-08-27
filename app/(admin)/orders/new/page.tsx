@@ -2,17 +2,19 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { NewOrderForm } from "@/components/admin/NewOrderForm";
+import { getStaff } from "@/lib/auth";
+import { listMessengerPages } from "@/lib/actions/messenger-pages";
 import type { Service } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewOrderPage() {
   const supabase = createClient();
-  const { data: services } = await supabase
-    .from("services")
-    .select("*")
-    .eq("active", true)
-    .order("name");
+  const [staff, { data: services }, pages] = await Promise.all([
+    getStaff(),
+    supabase.from("services").select("*").eq("active", true).order("name"),
+    listMessengerPages(),
+  ]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -28,7 +30,15 @@ export default async function NewOrderPage() {
           Name, document, paste their reply — that&apos;s the whole intake.
         </p>
       </div>
-      <NewOrderForm services={(services ?? []) as Service[]} />
+      <NewOrderForm
+        services={(services ?? []) as Service[]}
+        messengerPages={pages.filter((p) => p.active)}
+        defaultPageId={
+          staff?.default_messenger_page_id ??
+          pages.find((p) => p.is_default)?.id ??
+          null
+        }
+      />
     </div>
   );
 }

@@ -12,6 +12,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { unwrap, type ActionResult } from "@/lib/action-result";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -90,11 +91,11 @@ export function OrderActions({
     setPanel(panel === p ? null : p);
   }
 
-  function run(fn: () => Promise<unknown>) {
+  function run(fn: () => Promise<ActionResult<unknown>>) {
     setError(null);
     startTransition(async () => {
       try {
-        await fn();
+        unwrap(await fn());
         setPanel(null);
         setNote("");
         setReason("");

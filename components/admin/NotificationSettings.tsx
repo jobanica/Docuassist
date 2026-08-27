@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Save, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { unwrap, type ActionResult } from "@/lib/action-result";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -84,11 +85,11 @@ function EventCard({
   };
   const dirty = template.trim() !== row.template.trim();
 
-  function run(fn: () => Promise<unknown>, markSaved = false) {
+  function run(fn: () => Promise<ActionResult<unknown>>, markSaved = false) {
     setError(null);
     startTransition(async () => {
       try {
-        await fn();
+        unwrap(await fn());
         if (markSaved) {
           setSaved(true);
           setTimeout(() => setSaved(false), 1800);

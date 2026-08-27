@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Save, Copy, Check, ExternalLink, ShieldAlert, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { unwrap } from "@/lib/action-result";
 import { updatePublicOrderSettings } from "@/lib/actions/settings";
 
 export function PublicFormSettings({
@@ -30,7 +31,7 @@ export function PublicFormSettings({
     setError(null);
     startTransition(async () => {
       try {
-        await updatePublicOrderSettings(v);
+        unwrap(await updatePublicOrderSettings(v));
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
         router.refresh();

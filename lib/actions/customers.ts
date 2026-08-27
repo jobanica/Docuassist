@@ -1,5 +1,7 @@
 "use server";
 
+import { run, type ActionResult } from "@/lib/action-result";
+
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
@@ -22,35 +24,39 @@ const customerSchema = z.object({
 export type CustomerInput = z.infer<typeof customerSchema>;
 
 /** Search customers by name or phone (for the new-order "pick existing" step). */
-export async function searchCustomers(query: string): Promise<Customer[]> {
-  await requireStaff();
-  const supabase = createClient();
-  const q = query.trim();
-  let builder = supabase
-    .from("customers")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(10);
-  if (q) {
-    builder = builder.or(`full_name.ilike.%${q}%,phone.ilike.%${q}%`);
-  }
-  const { data, error } = await builder;
-  if (error) throw new Error(error.message);
-  return (data ?? []) as Customer[];
+export async function searchCustomers(query: string): Promise<ActionResult<Customer[]>> {
+  return run(async () => {
+    await requireStaff();
+    const supabase = createClient();
+    const q = query.trim();
+    let builder = supabase
+      .from("customers")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(10);
+    if (q) {
+      builder = builder.or(`full_name.ilike.%${q}%,phone.ilike.%${q}%`);
+    }
+    const { data, error } = await builder;
+    if (error) throw new Error(error.message);
+    return (data ?? []) as Customer[];
+  });
 }
 
 export async function createCustomer(
   input: CustomerInput
-): Promise<{ id: string }> {
-  await requireStaff();
-  const parsed = customerSchema.parse(input);
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("customers")
-    .insert(parsed)
-    .select("id")
-    .single();
-  if (error) throw new Error(error.message);
-  revalidatePath("/customers");
-  return { id: data.id };
+): Promise<ActionResult<{ id: string }>> {
+  return run(async () => {
+    await requireStaff();
+    const parsed = customerSchema.parse(input);
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("customers")
+      .insert(parsed)
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    revalidatePath("/customers");
+    return { id: data.id };
+  });
 }

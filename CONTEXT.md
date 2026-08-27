@@ -132,6 +132,13 @@ An order reaches the system one of two ways, and they store details differently.
 - The printable PSA forms (§12a) fill from `form_details`. Path B fills them automatically; on Path A staff fill them **on the order detail screen**, with the pasted reply displayed directly above the fields to copy from. The print screen warns when an item's fields are still empty rather than silently printing a blank form.
 - Both `pasted_details` and `form_details` stay editable on the order after creation.
 - No AI parsing, no `ANTHROPIC_API_KEY`, no per-parse token cost.
+## 9a. Facebook Pages on the Tracking Link
+The business answers on more than one page — the VA handling TIN and PhilHealth IDs runs her own — so one global Messenger link would send those customers to staff who can't help them.
+- `messenger_pages` (name + url, one `is_default`) is the source of truth; the old single `app_settings.messenger_url` is only a legacy fallback. Admins manage the list in **Settings → Business info**.
+- `orders.messenger_page_id` decides which page a tracking link's "Message us" button opens. Whoever encodes the order picks it, and it stays changeable on the order afterwards.
+- `staff_users.default_messenger_page_id` pre-selects a page per staff member, so the VA's orders carry hers without her remembering. Admins set it in **Settings → Staff accounts**.
+- Resolution is one SQL function, `resolve_messenger_page(order's page → default page → legacy setting)`, so the tracking page and the order screen can't disagree. The tracking RPC returns the resolved name + url; `messenger_pages` itself stays staff-only under RLS and anon never reaches it.
+- The button reads "Message {page name}" when a page is named, so the customer isn't surprised by which inbox opens.
 ## 10. Notifications (Semaphore SMS)
 - Provider: **Semaphore** (semaphore.co) — PH SMS gateway, API-key based, ~₱0.50/SMS.
 - Env: `SEMAPHORE_API_KEY`, `SEMAPHORE_SENDER_NAME`.

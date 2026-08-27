@@ -10,17 +10,21 @@ import {
   ShieldCheck,
   RefreshCw,
   X,
+  MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { unwrap, type ActionResult } from "@/lib/action-result";
 import { Input } from "@/components/ui/input";
 import { fmtDate } from "@/lib/dates";
 import {
   createStaffAccount,
   resetStaffPassword,
   setStaffActive,
+  setStaffMessengerPage,
   setStaffRole,
   type StaffRow,
 } from "@/lib/actions/staff";
+import type { MessengerPage } from "@/lib/types";
 
 /** Readable password: two Filipino-ish words + 4 digits. Easy to dictate. */
 const WORDS = [
@@ -39,9 +43,11 @@ function generatePassword() {
 export function StaffSettings({
   staff,
   meId,
+  messengerPages,
 }: {
   staff: StaffRow[];
   meId: string;
+  messengerPages: MessengerPage[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -61,11 +67,11 @@ export function StaffSettings({
     role: "staff" as "admin" | "staff",
   });
 
-  function run(fn: () => Promise<void>, after?: () => void) {
+  function run(fn: () => Promise<ActionResult<unknown>>, after?: () => void) {
     setError(null);
     startTransition(async () => {
       try {
-        await fn();
+        unwrap(await fn());
         after?.();
         router.refresh();
       } catch (e) {
@@ -192,6 +198,9 @@ export function StaffSettings({
             <tr>
               <th className="px-4 py-3 font-medium">Name</th>
               <th className="px-4 py-3 font-medium">Role</th>
+              {messengerPages.length > 1 && (
+                <th className="px-4 py-3 font-medium">Facebook page</th>
+              )}
               <th className="px-4 py-3 font-medium">Added</th>
               <th className="px-4 py-3 font-medium text-right">Actions</th>
             </tr>
@@ -240,6 +249,27 @@ export function StaffSettings({
                       <option value="admin">Admin</option>
                     </select>
                   </td>
+                  {messengerPages.length > 1 && (
+                    <td className="px-4 py-3">
+                      <select
+                        className="h-9 max-w-[190px] rounded-md border border-input bg-background px-2 text-sm disabled:opacity-60"
+                        value={s.default_messenger_page_id ?? ""}
+                        disabled={pending || !s.active}
+                        onChange={(e) =>
+                          run(() =>
+                            setStaffMessengerPage(s.id, e.target.value || null)
+                          )
+                        }
+                      >
+                        <option value="">Business default</option>
+                        {messengerPages.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                  )}
                   <td className="px-4 py-3 text-slate-500">
                     {fmtDate(s.created_at)}
                   </td>
@@ -271,6 +301,17 @@ export function StaffSettings({
           </tbody>
         </table>
       </div>
+
+      {messengerPages.length > 1 && (
+      <p className="flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+        <MessageCircle className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>
+          The Facebook page is what new orders this person encodes will point
+          their tracking link at — so the VA on a separate page doesn&apos;t
+          have to switch it every time. It stays changeable per order.
+        </span>
+      </p>
+      )}
 
       <p className="flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
         <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />

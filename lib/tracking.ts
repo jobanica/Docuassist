@@ -26,6 +26,8 @@ export interface TrackingInfo {
   delivered_at: string | null;
   returned_at: string | null;
   return_reason: string | null;
+  /** The Facebook page this order's customer should message. */
+  messenger: { name: string; url: string } | null;
   history: {
     status: StatusCode | null;
     label: string | null;

@@ -1,5 +1,7 @@
 "use server";
 
+import { run, type ActionResult } from "@/lib/action-result";
+
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireStaff } from "@/lib/auth";
@@ -17,31 +19,35 @@ async function requireAdmin() {
 export async function setNotificationEnabled(
   eventKey: string,
   enabled: boolean
-): Promise<void> {
-  await requireAdmin();
-  const supabase = createClient();
-  const { error } = await supabase
-    .from("notification_settings")
-    .update({ enabled })
-    .eq("event_key", eventKey);
-  if (error) throw new Error(error.message);
-  revalidatePath("/settings/notifications");
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    await requireAdmin();
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("notification_settings")
+      .update({ enabled })
+      .eq("event_key", eventKey);
+    if (error) throw new Error(error.message);
+    revalidatePath("/settings/notifications");
+  });
 }
 
 /** Edit an SMS template (§10) — templates live in the DB, not in components. */
 export async function setNotificationTemplate(
   eventKey: string,
   template: string
-): Promise<void> {
-  await requireAdmin();
-  if (!template.trim()) throw new Error("The template cannot be empty.");
-  const supabase = createClient();
-  const { error } = await supabase
-    .from("notification_settings")
-    .update({ template: template.trim() })
-    .eq("event_key", eventKey);
-  if (error) throw new Error(error.message);
-  revalidatePath("/settings/notifications");
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    await requireAdmin();
+    if (!template.trim()) throw new Error("The template cannot be empty.");
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("notification_settings")
+      .update({ template: template.trim() })
+      .eq("event_key", eventKey);
+    if (error) throw new Error(error.message);
+    revalidatePath("/settings/notifications");
+  });
 }
 
 /**
@@ -52,45 +58,42 @@ export async function setNotificationTemplate(
  */
 export async function updateBusinessInfo(input: {
   business_name: string;
-  messenger_url: string;
   logo_url: string;
-}): Promise<void> {
-  await requireAdmin();
+}): Promise<ActionResult<void>> {
+  return run(async () => {
+    await requireAdmin();
 
-  const name = input.business_name.trim();
-  if (!name) throw new Error("Business name cannot be empty.");
+    const name = input.business_name.trim();
+    if (!name) throw new Error("Business name cannot be empty.");
 
-  // Validate the links rather than letting a typo silently break the public
-  // page's only call-to-action.
-  for (const [label, raw] of [
-    ["Facebook / Messenger link", input.messenger_url],
-    ["Logo URL", input.logo_url],
-  ] as const) {
-    const v = raw.trim();
-    if (!v) continue;
-    let url: URL;
-    try {
-      url = new URL(v);
-    } catch {
-      throw new Error(`${label} must be a full URL starting with https://`);
+    // Validate the links rather than letting a typo silently break the public
+    // page's only call-to-action.
+    for (const [label, raw] of [["Logo URL", input.logo_url]] as const) {
+      const v = raw.trim();
+      if (!v) continue;
+      let url: URL;
+      try {
+        url = new URL(v);
+      } catch {
+        throw new Error(`${label} must be a full URL starting with https://`);
+      }
+      if (url.protocol !== "https:" && url.protocol !== "http:") {
+        throw new Error(`${label} must start with https://`);
+      }
     }
-    if (url.protocol !== "https:" && url.protocol !== "http:") {
-      throw new Error(`${label} must start with https://`);
-    }
-  }
 
-  const supabase = createClient();
-  const rows = [
-    { key: "business_name", value: name },
-    { key: "messenger_url", value: input.messenger_url.trim() },
-    { key: "logo_url", value: input.logo_url.trim() },
-  ];
-  const { error } = await supabase
-    .from("app_settings")
-    .upsert(rows, { onConflict: "key" });
-  if (error) throw new Error(error.message);
+    const supabase = createClient();
+    const rows = [
+      { key: "business_name", value: name },
+      { key: "logo_url", value: input.logo_url.trim() },
+    ];
+    const { error } = await supabase
+      .from("app_settings")
+      .upsert(rows, { onConflict: "key" });
+    if (error) throw new Error(error.message);
 
-  revalidatePath("/settings/business");
+    revalidatePath("/settings/business");
+  });
 }
 
 /**
@@ -101,17 +104,19 @@ export async function updateBusinessInfo(input: {
 export async function updatePublicOrderSettings(input: {
   public_orders_enabled: boolean;
   otp_required: boolean;
-}): Promise<void> {
-  await requireAdmin();
-  const supabase = createClient();
-  const { error } = await supabase.from("app_settings").upsert(
-    [
-      { key: "public_orders_enabled", value: String(input.public_orders_enabled) },
-      { key: "otp_required", value: String(input.otp_required) },
-    ],
-    { onConflict: "key" }
-  );
-  if (error) throw new Error(error.message);
-  revalidatePath("/settings/public-form");
-  revalidatePath("/order");
+}): Promise<ActionResult<void>> {
+  return run(async () => {
+    await requireAdmin();
+    const supabase = createClient();
+    const { error } = await supabase.from("app_settings").upsert(
+      [
+        { key: "public_orders_enabled", value: String(input.public_orders_enabled) },
+        { key: "otp_required", value: String(input.otp_required) },
+      ],
+      { onConflict: "key" }
+    );
+    if (error) throw new Error(error.message);
+    revalidatePath("/settings/public-form");
+    revalidatePath("/order");
+  });
 }

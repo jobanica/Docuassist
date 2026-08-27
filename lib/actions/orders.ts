@@ -1,5 +1,7 @@
 "use server";
 
+import { run, type ActionResult } from "@/lib/action-result";
+
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
@@ -23,6 +25,9 @@ const orderItemSchema = z.object({
 const createOrderSchema = z.object({
   customer_id: z.string().uuid(),
   initial_status: z.enum(["new_inquiry", "details_received"]),
+  /** Facebook page the tracking link points at. Null falls back to the
+   *  business default when the page is rendered. */
+  messenger_page_id: z.string().uuid().nullable().default(null),
   items: z.array(orderItemSchema).min(1, "Add at least one service"),
 });
 
@@ -30,47 +35,53 @@ export type CreateOrderInput = z.input<typeof createOrderSchema>;
 
 export async function createOrder(
   input: CreateOrderInput
-): Promise<{ id: string }> {
-  const staff = await requireStaff();
-  const parsed = createOrderSchema.parse(input);
-  const supabase = createClient();
+): Promise<ActionResult<{ id: string }>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    const parsed = createOrderSchema.parse(input);
+    const supabase = createClient();
 
-  const { data: order, error: orderErr } = await supabase
-    .from("orders")
-    .insert({
-      customer_id: parsed.customer_id,
-      status: parsed.initial_status,
-    })
-    .select("id")
-    .single();
-  if (orderErr) throw new Error(orderErr.message);
+    const { data: order, error: orderErr } = await supabase
+      .from("orders")
+      .insert({
+        customer_id: parsed.customer_id,
+        status: parsed.initial_status,
+        // Falls back to whichever page this staff member answers on, so the VA
+        // running a separate page doesn't have to remember to switch it.
+        messenger_page_id:
+          parsed.messenger_page_id ?? staff.default_messenger_page_id,
+      })
+      .select("id")
+      .single();
+    if (orderErr) throw new Error(orderErr.message);
 
-  const { error: itemsErr } = await supabase.from("order_items").insert(
-    parsed.items.map((it) => ({
+    const { error: itemsErr } = await supabase.from("order_items").insert(
+      parsed.items.map((it) => ({
+        order_id: order.id,
+        service_id: it.service_id,
+        quantity: it.quantity,
+        price_at_order: it.price_at_order,
+        form_details: it.form_details,
+        pasted_details: it.pasted_details.trim() || null,
+      }))
+    );
+    if (itemsErr) throw new Error(itemsErr.message);
+
+    await supabase.from("order_status_history").insert({
       order_id: order.id,
-      service_id: it.service_id,
-      quantity: it.quantity,
-      price_at_order: it.price_at_order,
-      form_details: it.form_details,
-      pasted_details: it.pasted_details.trim() || null,
-    }))
-  );
-  if (itemsErr) throw new Error(itemsErr.message);
+      status: parsed.initial_status,
+      event_type: "status_change",
+      note: "Order encoded",
+      changed_by: staff.id,
+    });
 
-  await supabase.from("order_status_history").insert({
-    order_id: order.id,
-    status: parsed.initial_status,
-    event_type: "status_change",
-    note: "Order encoded",
-    changed_by: staff.id,
+    if (parsed.initial_status === "details_received") {
+      await notifyOrder("details_received", order.id);
+    }
+
+    revalidatePath("/orders");
+    return { id: order.id };
   });
-
-  if (parsed.initial_status === "details_received") {
-    await notifyOrder("details_received", order.id);
-  }
-
-  revalidatePath("/orders");
-  return { id: order.id };
 }
 
 /**
@@ -112,55 +123,57 @@ async function computeExpectedDates(orderId: string) {
 export async function advanceStatus(
   orderId: string,
   note?: string
-): Promise<{ status: StatusCode }> {
-  const staff = await requireStaff();
-  const supabase = createClient();
+): Promise<ActionResult<{ status: StatusCode }>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    const supabase = createClient();
 
-  const { data: order, error } = await supabase
-    .from("orders")
-    .select("status")
-    .eq("id", orderId)
-    .single();
-  if (error) throw new Error(error.message);
+    const { data: order, error } = await supabase
+      .from("orders")
+      .select("status")
+      .eq("id", orderId)
+      .single();
+    if (error) throw new Error(error.message);
 
-  const current = order.status as StatusCode;
-  const target = nextStatus(current);
-  if (!target) throw new Error("Order is already at the final stage.");
-  if (target === "shipped") {
-    throw new Error(
-      "Use “Mark as Shipped” — a courier and tracking number are required."
-    );
-  }
-  if (target === "delivered") {
-    throw new Error("Use “Mark as Delivered” to record COD collection.");
-  }
+    const current = order.status as StatusCode;
+    const target = nextStatus(current);
+    if (!target) throw new Error("Order is already at the final stage.");
+    if (target === "shipped") {
+      throw new Error(
+        "Use “Mark as Shipped” — a courier and tracking number are required."
+      );
+    }
+    if (target === "delivered") {
+      throw new Error("Use “Mark as Delivered” to record COD collection.");
+    }
 
-  const patch: Record<string, unknown> = { status: target };
-  if (target === "processing") {
-    Object.assign(patch, await computeExpectedDates(orderId));
-  }
+    const patch: Record<string, unknown> = { status: target };
+    if (target === "processing") {
+      Object.assign(patch, await computeExpectedDates(orderId));
+    }
 
-  const { error: upErr } = await supabase
-    .from("orders")
-    .update(patch)
-    .eq("id", orderId);
-  if (upErr) throw new Error(upErr.message);
+    const { error: upErr } = await supabase
+      .from("orders")
+      .update(patch)
+      .eq("id", orderId);
+    if (upErr) throw new Error(upErr.message);
 
-  await supabase.from("order_status_history").insert({
-    order_id: orderId,
-    status: target,
-    event_type: "status_change",
-    note: note?.trim() || null,
-    changed_by: staff.id,
+    await supabase.from("order_status_history").insert({
+      order_id: orderId,
+      status: target,
+      event_type: "status_change",
+      note: note?.trim() || null,
+      changed_by: staff.id,
+    });
+
+    if (target === "details_received") {
+      await notifyOrder("details_received", orderId);
+    }
+
+    revalidatePath(`/orders/${orderId}`);
+    revalidatePath("/orders");
+    return { status: target };
   });
-
-  if (target === "details_received") {
-    await notifyOrder("details_received", orderId);
-  }
-
-  revalidatePath(`/orders/${orderId}`);
-  revalidatePath("/orders");
-  return { status: target };
 }
 
 /** Admin correction: move an order backward to an earlier stage with a reason. §4 */
@@ -168,83 +181,87 @@ export async function correctStatusBackward(
   orderId: string,
   targetStatus: StatusCode,
   reason: string
-): Promise<void> {
-  const staff = await requireStaff();
-  if (!reason.trim()) throw new Error("A reason is required for corrections.");
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    if (!reason.trim()) throw new Error("A reason is required for corrections.");
 
-  const supabase = createClient();
-  const { data: order, error } = await supabase
-    .from("orders")
-    .select("status")
-    .eq("id", orderId)
-    .single();
-  if (error) throw new Error(error.message);
+    const supabase = createClient();
+    const { data: order, error } = await supabase
+      .from("orders")
+      .select("status")
+      .eq("id", orderId)
+      .single();
+    if (error) throw new Error(error.message);
 
-  const current = order.status as StatusCode;
-  const ci = PIPELINE.indexOf(current);
-  const ti = PIPELINE.indexOf(targetStatus);
-  if (ti === -1 || ci === -1 || ti >= ci) {
-    throw new Error("Backward correction must target an earlier stage.");
-  }
+    const current = order.status as StatusCode;
+    const ci = PIPELINE.indexOf(current);
+    const ti = PIPELINE.indexOf(targetStatus);
+    if (ti === -1 || ci === -1 || ti >= ci) {
+      throw new Error("Backward correction must target an earlier stage.");
+    }
 
-  const { error: upErr } = await supabase
-    .from("orders")
-    .update({ status: targetStatus })
-    .eq("id", orderId);
-  if (upErr) throw new Error(upErr.message);
+    const { error: upErr } = await supabase
+      .from("orders")
+      .update({ status: targetStatus })
+      .eq("id", orderId);
+    if (upErr) throw new Error(upErr.message);
 
-  await supabase.from("order_status_history").insert({
-    order_id: orderId,
-    status: targetStatus,
-    event_type: "backward_correction",
-    note: reason.trim(),
-    changed_by: staff.id,
+    await supabase.from("order_status_history").insert({
+      order_id: orderId,
+      status: targetStatus,
+      event_type: "backward_correction",
+      note: reason.trim(),
+      changed_by: staff.id,
+    });
+
+    revalidatePath(`/orders/${orderId}`);
+    revalidatePath("/orders");
   });
-
-  revalidatePath(`/orders/${orderId}`);
-  revalidatePath("/orders");
 }
 
 /** Cancel an order (reachable before shipped) with a required reason. §4 */
 export async function cancelOrder(
   orderId: string,
   reason: string
-): Promise<void> {
-  const staff = await requireStaff();
-  if (!reason.trim()) throw new Error("A cancellation reason is required.");
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    if (!reason.trim()) throw new Error("A cancellation reason is required.");
 
-  const supabase = createClient();
-  const { data: order, error } = await supabase
-    .from("orders")
-    .select("status")
-    .eq("id", orderId)
-    .single();
-  if (error) throw new Error(error.message);
+    const supabase = createClient();
+    const { data: order, error } = await supabase
+      .from("orders")
+      .select("status")
+      .eq("id", orderId)
+      .single();
+    if (error) throw new Error(error.message);
 
-  if (!canCancel(order.status as StatusCode)) {
-    throw new Error("This order can no longer be cancelled.");
-  }
+    if (!canCancel(order.status as StatusCode)) {
+      throw new Error("This order can no longer be cancelled.");
+    }
 
-  const { error: upErr } = await supabase
-    .from("orders")
-    .update({
+    const { error: upErr } = await supabase
+      .from("orders")
+      .update({
+        status: "cancelled",
+        cancelled_at: new Date().toISOString(),
+        cancel_reason: reason.trim(),
+      })
+      .eq("id", orderId);
+    if (upErr) throw new Error(upErr.message);
+
+    await supabase.from("order_status_history").insert({
+      order_id: orderId,
       status: "cancelled",
-      cancelled_at: new Date().toISOString(),
-      cancel_reason: reason.trim(),
-    })
-    .eq("id", orderId);
-  if (upErr) throw new Error(upErr.message);
+      event_type: "status_change",
+      note: reason.trim(),
+      changed_by: staff.id,
+    });
 
-  await supabase.from("order_status_history").insert({
-    order_id: orderId,
-    status: "cancelled",
-    event_type: "status_change",
-    note: reason.trim(),
-    changed_by: staff.id,
+    revalidatePath(`/orders/${orderId}`);
+    revalidatePath("/orders");
   });
-
-  revalidatePath(`/orders/${orderId}`);
-  revalidatePath("/orders");
 }
 
 /**
@@ -256,54 +273,56 @@ export async function markShipped(
   courierId: string,
   trackingNumber: string,
   note?: string
-): Promise<void> {
-  const staff = await requireStaff();
-  if (!courierId) throw new Error("Pick a courier.");
-  if (!trackingNumber.trim()) {
-    throw new Error("Enter the courier tracking number.");
-  }
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    if (!courierId) throw new Error("Pick a courier.");
+    if (!trackingNumber.trim()) {
+      throw new Error("Enter the courier tracking number.");
+    }
 
-  const supabase = createClient();
-  const { data: order, error } = await supabase
-    .from("orders")
-    .select("status")
-    .eq("id", orderId)
-    .single();
-  if (error) throw new Error(error.message);
-  if (order.status !== "released") {
-    throw new Error("Only a released order can be marked as shipped.");
-  }
+    const supabase = createClient();
+    const { data: order, error } = await supabase
+      .from("orders")
+      .select("status")
+      .eq("id", orderId)
+      .single();
+    if (error) throw new Error(error.message);
+    if (order.status !== "released") {
+      throw new Error("Only a released order can be marked as shipped.");
+    }
 
-  const now = new Date();
-  const { expected_delivery_date } = await computeShippingEstimate(
-    orderId,
-    now
-  );
+    const now = new Date();
+    const { expected_delivery_date } = await computeShippingEstimate(
+      orderId,
+      now
+    );
 
-  const { error: upErr } = await supabase
-    .from("orders")
-    .update({
+    const { error: upErr } = await supabase
+      .from("orders")
+      .update({
+        status: "shipped",
+        courier_id: courierId,
+        courier_tracking_number: trackingNumber.trim(),
+        shipped_at: now.toISOString(),
+        expected_delivery_date,
+      })
+      .eq("id", orderId);
+    if (upErr) throw new Error(upErr.message);
+
+    await supabase.from("order_status_history").insert({
+      order_id: orderId,
       status: "shipped",
-      courier_id: courierId,
-      courier_tracking_number: trackingNumber.trim(),
-      shipped_at: now.toISOString(),
-      expected_delivery_date,
-    })
-    .eq("id", orderId);
-  if (upErr) throw new Error(upErr.message);
+      event_type: "status_change",
+      note: note?.trim() || null,
+      changed_by: staff.id,
+    });
 
-  await supabase.from("order_status_history").insert({
-    order_id: orderId,
-    status: "shipped",
-    event_type: "status_change",
-    note: note?.trim() || null,
-    changed_by: staff.id,
+    await notifyOrder("shipped", orderId);
+
+    revalidatePath(`/orders/${orderId}`);
+    revalidatePath("/orders");
   });
-
-  await notifyOrder("shipped", orderId);
-
-  revalidatePath(`/orders/${orderId}`);
-  revalidatePath("/orders");
 }
 
 /** Expected delivery = ship date + max(shipping_days_estimate) across items. */
@@ -330,49 +349,51 @@ async function computeShippingEstimate(orderId: string, from: Date) {
 export async function logFailedAttempt(
   orderId: string,
   reason: string
-): Promise<{ attempts: number }> {
-  const staff = await requireStaff();
-  if (!reason.trim()) throw new Error("Pick or enter a reason.");
+): Promise<ActionResult<{ attempts: number }>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    if (!reason.trim()) throw new Error("Pick or enter a reason.");
 
-  const supabase = createClient();
-  const { data: order, error } = await supabase
-    .from("orders")
-    .select("status, delivery_attempts")
-    .eq("id", orderId)
-    .single();
-  if (error) throw new Error(error.message);
-  if (order.status !== "shipped") {
-    throw new Error("Failed attempts can only be logged while shipped.");
-  }
-  if (order.delivery_attempts >= 3) {
-    throw new Error(
-      "This order already has 3 failed attempts — mark it as Returned."
-    );
-  }
+    const supabase = createClient();
+    const { data: order, error } = await supabase
+      .from("orders")
+      .select("status, delivery_attempts")
+      .eq("id", orderId)
+      .single();
+    if (error) throw new Error(error.message);
+    if (order.status !== "shipped") {
+      throw new Error("Failed attempts can only be logged while shipped.");
+    }
+    if (order.delivery_attempts >= 3) {
+      throw new Error(
+        "This order already has 3 failed attempts — mark it as Returned."
+      );
+    }
 
-  const attempts = order.delivery_attempts + 1;
-  const { error: upErr } = await supabase
-    .from("orders")
-    .update({ delivery_attempts: attempts })
-    .eq("id", orderId);
-  if (upErr) throw new Error(upErr.message);
+    const attempts = order.delivery_attempts + 1;
+    const { error: upErr } = await supabase
+      .from("orders")
+      .update({ delivery_attempts: attempts })
+      .eq("id", orderId);
+    if (upErr) throw new Error(upErr.message);
 
-  await supabase.from("order_status_history").insert({
-    order_id: orderId,
-    status: null,
-    event_type: "failed_attempt",
-    attempt_number: attempts,
-    note: reason.trim(),
-    changed_by: staff.id,
+    await supabase.from("order_status_history").insert({
+      order_id: orderId,
+      status: null,
+      event_type: "failed_attempt",
+      attempt_number: attempts,
+      note: reason.trim(),
+      changed_by: staff.id,
+    });
+
+    // Highest-priority send in the system: every recovered attempt is a saved
+    // sale, so this template defaults to enabled (§10).
+    await notifyOrder("failed_attempt", orderId, { attempt: attempts });
+
+    revalidatePath(`/orders/${orderId}`);
+    revalidatePath("/orders");
+    return { attempts };
   });
-
-  // Highest-priority send in the system: every recovered attempt is a saved
-  // sale, so this template defaults to enabled (§10).
-  await notifyOrder("failed_attempt", orderId, { attempt: attempts });
-
-  revalidatePath(`/orders/${orderId}`);
-  revalidatePath("/orders");
-  return { attempts };
 }
 
 /**
@@ -383,70 +404,74 @@ export async function markDelivered(
   orderId: string,
   codCollected: boolean,
   note?: string
-): Promise<void> {
-  const staff = await requireStaff();
-  const supabase = createClient();
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    const supabase = createClient();
 
-  const { data: order, error } = await supabase
-    .from("orders")
-    .select("status")
-    .eq("id", orderId)
-    .single();
-  if (error) throw new Error(error.message);
-  if (order.status !== "shipped") {
-    throw new Error("Only a shipped order can be marked as delivered.");
-  }
+    const { data: order, error } = await supabase
+      .from("orders")
+      .select("status")
+      .eq("id", orderId)
+      .single();
+    if (error) throw new Error(error.message);
+    if (order.status !== "shipped") {
+      throw new Error("Only a shipped order can be marked as delivered.");
+    }
 
-  const { error: upErr } = await supabase
-    .from("orders")
-    .update({
+    const { error: upErr } = await supabase
+      .from("orders")
+      .update({
+        status: "delivered",
+        delivered_at: new Date().toISOString(),
+        payment_status: codCollected ? "paid" : "unpaid",
+      })
+      .eq("id", orderId);
+    if (upErr) throw new Error(upErr.message);
+
+    await supabase.from("order_status_history").insert({
+      order_id: orderId,
       status: "delivered",
-      delivered_at: new Date().toISOString(),
-      payment_status: codCollected ? "paid" : "unpaid",
-    })
-    .eq("id", orderId);
-  if (upErr) throw new Error(upErr.message);
+      event_type: "status_change",
+      note:
+        note?.trim() ||
+        (codCollected ? "COD collected" : "Delivered — COD not yet collected"),
+      changed_by: staff.id,
+    });
 
-  await supabase.from("order_status_history").insert({
-    order_id: orderId,
-    status: "delivered",
-    event_type: "status_change",
-    note:
-      note?.trim() ||
-      (codCollected ? "COD collected" : "Delivered — COD not yet collected"),
-    changed_by: staff.id,
+    await notifyOrder("delivered", orderId);
+
+    revalidatePath(`/orders/${orderId}`);
+    revalidatePath("/orders");
   });
-
-  await notifyOrder("delivered", orderId);
-
-  revalidatePath(`/orders/${orderId}`);
-  revalidatePath("/orders");
 }
 
 /** Toggle the COD payment status on a delivered order (§8). */
 export async function setPaymentStatus(
   orderId: string,
   paid: boolean
-): Promise<void> {
-  const staff = await requireStaff();
-  const supabase = createClient();
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    const supabase = createClient();
 
-  const { error } = await supabase
-    .from("orders")
-    .update({ payment_status: paid ? "paid" : "unpaid" })
-    .eq("id", orderId);
-  if (error) throw new Error(error.message);
+    const { error } = await supabase
+      .from("orders")
+      .update({ payment_status: paid ? "paid" : "unpaid" })
+      .eq("id", orderId);
+    if (error) throw new Error(error.message);
 
-  await supabase.from("order_status_history").insert({
-    order_id: orderId,
-    status: null,
-    event_type: "status_change",
-    note: paid ? "COD marked as collected" : "COD marked as not collected",
-    changed_by: staff.id,
+    await supabase.from("order_status_history").insert({
+      order_id: orderId,
+      status: null,
+      event_type: "status_change",
+      note: paid ? "COD marked as collected" : "COD marked as not collected",
+      changed_by: staff.id,
+    });
+
+    revalidatePath(`/orders/${orderId}`);
+    revalidatePath("/orders");
   });
-
-  revalidatePath(`/orders/${orderId}`);
-  revalidatePath("/orders");
 }
 
 /**
@@ -457,41 +482,43 @@ export async function setPaymentStatus(
 export async function markReturned(
   orderId: string,
   reason: string
-): Promise<void> {
-  const staff = await requireStaff();
-  if (!reason.trim()) throw new Error("A return reason is required.");
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    if (!reason.trim()) throw new Error("A return reason is required.");
 
-  const supabase = createClient();
-  const { data: order, error } = await supabase
-    .from("orders")
-    .select("status")
-    .eq("id", orderId)
-    .single();
-  if (error) throw new Error(error.message);
-  if (order.status !== "shipped") {
-    throw new Error("Only a shipped order can be returned to sender.");
-  }
+    const supabase = createClient();
+    const { data: order, error } = await supabase
+      .from("orders")
+      .select("status")
+      .eq("id", orderId)
+      .single();
+    if (error) throw new Error(error.message);
+    if (order.status !== "shipped") {
+      throw new Error("Only a shipped order can be returned to sender.");
+    }
 
-  const { error: upErr } = await supabase
-    .from("orders")
-    .update({
+    const { error: upErr } = await supabase
+      .from("orders")
+      .update({
+        status: "returned",
+        returned_at: new Date().toISOString(),
+        return_reason: reason.trim(),
+      })
+      .eq("id", orderId);
+    if (upErr) throw new Error(upErr.message);
+
+    await supabase.from("order_status_history").insert({
+      order_id: orderId,
       status: "returned",
-      returned_at: new Date().toISOString(),
-      return_reason: reason.trim(),
-    })
-    .eq("id", orderId);
-  if (upErr) throw new Error(upErr.message);
+      event_type: "status_change",
+      note: reason.trim(),
+      changed_by: staff.id,
+    });
 
-  await supabase.from("order_status_history").insert({
-    order_id: orderId,
-    status: "returned",
-    event_type: "status_change",
-    note: reason.trim(),
-    changed_by: staff.id,
+    revalidatePath(`/orders/${orderId}`);
+    revalidatePath("/orders");
   });
-
-  revalidatePath(`/orders/${orderId}`);
-  revalidatePath("/orders");
 }
 
 /**
@@ -504,50 +531,52 @@ export async function markReturned(
 export async function updateOrderItemDetails(
   itemId: string,
   input: { form_details?: Record<string, string>; pasted_details?: string }
-): Promise<void> {
-  await requireStaff();
-  const parsed = z
-    .object({
-      form_details: z.record(z.string(), z.string()).optional(),
-      pasted_details: z.string().max(20000).optional(),
-    })
-    .parse(input);
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    await requireStaff();
+    const parsed = z
+      .object({
+        form_details: z.record(z.string(), z.string()).optional(),
+        pasted_details: z.string().max(20000).optional(),
+      })
+      .parse(input);
 
-  const supabase = createClient();
-  const { data: item, error: readErr } = await supabase
-    .from("order_items")
-    .select("order_id, services ( form_fields )")
-    .eq("id", itemId)
-    .single();
-  if (readErr) throw new Error(readErr.message);
+    const supabase = createClient();
+    const { data: item, error: readErr } = await supabase
+      .from("order_items")
+      .select("order_id, services ( form_fields )")
+      .eq("id", itemId)
+      .single();
+    if (readErr) throw new Error(readErr.message);
 
-  const patch: Record<string, unknown> = {};
+    const patch: Record<string, unknown> = {};
 
-  if (parsed.form_details) {
-    // Only keys this service actually declares — no arbitrary keys in jsonb.
-    const rel = (item as any).services;
-    const svc = Array.isArray(rel) ? rel[0] : rel;
-    const allowed = new Set(
-      ((svc?.form_fields ?? []) as { key: string }[]).map((f) => f.key)
-    );
-    const details: Record<string, string> = {};
-    for (const [k, v] of Object.entries(parsed.form_details)) {
-      if (allowed.has(k) && v.trim()) details[k] = v.trim();
+    if (parsed.form_details) {
+      // Only keys this service actually declares — no arbitrary keys in jsonb.
+      const rel = (item as any).services;
+      const svc = Array.isArray(rel) ? rel[0] : rel;
+      const allowed = new Set(
+        ((svc?.form_fields ?? []) as { key: string }[]).map((f) => f.key)
+      );
+      const details: Record<string, string> = {};
+      for (const [k, v] of Object.entries(parsed.form_details)) {
+        if (allowed.has(k) && v.trim()) details[k] = v.trim();
+      }
+      patch.form_details = details;
     }
-    patch.form_details = details;
-  }
-  if (parsed.pasted_details !== undefined) {
-    patch.pasted_details = parsed.pasted_details.trim() || null;
-  }
-  if (Object.keys(patch).length === 0) return;
+    if (parsed.pasted_details !== undefined) {
+      patch.pasted_details = parsed.pasted_details.trim() || null;
+    }
+    if (Object.keys(patch).length === 0) return;
 
-  const { error } = await supabase
-    .from("order_items")
-    .update(patch)
-    .eq("id", itemId);
-  if (error) throw new Error(error.message);
+    const { error } = await supabase
+      .from("order_items")
+      .update(patch)
+      .eq("id", itemId);
+    if (error) throw new Error(error.message);
 
-  const orderId = (item as any).order_id;
-  revalidatePath(`/orders/${orderId}`);
-  revalidatePath(`/orders/${orderId}/print`);
+    const orderId = (item as any).order_id;
+    revalidatePath(`/orders/${orderId}`);
+    revalidatePath(`/orders/${orderId}/print`);
+  });
 }

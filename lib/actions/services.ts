@@ -1,5 +1,7 @@
 "use server";
 
+import { run, type ActionResult } from "@/lib/action-result";
+
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
@@ -64,36 +66,40 @@ function validate(input: ServiceInput) {
 export async function updateService(
   id: string,
   input: ServiceInput
-): Promise<void> {
-  await requireAdmin();
-  const parsed = validate(input);
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    await requireAdmin();
+    const parsed = validate(input);
 
-  const supabase = createClient();
-  const { error } = await supabase
-    .from("services")
-    .update(parsed)
-    .eq("id", id);
-  if (error) throw new Error(error.message);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("services")
+      .update(parsed)
+      .eq("id", id);
+    if (error) throw new Error(error.message);
 
-  revalidatePath("/settings/services");
-  revalidatePath("/orders/new");
+    revalidatePath("/settings/services");
+    revalidatePath("/orders/new");
+  });
 }
 
-export async function createService(input: ServiceInput): Promise<void> {
-  await requireAdmin();
-  const parsed = validate(input);
+export async function createService(input: ServiceInput): Promise<ActionResult<void>> {
+  return run(async () => {
+    await requireAdmin();
+    const parsed = validate(input);
 
-  const supabase = createClient();
-  const { error } = await supabase.from("services").insert(parsed);
-  if (error) {
-    if (/duplicate key|unique/i.test(error.message)) {
-      throw new Error(`A service with code "${parsed.code}" already exists.`);
+    const supabase = createClient();
+    const { error } = await supabase.from("services").insert(parsed);
+    if (error) {
+      if (/duplicate key|unique/i.test(error.message)) {
+        throw new Error(`A service with code "${parsed.code}" already exists.`);
+      }
+      throw new Error(error.message);
     }
-    throw new Error(error.message);
-  }
 
-  revalidatePath("/settings/services");
-  revalidatePath("/orders/new");
+    revalidatePath("/settings/services");
+    revalidatePath("/orders/new");
+  });
 }
 
 /**
@@ -105,15 +111,17 @@ export async function createService(input: ServiceInput): Promise<void> {
 export async function setServiceActive(
   id: string,
   active: boolean
-): Promise<void> {
-  await requireAdmin();
-  const supabase = createClient();
-  const { error } = await supabase
-    .from("services")
-    .update({ active })
-    .eq("id", id);
-  if (error) throw new Error(error.message);
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    await requireAdmin();
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("services")
+      .update({ active })
+      .eq("id", id);
+    if (error) throw new Error(error.message);
 
-  revalidatePath("/settings/services");
-  revalidatePath("/orders/new");
+    revalidatePath("/settings/services");
+    revalidatePath("/orders/new");
+  });
 }

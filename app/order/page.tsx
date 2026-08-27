@@ -15,13 +15,20 @@ export default async function PublicOrderPage() {
   // Read directly on the server so the form renders filled in on first paint —
   // no client fetch, no loading flash on a slow mobile connection.
   const db = createAdminClient();
-  const [{ data: services }, { data: settings }] = await Promise.all([
+  const [{ data: services }, { data: settings }, { data: page }] = await Promise.all([
     db
       .from("services")
       .select("id, code, name, price, form_fields, processing_days_max, shipping_days_estimate")
       .eq("active", true)
       .order("name"),
     db.from("app_settings").select("key, value"),
+    // The default page, same one the tracking pages fall back to.
+    db
+      .from("messenger_pages")
+      .select("url")
+      .eq("is_default", true)
+      .eq("active", true)
+      .maybeSingle(),
   ]);
 
   const map = new Map((settings ?? []).map((r) => [r.key, r.value ?? ""]));
@@ -29,7 +36,7 @@ export default async function PublicOrderPage() {
     enabled: (map.get("public_orders_enabled") ?? "true") !== "false",
     otpRequired: (map.get("otp_required") ?? "true") !== "false",
     businessName: map.get("business_name") || "DocuAssist PH",
-    messengerUrl: map.get("messenger_url") || null,
+    messengerUrl: page?.url || map.get("messenger_url") || null,
     services: (services ?? []).map((s) => ({
       ...s,
       price: Number(s.price),

@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getStaff } from "@/lib/auth";
 import { BusinessSettings } from "@/components/admin/BusinessSettings";
+import { MessengerPagesEditor } from "@/components/admin/MessengerPagesEditor";
+import { listMessengerPages } from "@/lib/actions/messenger-pages";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +12,10 @@ export default async function BusinessSettingsPage() {
   if (!staff) redirect("/login");
 
   const supabase = createClient();
-  const { data } = await supabase.from("app_settings").select("key, value");
+  const [{ data }, pages] = await Promise.all([
+    supabase.from("app_settings").select("key, value"),
+    listMessengerPages(),
+  ]);
   const map = new Map((data ?? []).map((r) => [r.key, r.value ?? ""]));
 
   return (
@@ -22,10 +27,10 @@ export default async function BusinessSettingsPage() {
         canEdit={staff.role === "admin"}
         initial={{
           business_name: map.get("business_name") ?? "DocuAssist PH",
-          messenger_url: map.get("messenger_url") ?? "",
           logo_url: map.get("logo_url") ?? "",
         }}
       />
+      <MessengerPagesEditor pages={pages} canEdit={staff.role === "admin"} />
     </div>
   );
 }

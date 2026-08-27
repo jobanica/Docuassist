@@ -41,6 +41,15 @@ export interface Service {
   created_at: string;
 }
 
+export interface MessengerPage {
+  id: string;
+  name: string;
+  url: string;
+  active: boolean;
+  is_default: boolean;
+  created_at: string;
+}
+
 export interface Courier {
   id: string;
   name: string;

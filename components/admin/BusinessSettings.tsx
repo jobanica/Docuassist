@@ -2,8 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Save, ExternalLink, ShieldAlert } from "lucide-react";
+import { Save, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { unwrap } from "@/lib/action-result";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { updateBusinessInfo } from "@/lib/actions/settings";
@@ -12,7 +13,7 @@ export function BusinessSettings({
   initial,
   canEdit,
 }: {
-  initial: { business_name: string; messenger_url: string; logo_url: string };
+  initial: { business_name: string; logo_url: string };
   canEdit: boolean;
 }) {
   const router = useRouter();
@@ -27,7 +28,7 @@ export function BusinessSettings({
     setError(null);
     startTransition(async () => {
       try {
-        await updateBusinessInfo(v);
+        unwrap(await updateBusinessInfo(v));
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
         router.refresh();
@@ -57,34 +58,6 @@ export function BusinessSettings({
           <p className="text-xs text-slate-400">
             Shown in the header of every customer tracking page.
           </p>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label className="text-xs text-slate-600">
-            Facebook / Messenger link
-          </Label>
-          <Input
-            disabled={!canEdit}
-            value={v.messenger_url}
-            onChange={(e) => setV({ ...v, messenger_url: e.target.value })}
-            placeholder="https://www.facebook.com/yourpage"
-          />
-          <p className="text-xs text-slate-400">
-            Where the &ldquo;Message us on Facebook&rdquo; button sends
-            customers. Use your page URL, or{" "}
-            <span className="font-mono">https://m.me/yourpage</span> to open a
-            Messenger chat directly.
-          </p>
-          {v.messenger_url && (
-            <a
-              href={v.messenger_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-[#2a78d6] hover:underline"
-            >
-              <ExternalLink className="h-3 w-3" /> Test this link
-            </a>
-          )}
         </div>
 
         <div className="space-y-1.5">

@@ -14,6 +14,7 @@ import { OrderActions } from "@/components/admin/OrderActions";
 import { TrackingPanel } from "@/components/admin/TrackingPanel";
 import { PaymentToggle } from "@/components/admin/PaymentToggle";
 import { ItemDetails } from "@/components/admin/ItemDetails";
+import { listMessengerPages } from "@/lib/actions/messenger-pages";
 import { qrDataUrl, trackingUrl } from "@/lib/qr";
 import { peso } from "@/lib/money";
 import { fmtDate, fmtDateTime, daysSince } from "@/lib/dates";
@@ -55,7 +56,7 @@ export default async function OrderDetailPage({
 
   if (!order) notFound();
 
-  const [{ data: statuses }, { data: history }, { data: couriers }] =
+  const [{ data: statuses }, { data: history }, { data: couriers }, messengerPages] =
     await Promise.all([
       supabase.from("order_statuses").select("*").order("sort_order"),
       supabase
@@ -68,6 +69,7 @@ export default async function OrderDetailPage({
         .select("*")
         .eq("active", true)
         .order("name"),
+      listMessengerPages(),
     ]);
 
   const o = order as any;
@@ -213,6 +215,11 @@ export default async function OrderDetailPage({
                 publicUrl={publicUrl}
                 qrDataUrl={qr}
                 code={o.tracking_code}
+                orderId={o.id}
+                messengerPages={messengerPages.filter(
+                  (p) => p.active || p.id === o.messenger_page_id
+                )}
+                messengerPageId={o.messenger_page_id ?? null}
               />
             </CardContent>
           </Card>

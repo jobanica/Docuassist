@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Save, X, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { unwrap } from "@/lib/action-result";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { peso } from "@/lib/money";
@@ -89,7 +90,7 @@ export function ServicesEditor({
             title="New service"
             onCancel={() => setAdding(false)}
             onSave={async (v) => {
-              await createService(toInput(v));
+              unwrap(await createService(toInput(v)));
               setAdding(false);
             }}
           />
@@ -129,7 +130,7 @@ function ServiceRow({
         title={`Edit ${service.name}`}
         onCancel={() => setEditing(false)}
         onSave={async (v) => {
-          await updateService(service.id, toInput(v));
+          unwrap(await updateService(service.id, toInput(v)));
           setEditing(false);
         }}
       />
@@ -174,7 +175,7 @@ function ServiceRow({
               disabled={pending}
               onClick={() =>
                 startTransition(async () => {
-                  await setServiceActive(service.id, !service.active);
+                  unwrap(await setServiceActive(service.id, !service.active));
                   router.refresh();
                 })
               }

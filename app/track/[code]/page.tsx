@@ -155,17 +155,29 @@ export default async function TrackPage({
         <PublicStepper pipeline={pipeline} info={info} />
       </section>
 
-      {/* Footer */}
+      {/* Footer — the page named on this order, not one global link, so the
+          customer reaches the staff who actually handle their document. */}
       <section className="mt-6 text-center">
         <p className="text-sm text-slate-500">May tanong po kayo?</p>
-        <MessengerButton url={business.messenger_url} />
+        <MessengerButton
+          url={info.messenger?.url ?? business.messenger_url}
+          name={info.messenger?.name ?? null}
+        />
       </section>
       <PrivacyNote />
     </Shell>
   );
 }
 
-function MessengerButton({ url }: { url: string | null }) {
+function MessengerButton({
+  url,
+  name,
+}: {
+  url: string | null;
+  /** Named when the order points at a page other than the main one, so the
+   *  customer isn't surprised by which inbox opens. */
+  name?: string | null;
+}) {
   if (!url) return null;
   return (
     <a
@@ -174,7 +186,8 @@ function MessengerButton({ url }: { url: string | null }) {
       rel="noopener noreferrer"
       className="mt-3 inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
     >
-      <MessageCircle className="h-4 w-4" /> Message us on Facebook
+      <MessageCircle className="h-4 w-4" />
+      {name ? `Message ${name}` : "Message us on Facebook"}
     </a>
   );
 }

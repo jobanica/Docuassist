@@ -2,8 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Search, UserPlus, X, ChevronDown } from "lucide-react";
+import { Search, UserPlus, X, ChevronDown, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { unwrap } from "@/lib/action-result";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,7 +17,7 @@ import {
 import { peso } from "@/lib/money";
 import { searchCustomers, createCustomer } from "@/lib/actions/customers";
 import { createOrder } from "@/lib/actions/orders";
-import type { Customer, Service } from "@/lib/types";
+import type { Customer, MessengerPage, Service } from "@/lib/types";
 
 type SelectedService = {
   quantity: number;
@@ -45,7 +46,16 @@ const emptyNewCustomer = {
  * costs more staff time than it saves. The printable PSA form is filled in on
  * the order itself, when there is actually a form to print.
  */
-export function NewOrderForm({ services }: { services: Service[] }) {
+export function NewOrderForm({
+  services,
+  messengerPages,
+  defaultPageId,
+}: {
+  services: Service[];
+  messengerPages: MessengerPage[];
+  /** This staff member's own page, so the VA's orders default to hers. */
+  defaultPageId: string | null;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -66,10 +76,13 @@ export function NewOrderForm({ services }: { services: Service[] }) {
   const [initialStatus, setInitialStatus] =
     useState<"new_inquiry" | "details_received">("details_received");
 
+  // --- Which Facebook page the tracking link points at ---
+  const [pageId, setPageId] = useState<string | null>(defaultPageId);
+
   async function runSearch() {
     setSearching(true);
     try {
-      setResults(await searchCustomers(query));
+      setResults(unwrap(await searchCustomers(query)));
     } finally {
       setSearching(false);
     }
@@ -98,6 +111,7 @@ export function NewOrderForm({ services }: { services: Service[] }) {
     }));
   }
 
+  const selectedPage = messengerPages.find((p) => p.id === pageId) ?? null;
   const chosen = services.filter((s) => selected[s.id]);
   const total = chosen.reduce(
     (sum, s) => sum + Number(s.price) * (selected[s.id]?.quantity ?? 1),
@@ -119,24 +133,27 @@ export function NewOrderForm({ services }: { services: Service[] }) {
             setError("Enter the customer's full name.");
             return;
           }
-          const { id } = await createCustomer(newCustomer);
-          customerId = id;
+          const created = unwrap(await createCustomer(newCustomer));
+          customerId = created.id;
         }
         if (!customerId) {
           setError("Pick an existing customer or enter a new one.");
           return;
         }
 
-        const { id } = await createOrder({
-          customer_id: customerId,
-          initial_status: initialStatus,
-          items: chosen.map((s) => ({
-            service_id: s.id,
-            quantity: selected[s.id].quantity,
-            price_at_order: Number(s.price),
-            pasted_details: selected[s.id].pasted_details,
-          })),
-        });
+        const { id } = unwrap(
+          await createOrder({
+            customer_id: customerId,
+            initial_status: initialStatus,
+            messenger_page_id: pageId,
+            items: chosen.map((s) => ({
+              service_id: s.id,
+              quantity: selected[s.id].quantity,
+              price_at_order: Number(s.price),
+              pasted_details: selected[s.id].pasted_details,
+            })),
+          })
+        );
         router.push(`/orders/${id}`);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Something went wrong.");
@@ -446,6 +463,34 @@ export function NewOrderForm({ services }: { services: Service[] }) {
               New inquiry (stub, waiting for details)
             </label>
           </div>
+
+          {messengerPages.length > 1 && (
+            <div className="border-t pt-4">
+              <Field
+                label="Facebook page for the tracking link"
+                hint="where this customer will message you"
+              >
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  value={pageId ?? ""}
+                  onChange={(e) => setPageId(e.target.value || null)}
+                >
+                  {messengerPages.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                      {p.is_default ? " (default)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              {selectedPage && (
+                <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <MessageCircle className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{selectedPage.url}</span>
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center justify-between border-t pt-4">
             <p className="text-lg font-semibold">Total: {peso(total)}</p>

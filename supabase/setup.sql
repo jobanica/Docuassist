@@ -1,6 +1,6 @@
 -- =============================================================================
 -- DocuAssist PH — full schema setup for a fresh Supabase project.
--- Migrations 0001–0015 concatenated in order. Run once on a fresh project.
+-- Migrations 0001–0017 concatenated in order. Run once on a fresh project.
 -- =============================================================================
 
 
@@ -1447,3 +1447,207 @@ alter table order_items
 
 comment on column order_items.pasted_details is
   'Customer''s filled-out form, pasted verbatim by staff from Messenger.';
+
+-- >>> 0016_messenger_pages.sql <<<
+-- =============================================================================
+-- 0016_messenger_pages.sql — more than one Facebook page.
+--
+-- The business runs separate pages for different lines of work (the VA who
+-- handles TIN and PhilHealth IDs answers on her own page). A tracking link that
+-- always points at the main page sends those customers to staff who can't help
+-- them, so the page is now chosen per order by whoever encodes it.
+--
+-- Each staff member gets a default page, so the VA's orders carry hers without
+-- her having to remember; the picker on the order still overrides it.
+-- =============================================================================
+
+create table if not exists messenger_pages (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null,
+  url         text not null,
+  active      boolean not null default true,
+  is_default  boolean not null default false,
+  created_at  timestamptz not null default now()
+);
+
+-- Exactly one default. A partial unique index makes a second one impossible
+-- rather than merely discouraged.
+create unique index if not exists messenger_pages_one_default
+  on messenger_pages (is_default) where is_default;
+
+alter table orders
+  add column if not exists messenger_page_id uuid
+    references messenger_pages(id) on delete set null;
+
+alter table staff_users
+  add column if not exists default_messenger_page_id uuid
+    references messenger_pages(id) on delete set null;
+
+-- Staff-only, like every other table. The public reaches page URLs only
+-- through the whitelisted tracking RPCs below.
+alter table messenger_pages enable row level security;
+drop policy if exists messenger_pages_staff_all on messenger_pages;
+create policy messenger_pages_staff_all on messenger_pages
+  for all using (is_staff()) with check (is_staff());
+
+-- Carry the existing single link over as the default page so nothing changes
+-- for orders that were created before this.
+insert into messenger_pages (name, url, is_default)
+select
+  coalesce((select value from app_settings where key = 'business_name'), 'DocuAssist PH'),
+  value,
+  true
+from app_settings
+where key = 'messenger_url'
+  and coalesce(value, '') <> ''
+  and not exists (select 1 from messenger_pages);
+
+-- -----------------------------------------------------------------------------
+-- Resolve the page a tracking link should point at: the order's own page, else
+-- the default page, else the legacy app_settings value. One place, so the
+-- tracking page and the order screen can never disagree.
+-- -----------------------------------------------------------------------------
+create or replace function public.resolve_messenger_page(p_page_id uuid)
+returns json
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    (select json_build_object('name', name, 'url', url)
+       from messenger_pages where id = p_page_id and active),
+    (select json_build_object('name', name, 'url', url)
+       from messenger_pages where is_default and active),
+    (select json_build_object(
+              'name', coalesce((select value from app_settings where key = 'business_name'), 'DocuAssist PH'),
+              'url', value)
+       from app_settings where key = 'messenger_url' and coalesce(value, '') <> '')
+  );
+$$;
+
+revoke all on function public.resolve_messenger_page(uuid) from public;
+-- Not granted to anon: it is only ever called from inside the RPCs below,
+-- which run as definer. Anon has no way to enumerate pages by id.
+grant execute on function public.resolve_messenger_page(uuid) to service_role;
+
+-- The public business info now resolves through the same helper.
+create or replace function public.get_public_business_info()
+returns json
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select json_build_object(
+    'business_name', coalesce((select value from app_settings where key = 'business_name'), 'DocuAssist PH'),
+    'messenger_url', (select resolve_messenger_page(null) ->> 'url'),
+    'logo_url', nullif((select value from app_settings where key = 'logo_url'), '')
+  );
+$$;
+
+revoke all on function public.get_public_business_info() from public;
+grant execute on function public.get_public_business_info() to anon, authenticated, service_role;
+
+-- >>> 0017_tracking_messenger.sql <<<
+-- =============================================================================
+-- 0017_tracking_messenger.sql — the tracking page now points at the Facebook
+-- page chosen on the order (0016), not one global link. Same whitelist as
+-- 0004 otherwise: this only adds the resolved page name + url, which is public
+-- branding, never customer data.
+-- =============================================================================
+
+create or replace function public.get_tracking_info(p_code text)
+returns json
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  o             orders%rowtype;
+  first_name    text;
+  service_names text[];
+  courier_json  json;
+  history_json  json;
+  messenger_json json;
+  st            order_statuses%rowtype;
+begin
+  select * into o from orders where tracking_code = p_code;
+  if not found then
+    return null;               -- caller renders the friendly not-found screen
+  end if;
+
+  select * into st from order_statuses where code = o.status;
+
+  -- First name only (never the full name). §13
+  select split_part(trim(c.full_name), ' ', 1) into first_name
+    from customers c where c.id = o.customer_id;
+
+  -- Service display names only (never form_details / document contents). §13
+  select array_agg(s.name order by s.name) into service_names
+    from order_items oi
+    join services s on s.id = oi.service_id
+   where oi.order_id = o.id;
+
+  -- Courier block only when courier info exists (§7: hidden otherwise).
+  if o.courier_id is not null then
+    select json_build_object(
+      'name', cr.name,
+      'tracking_page_url', cr.tracking_page_url,
+      'tracking_number', o.courier_tracking_number
+    ) into courier_json
+    from couriers cr where cr.id = o.courier_id;
+  else
+    courier_json := null;
+  end if;
+
+  -- Which Facebook page this customer should message. Set per order, because
+  -- different lines of work are answered by different pages.
+  messenger_json := resolve_messenger_page(o.messenger_page_id);
+
+  -- History: status + date + event type/attempt/note. Notes here are staff
+  -- transition notes and failed-attempt reasons — customer-safe per §7 (which
+  -- explicitly shows failure reasons). PII lives on other tables, never here.
+  select json_agg(json_build_object(
+           'status', h.status,
+           'label', hs.label,
+           'event_type', h.event_type,
+           'attempt_number', h.attempt_number,
+           'note', h.note,
+           'date', h.created_at
+         ) order by h.created_at)
+    into history_json
+    from order_status_history h
+    left join order_statuses hs on hs.code = h.status
+   where h.order_id = o.id;
+
+  return json_build_object(
+    'tracking_code', o.tracking_code,
+    'first_name', first_name,
+    'service_names', coalesce(service_names, array[]::text[]),
+    'status', o.status,
+    'status_label', st.label,
+    'status_sort_order', st.sort_order,
+    'is_terminal', st.is_terminal,
+    'public_helper', st.public_helper,
+    'total_amount', o.total_amount,
+    'payment_method', o.payment_method,
+    'payment_status', o.payment_status,
+    'courier', courier_json,
+    'delivery_attempts', o.delivery_attempts,
+    'expected_release_date', o.expected_release_date,
+    'expected_delivery_date', o.expected_delivery_date,
+    'shipped_at', o.shipped_at,
+    'delivered_at', o.delivered_at,
+    'returned_at', o.returned_at,
+    'return_reason', o.return_reason,
+    'messenger', messenger_json,
+    'history', coalesce(history_json, '[]'::json)
+  );
+end;
+$$;
+
+-- Anon may execute ONLY this function. No table grants to anon anywhere.
+revoke all on function public.get_tracking_info(text) from public;
+grant execute on function public.get_tracking_info(text) to anon, authenticated, service_role;

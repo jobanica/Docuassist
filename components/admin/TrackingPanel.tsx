@@ -1,19 +1,49 @@
 "use client";
 
-import { useState } from "react";
-import { Copy, Check, Download, ExternalLink } from "lucide-react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Copy, Check, Download, ExternalLink, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { unwrap } from "@/lib/action-result";
+import { setOrderMessengerPage } from "@/lib/actions/messenger-pages";
+import type { MessengerPage } from "@/lib/types";
 
 export function TrackingPanel({
   publicUrl,
   qrDataUrl,
   code,
+  orderId,
+  messengerPages,
+  messengerPageId,
 }: {
   publicUrl: string;
   qrDataUrl: string;
   code: string;
+  orderId: string;
+  messengerPages: MessengerPage[];
+  messengerPageId: string | null;
 }) {
+  const router = useRouter();
   const [copied, setCopied] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [pageId, setPageId] = useState(messengerPageId ?? "");
+  const [error, setError] = useState<string | null>(null);
+
+  const fallback = messengerPages.find((p) => p.is_default) ?? null;
+  const effective = messengerPages.find((p) => p.id === pageId) ?? fallback;
+
+  function changePage(next: string) {
+    setPageId(next);
+    setError(null);
+    startTransition(async () => {
+      try {
+        unwrap(await setOrderMessengerPage(orderId, next || null));
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not save.");
+      }
+    });
+  }
 
   async function copy() {
     try {
@@ -72,6 +102,38 @@ export function TrackingPanel({
         Send this link or QR to the customer via Messenger. It works with no
         login and shows only their first name + status.
       </p>
+
+      {/* Which page the tracking link's "Message us" button opens. Different
+          lines of work are answered by different pages. */}
+      {messengerPages.length > 1 && (
+        <div className="space-y-1.5 border-t pt-3">
+          <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <MessageCircle className="h-3.5 w-3.5" />
+            Customer messages this page
+          </label>
+          <select
+            className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+            value={pageId}
+            disabled={pending}
+            onChange={(e) => changePage(e.target.value)}
+          >
+            <option value="">
+              Business default{fallback ? ` — ${fallback.name}` : ""}
+            </option>
+            {messengerPages.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          {effective && (
+            <p className="truncate text-[11px] text-muted-foreground">
+              {effective.url}
+            </p>
+          )}
+          {error && <p className="text-xs text-destructive">{error}</p>}
+        </div>
+      )}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, Copy, Check, Pencil, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { unwrap } from "@/lib/action-result";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -48,7 +49,7 @@ export function ItemDetails({
     setError(null);
     startTransition(async () => {
       try {
-        await updateOrderItemDetails(itemId, patch);
+        unwrap(await updateOrderItemDetails(itemId, patch));
         done?.();
         router.refresh();
       } catch (e) {

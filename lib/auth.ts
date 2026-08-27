@@ -7,6 +7,8 @@ export interface StaffContext {
   name: string;
   email: string | null;
   role: Role;
+  /** Facebook page pre-selected on orders this person creates. */
+  default_messenger_page_id: string | null;
 }
 
 /**
@@ -28,7 +30,7 @@ export const getStaff = cache(async (): Promise<StaffContext | null> => {
 
   const { data: staff } = await supabase
     .from("staff_users")
-    .select("name, email, role, active")
+    .select("name, email, role, active, default_messenger_page_id")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -40,6 +42,7 @@ export const getStaff = cache(async (): Promise<StaffContext | null> => {
     name: staff.name,
     email: staff.email ?? user.email ?? null,
     role: staff.role as Role,
+    default_messenger_page_id: staff.default_messenger_page_id ?? null,
   };
 });
 
