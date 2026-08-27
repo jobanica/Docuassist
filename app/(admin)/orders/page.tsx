@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function OrdersPage() {
   const supabase = createClient();
 
-  const [{ data: statuses }, { data: services }, { data: orders }] =
+  const [{ data: statuses }, { data: services }, { data: orders }, { data: attempts }] =
     await Promise.all([
       supabase.from("order_statuses").select("*").order("sort_order"),
       supabase.from("services").select("*").order("name"),
@@ -23,11 +23,23 @@ export default async function OrdersPage() {
            order_items ( services ( code, name ) )`
         )
         .order("created_at", { ascending: false }),
+      // Why each delivery failed, for the call list. Oldest first so the loop
+      // below leaves the most recent attempt per order in the map.
+      supabase
+        .from("order_status_history")
+        .select("order_id, note, attempt_number, created_at")
+        .eq("event_type", "failed_attempt")
+        .order("created_at", { ascending: true }),
     ]);
 
   const statusLabel = new Map(
     (statuses ?? []).map((s) => [s.code, s.label as string])
   );
+
+  const lastAttempt = new Map<string, { note: string | null; at: string }>();
+  for (const a of attempts ?? []) {
+    lastAttempt.set(a.order_id, { note: a.note, at: a.created_at });
+  }
 
   const rows: OrderRow[] = (orders ?? []).map((o: any) => {
     const svcCodes: string[] = [];
@@ -52,6 +64,8 @@ export default async function OrdersPage() {
       customer_phone: o.customers?.phone ?? null,
       service_codes: svcCodes,
       service_names: svcNames,
+      last_attempt_note: lastAttempt.get(o.id)?.note ?? null,
+      last_attempt_at: lastAttempt.get(o.id)?.at ?? null,
     };
   });
 
