@@ -1,8 +1,15 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Search, UserPlus, X, ChevronDown, MessageCircle } from "lucide-react";
+import {
+  Search,
+  UserPlus,
+  UserCheck,
+  X,
+  ChevronDown,
+  MessageCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { unwrap } from "@/lib/action-result";
 import { Input } from "@/components/ui/input";
@@ -16,6 +23,11 @@ import {
 } from "@/components/ui/card";
 import { peso } from "@/lib/money";
 import { searchCustomers, createCustomer } from "@/lib/actions/customers";
+import {
+  findDuplicateOrders,
+  type DuplicateReport,
+} from "@/lib/actions/duplicates";
+import { DuplicateWarning } from "./DuplicateWarning";
 import { createOrder } from "@/lib/actions/orders";
 import type { Customer, MessengerPage, Service } from "@/lib/types";
 
@@ -79,6 +91,53 @@ export function NewOrderForm({
   // --- Which Facebook page the tracking link points at ---
   const [pageId, setPageId] = useState<string | null>(defaultPageId);
 
+  // --- Duplicate check ---
+  // Held until the staff member has seen it; `acknowledged` is what lets the
+  // second submit through, so the warning can't be skipped by double-clicking.
+  const [dupes, setDupes] = useState<DuplicateReport | null>(null);
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [existing, setExisting] = useState<Customer[]>([]);
+
+  // Look the typed name/phone up as they go, so a customer already on file is
+  // spotted before a second record is created for them.
+  useEffect(() => {
+    if (mode !== "new") {
+      setExisting([]);
+      return;
+    }
+    const name = newCustomer.full_name.trim();
+    const phone = newCustomer.phone.trim();
+    if (name.length < 4 && phone.length < 7) {
+      setExisting([]);
+      return;
+    }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const r = unwrap(
+          await findDuplicateOrders({
+            full_name: name,
+            phone,
+            service_ids: [],
+          })
+        );
+        if (!cancelled) setExisting(r.existingCustomers);
+      } catch {
+        /* a failed hint is not worth interrupting intake for */
+      }
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [mode, newCustomer.full_name, newCustomer.phone]);
+
+  useEffect(() => {
+    setAcknowledged(false);
+    setDupes(null);
+  }, [picked?.id, newCustomer.full_name, newCustomer.phone, mode]);
+
   async function runSearch() {
     setSearching(true);
     try {
@@ -89,6 +148,10 @@ export function NewOrderForm({
   }
 
   function toggleService(svc: Service) {
+    // The warning was about a specific set of documents — changing them makes
+    // it stale, so it has to be earned again.
+    setAcknowledged(false);
+    setDupes(null);
     setSelected((prev) => {
       const next = { ...prev };
       if (next[svc.id]) delete next[svc.id];
@@ -118,21 +181,51 @@ export function NewOrderForm({
     0
   );
 
-  async function submit() {
+  async function submit(force = false) {
     setError(null);
     if (chosen.length === 0) {
       setError("Pick at least one document.");
       return;
+    }
+    const name = mode === "new" ? newCustomer.full_name.trim() : picked?.full_name ?? "";
+    if (mode === "new" && !name) {
+      setError("Enter the customer's full name.");
+      return;
+    }
+    if (mode === "pick" && !picked) {
+      setError("Pick an existing customer or enter a new one.");
+      return;
+    }
+
+    // Warn once, then let them through. Checked here rather than on the server
+    // side of createOrder so the staff member sees the actual orders and can
+    // open them, instead of just being refused.
+    if (!force && !acknowledged) {
+      setChecking(true);
+      try {
+        const report = unwrap(
+          await findDuplicateOrders({
+            full_name: name,
+            phone: mode === "new" ? newCustomer.phone : picked?.phone ?? null,
+            customer_id: picked?.id ?? null,
+            service_ids: chosen.map((s) => s.id),
+          })
+        );
+        if (report.matches.length > 0) {
+          setDupes(report);
+          setChecking(false);
+          return;
+        }
+      } catch {
+        // A check that can't run shouldn't stop an order being taken.
+      }
+      setChecking(false);
     }
 
     startTransition(async () => {
       try {
         let customerId = picked?.id ?? null;
         if (mode === "new") {
-          if (!newCustomer.full_name.trim()) {
-            setError("Enter the customer's full name.");
-            return;
-          }
           const created = unwrap(await createCustomer(newCustomer));
           customerId = created.id;
         }
@@ -159,6 +252,15 @@ export function NewOrderForm({
         setError(e instanceof Error ? e.message : "Something went wrong.");
       }
     });
+  }
+
+  /** Switch to the existing customer record instead of making a second one. */
+  function useExisting(c: Customer) {
+    setPicked(c);
+    setMode("pick");
+    setExisting([]);
+    setAcknowledged(false);
+    setDupes(null);
   }
 
   return (
@@ -277,6 +379,43 @@ export function NewOrderForm({
                   />
                 </Field>
               </div>
+
+              {existing.length > 0 && (
+                <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
+                  <p className="flex items-center gap-2 text-sm font-medium text-sky-900">
+                    <UserCheck className="h-4 w-4 shrink-0" />
+                    Already on file
+                  </p>
+                  <p className="mt-0.5 text-xs text-sky-800">
+                    Use the existing record so their order history stays in one
+                    place.
+                  </p>
+                  <div className="mt-2 space-y-1.5">
+                    {existing.map((c) => (
+                      <div
+                        key={c.id}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-white p-2"
+                      >
+                        <span className="text-sm">
+                          <span className="font-medium">{c.full_name}</span>
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            {c.phone ?? "no phone"}
+                            {c.city ? ` · ${c.city}` : ""}
+                          </span>
+                        </span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => useExisting(c)}
+                        >
+                          Use this customer
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Delivery address is only needed once the order ships, so it
                   stays out of the way during intake. */}
@@ -492,10 +631,31 @@ export function NewOrderForm({
             </div>
           )}
 
+          {dupes && dupes.matches.length > 0 && (
+            <DuplicateWarning
+              matches={dupes.matches}
+              pending={pending}
+              onCancel={() => setDupes(null)}
+              onProceed={() => {
+                setAcknowledged(true);
+                setDupes(null);
+                submit(true);
+              }}
+            />
+          )}
+
           <div className="flex items-center justify-between border-t pt-4">
             <p className="text-lg font-semibold">Total: {peso(total)}</p>
-            <Button type="button" onClick={submit} disabled={pending}>
-              {pending ? "Creating…" : "Create order"}
+            <Button
+              type="button"
+              onClick={() => submit()}
+              disabled={pending || checking}
+            >
+              {checking
+                ? "Checking…"
+                : pending
+                  ? "Creating…"
+                  : "Create order"}
             </Button>
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}

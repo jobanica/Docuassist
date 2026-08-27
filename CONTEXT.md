@@ -132,6 +132,14 @@ An order reaches the system one of two ways, and they store details differently.
 - The printable PSA forms (§12a) fill from `form_details`. Path B fills them automatically; on Path A staff fill them **on the order detail screen**, with the pasted reply displayed directly above the fields to copy from. The print screen warns when an item's fields are still empty rather than silently printing a blank form.
 - Both `pasted_details` and `form_details` stay editable on the order after creation.
 - No AI parsing, no `ANTHROPIC_API_KEY`, no per-parse token cost.
+## 9b. Duplicate Warning on Intake
+The same request arrives twice often enough to cost money — a customer messages again after not hearing back, or two staff pick up the same thread. Encoding it twice means paying PSA twice and shipping twice.
+- Before creating anything, **New Order** checks for existing orders belonging to the same person: matched on normalized PH mobile number (so `09xx`, `+639xx` and spaced forms all count as one) or on a case- and spacing-insensitive full name, looking back 90 days and ignoring cancelled orders.
+- **Strong** (red, "same document"): the match shares a document with what's being ordered and is either still live or finished within 14 days. **Possible** (amber): same person, different document.
+- It **warns, never blocks** — a second copy is a real thing customers ask for. The warning lists each match with status, date, tracking code and a link to open it, then offers *Go back* or *Create anyway*.
+- Acknowledging is scoped to what was shown: changing the customer or the selected documents clears it, so the warning has to be earned again.
+- Separately, typing a name or phone already on file surfaces an **Already on file** hint with *Use this customer*, so a second customer record isn't created for the same person.
+- The public order form (§13a) has no such check — customers can't be shown other people's orders — so a double submission there shows up as two orders for staff to spot.
 ## 9a. Facebook Pages on the Tracking Link
 The business answers on more than one page — the VA handling TIN and PhilHealth IDs runs her own — so one global Messenger link would send those customers to staff who can't help them.
 - `messenger_pages` (name + url, one `is_default`) is the source of truth; the old single `app_settings.messenger_url` is only a legacy fallback. Admins manage the list in **Settings → Business info**.
