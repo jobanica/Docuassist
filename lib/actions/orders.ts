@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStaff } from "@/lib/auth";
 import { nextStatus, canCancel, PIPELINE } from "@/lib/status";
 import { addDaysISO } from "@/lib/dates";
+import { notifyOrder } from "@/lib/sms/notify";
 import type { StatusCode } from "@/lib/types";
 
 const orderItemSchema = z.object({
@@ -58,6 +59,10 @@ export async function createOrder(
     note: "Order encoded",
     changed_by: staff.id,
   });
+
+  if (parsed.initial_status === "details_received") {
+    await notifyOrder("details_received", order.id);
+  }
 
   revalidatePath("/orders");
   return { id: order.id };
@@ -143,6 +148,10 @@ export async function advanceStatus(
     note: note?.trim() || null,
     changed_by: staff.id,
   });
+
+  if (target === "details_received") {
+    await notifyOrder("details_received", orderId);
+  }
 
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/orders");
@@ -286,6 +295,8 @@ export async function markShipped(
     changed_by: staff.id,
   });
 
+  await notifyOrder("shipped", orderId);
+
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/orders");
 }
@@ -350,7 +361,10 @@ export async function logFailedAttempt(
     changed_by: staff.id,
   });
 
-  // Phase 6 wires the failed-attempt SMS nudge here (highest-priority send).
+  // Highest-priority send in the system: every recovered attempt is a saved
+  // sale, so this template defaults to enabled (§10).
+  await notifyOrder("failed_attempt", orderId, { attempt: attempts });
+
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/orders");
   return { attempts };
@@ -397,6 +411,8 @@ export async function markDelivered(
       (codCollected ? "COD collected" : "Delivered — COD not yet collected"),
     changed_by: staff.id,
   });
+
+  await notifyOrder("delivered", orderId);
 
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/orders");

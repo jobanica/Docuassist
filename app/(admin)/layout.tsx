@@ -14,7 +14,7 @@ const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/orders", label: "Orders", icon: Package },
   { href: "/customers", label: "Customers", icon: Users },
-  { href: "/settings/services", label: "Settings", icon: Settings },
+  { href: "/settings/notifications", label: "Settings", icon: Settings },
 ];
 
 export default async function AdminLayout({
