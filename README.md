@@ -24,10 +24,11 @@ SMS and AI parsing are **optional**: leave `SEMAPHORE_API_KEY` / `ANTHROPIC_API_
 blank and those calls are stubbed (logged, not sent) so the app runs end-to-end.
 
 ### 3. Database
-Apply the migrations in `supabase/migrations/` (in order) to your Supabase
-project. Options:
-- **Supabase CLI:** `supabase db push` (or `supabase migration up`), or
-- **SQL editor:** paste each `0001…0005` file in order and run.
+Apply the schema to your Supabase project. Options:
+- **SQL editor (easiest):** open `supabase/setup.sql`, copy the whole file,
+  paste it into the Supabase SQL Editor and Run. It is migrations 0001–0008
+  concatenated in order — run it once on a fresh project.
+- **Supabase CLI:** `supabase db push` (applies `supabase/migrations/` in order).
 
 This creates all tables, RLS policies (staff-only; no public table access), the
 public tracking RPC, and seeds the 6 services, 3 couriers, 8 statuses, and SMS
