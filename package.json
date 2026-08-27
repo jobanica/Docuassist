@@ -9,7 +9,8 @@
     "lint": "next lint",
     "create-staff": "tsx scripts/create-staff.ts",
     "test:parser": "tsx lib/parse/__tests__/parser.test.ts",
-    "test:sms": "tsx lib/sms/__tests__/sms.test.ts"
+    "test:sms": "tsx lib/sms/__tests__/sms.test.ts",
+    "seed:demo": "tsx scripts/seed-demo.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.121.0",
