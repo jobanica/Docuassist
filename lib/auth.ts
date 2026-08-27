@@ -28,11 +28,13 @@ export const getStaff = cache(async (): Promise<StaffContext | null> => {
 
   const { data: staff } = await supabase
     .from("staff_users")
-    .select("name, email, role")
+    .select("name, email, role, active")
     .eq("id", user.id)
     .maybeSingle();
 
-  if (!staff) return null;
+  // A deactivated account has a valid session but no access. is_staff() in the
+  // database enforces the same thing, so this is the UI half of one rule.
+  if (!staff || !staff.active) return null;
   return {
     id: user.id,
     name: staff.name,

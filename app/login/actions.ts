@@ -28,7 +28,7 @@ export async function signIn(
   // Must have a staff_users row to use the admin app (RLS gate).
   const { data: staff } = await supabase
     .from("staff_users")
-    .select("id, role")
+    .select("id, role, active")
     .eq("id", data.user.id)
     .maybeSingle();
 
@@ -38,6 +38,10 @@ export async function signIn(
       error:
         "This account is not registered as staff. Ask an admin to add you.",
     };
+  }
+  if (!staff.active) {
+    await supabase.auth.signOut();
+    return { error: "This account has been deactivated. Please contact your admin." };
   }
 
   // Admins land on the sales dashboard; staff on the orders board.

@@ -1,0 +1,467 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import {
+  UserPlus,
+  Copy,
+  Check,
+  KeyRound,
+  ShieldCheck,
+  RefreshCw,
+  X,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { fmtDate } from "@/lib/dates";
+import {
+  createStaffAccount,
+  resetStaffPassword,
+  setStaffActive,
+  setStaffRole,
+  type StaffRow,
+} from "@/lib/actions/staff";
+
+/** Readable password: two Filipino-ish words + 4 digits. Easy to dictate. */
+const WORDS = [
+  "Sinag", "Dalisay", "Bagani", "Alab", "Tala", "Maharlika", "Liwayway",
+  "Bituin", "Agila", "Hiyas", "Marikit", "Payapa", "Silangan", "Amihan",
+];
+function generatePassword() {
+  const pick = () => WORDS[Math.floor(Math.random() * WORDS.length)];
+  let a = pick();
+  let b = pick();
+  while (b === a) b = pick();
+  const n = 1000 + Math.floor(Math.random() * 9000);
+  return `${a}-${b}-${n}`;
+}
+
+export function StaffSettings({
+  staff,
+  meId,
+}: {
+  staff: StaffRow[];
+  meId: string;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  // Newly created account — shown once so the admin can copy the password.
+  const [justCreated, setJustCreated] = useState<{
+    email: string;
+    password: string;
+  } | null>(null);
+  const [resetFor, setResetFor] = useState<StaffRow | null>(null);
+
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: generatePassword(),
+    role: "staff" as "admin" | "staff",
+  });
+
+  function run(fn: () => Promise<void>, after?: () => void) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await fn();
+        after?.();
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Something went wrong.");
+      }
+    });
+  }
+
+  function create(e: React.FormEvent) {
+    e.preventDefault();
+    const snapshot = { email: form.email.trim(), password: form.password };
+    run(
+      () => createStaffAccount({ ...form, email: snapshot.email }),
+      () => {
+        setJustCreated(snapshot);
+        setForm({
+          name: "",
+          email: "",
+          password: generatePassword(),
+          role: "staff",
+        });
+      }
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-slate-500">
+        Give each staff member their own login. Staff see Orders and Customers;
+        only admins see the sales dashboard and these settings.
+      </p>
+
+      {error && (
+        <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>
+      )}
+
+      {justCreated && (
+        <NewAccountCard
+          email={justCreated.email}
+          password={justCreated.password}
+          onDismiss={() => setJustCreated(null)}
+        />
+      )}
+
+      {/* Create */}
+      <form
+        onSubmit={create}
+        className="space-y-4 rounded-2xl bg-white p-5 shadow-[0_1px_3px_rgba(16,24,40,0.06)]"
+      >
+        <p className="font-medium text-slate-900">Add a staff account</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="space-y-1">
+            <span className="text-xs font-medium text-slate-600">Full name</span>
+            <Input
+              required
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="Maria Santos"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="text-xs font-medium text-slate-600">Email</span>
+            <Input
+              required
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              placeholder="maria@example.com"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="text-xs font-medium text-slate-600">
+              Temporary password
+            </span>
+            <div className="flex gap-2">
+              <Input
+                required
+                minLength={8}
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                className="font-mono"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                title="Generate a new password"
+                onClick={() =>
+                  setForm({ ...form, password: generatePassword() })
+                }
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
+          </label>
+          <label className="space-y-1">
+            <span className="text-xs font-medium text-slate-600">Role</span>
+            <select
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={form.role}
+              onChange={(e) =>
+                setForm({ ...form, role: e.target.value as "admin" | "staff" })
+              }
+            >
+              <option value="staff">Staff — Orders &amp; Customers</option>
+              <option value="admin">Admin — everything, incl. sales</option>
+            </select>
+          </label>
+        </div>
+        <p className="text-xs text-slate-500">
+          You hand them this password yourself — no email is sent. They can keep
+          it or you can reset it here any time.
+        </p>
+        <Button type="submit" disabled={pending}>
+          <UserPlus className="h-4 w-4" />
+          {pending ? "Creating…" : "Create account"}
+        </Button>
+      </form>
+
+      {/* List */}
+      <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_3px_rgba(16,24,40,0.06)]">
+        <table className="w-full text-sm">
+          <thead className="border-b bg-slate-50 text-left text-xs uppercase text-slate-500">
+            <tr>
+              <th className="px-4 py-3 font-medium">Name</th>
+              <th className="px-4 py-3 font-medium">Role</th>
+              <th className="px-4 py-3 font-medium">Added</th>
+              <th className="px-4 py-3 font-medium text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {staff.map((s) => {
+              const isMe = s.id === meId;
+              return (
+                <tr key={s.id} className="border-b last:border-0">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-slate-900">
+                        {s.name}
+                      </span>
+                      {isMe && (
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
+                          you
+                        </span>
+                      )}
+                      {!s.active && (
+                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">
+                          Deactivated
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-500">{s.email ?? "—"}</div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <select
+                      className="h-9 rounded-md border border-input bg-background px-2 text-sm disabled:opacity-60"
+                      value={s.role}
+                      disabled={pending || isMe || !s.active}
+                      title={
+                        isMe ? "You can't change your own role." : undefined
+                      }
+                      onChange={(e) =>
+                        run(() =>
+                          setStaffRole(
+                            s.id,
+                            e.target.value as "admin" | "staff"
+                          )
+                        )
+                      }
+                    >
+                      <option value="staff">Staff</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </td>
+                  <td className="px-4 py-3 text-slate-500">
+                    {fmtDate(s.created_at)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={pending}
+                        onClick={() => setResetFor(s)}
+                      >
+                        <KeyRound className="h-3.5 w-3.5" /> Reset password
+                      </Button>
+                      {!isMe && (
+                        <Button
+                          size="sm"
+                          variant={s.active ? "outline" : "default"}
+                          disabled={pending}
+                          onClick={() => run(() => setStaffActive(s.id, !s.active))}
+                        >
+                          {s.active ? "Deactivate" : "Reactivate"}
+                        </Button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>
+          Deactivating signs the person out everywhere immediately and blocks
+          them in the database, not just in this app. Their name stays on the
+          orders they handled, so the history stays honest — that&apos;s why
+          accounts are deactivated rather than deleted.
+        </span>
+      </p>
+
+      {resetFor && (
+        <ResetPasswordDialog
+          staff={resetFor}
+          pending={pending}
+          error={error}
+          onClose={() => setResetFor(null)}
+          onSubmit={(pw, done) =>
+            run(() => resetStaffPassword(resetFor.id, pw), done)
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+function NewAccountCard({
+  email,
+  password,
+  onDismiss,
+}: {
+  email: string;
+  password: string;
+  onDismiss: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(`Email: ${email}\nPassword: ${password}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      /* clipboard unavailable */
+    }
+  }
+  return (
+    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-medium text-emerald-900">Account created</p>
+          <p className="mt-0.5 text-xs text-emerald-800">
+            Send these to them now — the password isn&apos;t shown again. If it
+            gets lost, use Reset password.
+          </p>
+        </div>
+        <button
+          onClick={onDismiss}
+          className="rounded-md p-1 text-emerald-700 hover:bg-emerald-100"
+          aria-label="Dismiss"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="mt-3 space-y-1 rounded-lg bg-white p-3 font-mono text-sm text-slate-800">
+        <p>{email}</p>
+        <p>{password}</p>
+      </div>
+      <Button size="sm" variant="outline" className="mt-2" onClick={copy}>
+        {copied ? (
+          <>
+            <Check className="h-4 w-4" /> Copied!
+          </>
+        ) : (
+          <>
+            <Copy className="h-4 w-4" /> Copy login details
+          </>
+        )}
+      </Button>
+    </div>
+  );
+}
+
+function ResetPasswordDialog({
+  staff,
+  pending,
+  error,
+  onClose,
+  onSubmit,
+}: {
+  staff: StaffRow;
+  pending: boolean;
+  /** Repeated here because the page-level banner sits behind the overlay. */
+  error: string | null;
+  onClose: () => void;
+  onSubmit: (password: string, done: () => void) => void;
+}) {
+  const [pw, setPw] = useState(generatePassword());
+  const [done, setDone] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="font-medium text-slate-900">
+              Reset password for {staff.name}
+            </p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Their old password stops working right away.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-md p-1 text-slate-500 hover:bg-slate-100"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="mt-4 flex gap-2">
+          <Input
+            className="font-mono"
+            minLength={8}
+            value={pw}
+            disabled={done}
+            onChange={(e) => setPw(e.target.value)}
+          />
+          {!done && (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              title="Generate a new password"
+              onClick={() => setPw(generatePassword())}
+            >
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+
+        {error && (
+          <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+            {error}
+          </p>
+        )}
+
+        <div className="mt-4 flex justify-end gap-2">
+          {done ? (
+            <>
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(pw);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1800);
+                  } catch {
+                    /* clipboard unavailable */
+                  }
+                }}
+              >
+                {copied ? (
+                  <>
+                    <Check className="h-4 w-4" /> Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-4 w-4" /> Copy password
+                  </>
+                )}
+              </Button>
+              <Button onClick={onClose}>Done</Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button
+                disabled={pending || pw.length < 8}
+                onClick={() => onSubmit(pw, () => setDone(true))}
+              >
+                <KeyRound className="h-4 w-4" />
+                {pending ? "Saving…" : "Set password"}
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
