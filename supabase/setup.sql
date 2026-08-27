@@ -1,6 +1,6 @@
 -- =============================================================================
 -- DocuAssist PH — full schema setup for a fresh Supabase project.
--- Migrations 0001–0012 concatenated in order. Run once on a fresh project.
+-- Migrations 0001–0015 concatenated in order. Run once on a fresh project.
 -- =============================================================================
 
 
@@ -1327,3 +1327,123 @@ update services set form_fields = $json$[
   {"key":"copies","label":"No. of Copies","type":"number","required":false,"synonyms":["copies","kopya"]}
 ]$json$::jsonb
 where code = 'psa_death';
+
+-- >>> 0013_public_orders.sql <<<
+-- =============================================================================
+-- 0013_public_orders.sql — customer self-service order form + phone OTP.
+--
+-- Customers open a public link, pick their documents, fill in the details and
+-- delivery address, and (when the owner requires it) confirm their mobile
+-- number with a one-time code before the order is created.
+--
+-- SECURITY POSTURE: this is the first public *write* path into the database.
+-- Nothing here is granted to `anon`. Every public order operation goes through
+-- a Next.js route handler using the service-role key, which rate-limits, mints
+-- and checks the OTP, and writes the rows. The browser never touches these
+-- tables, and the OTP code never leaves the server in plaintext.
+-- =============================================================================
+
+-- --- Where an order came from -------------------------------------------------
+alter table orders
+  add column if not exists source text not null default 'staff'
+    check (source in ('staff', 'public'));
+
+comment on column orders.source is
+  'staff = encoded by staff from Messenger; public = submitted by the customer '
+  'through the self-service form.';
+
+create index if not exists orders_source_idx on orders (source);
+
+-- --- OTP challenges -----------------------------------------------------------
+-- One row per code issued. The code is stored only as a salted hash: a leak of
+-- this table must not let anyone complete a verification.
+create table if not exists otp_verifications (
+  id           uuid primary key default gen_random_uuid(),
+  phone        text not null,                    -- normalized 09XXXXXXXXX
+  code_hash    text not null,
+  salt         text not null,
+  expires_at   timestamptz not null,
+  attempts     int not null default 0,           -- wrong guesses so far
+  verified_at  timestamptz,
+  -- Opaque token handed back on success; the submit step must present it.
+  token        text,
+  token_used_at timestamptz,
+  ip           text,
+  created_at   timestamptz not null default now()
+);
+create index if not exists otp_phone_idx on otp_verifications (phone, created_at desc);
+create index if not exists otp_token_idx on otp_verifications (token);
+
+-- Housekeeping: nothing here is useful for long.
+create or replace function purge_expired_otps() returns void
+language sql as $$
+  delete from otp_verifications where created_at < now() - interval '24 hours';
+$$;
+
+-- --- RLS: staff-only, like everything else ------------------------------------
+-- The service-role key used by the public routes bypasses RLS; anon has no
+-- policy here and no grants, so the browser cannot read or write OTP rows.
+alter table otp_verifications enable row level security;
+
+create policy otp_staff_read on otp_verifications
+  for select using (is_staff());
+
+revoke all on table otp_verifications from anon;
+
+-- --- Settings -----------------------------------------------------------------
+insert into app_settings (key, value) values
+  ('public_orders_enabled', 'true'),
+  ('otp_required', 'true')
+on conflict (key) do nothing;
+
+-- --- SMS template for the OTP itself ------------------------------------------
+insert into notification_settings (event_key, enabled, template) values
+  ('otp', true,
+   'Your DocuAssist PH confirmation code is {code}. It expires in 10 minutes. Do not share this code with anyone.')
+on conflict (event_key) do nothing;
+
+-- >>> 0014_staff_active.sql <<<
+-- =============================================================================
+-- 0014_staff_active.sql — deactivate staff instead of deleting them.
+--
+-- staff_users rows are referenced by order_status_history.changed_by, so a
+-- departed staff member cannot simply be deleted without either failing on the
+-- foreign key or erasing who did what. `active` revokes their access while
+-- leaving the audit trail intact.
+-- =============================================================================
+alter table staff_users
+  add column if not exists active boolean not null default true;
+
+comment on column staff_users.active is
+  'false = access revoked. The row stays so order history keeps attributing '
+  'their past actions to them.';
+
+create index if not exists staff_users_active_idx on staff_users (active);
+
+-- is_staff()/is_admin() gate RLS on every table, so an inactive account must
+-- fail them too — not just the UI.
+create or replace function is_staff() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from staff_users where id = auth.uid() and active
+  );
+$$;
+
+create or replace function is_admin() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from staff_users where id = auth.uid() and active and role = 'admin'
+  );
+$$;
+
+-- >>> 0015_pasted_details.sql <<<
+-- Staff intake no longer parses the customer's Messenger reply into fields.
+-- Staff paste the reply as-is and it is kept verbatim on the item, so nothing
+-- is lost to a parser guessing wrong. The structured form_details stay for the
+-- printable PSA forms: customer-submitted orders fill them directly, and staff
+-- fill them on the order when they are about to print.
+alter table order_items
+  add column if not exists pasted_details text;
+
+comment on column order_items.pasted_details is
+  'Customer''s filled-out form, pasted verbatim by staff from Messenger.';

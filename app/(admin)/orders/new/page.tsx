@@ -25,7 +25,7 @@ export default async function NewOrderPage() {
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">New order</h1>
         <p className="text-sm text-muted-foreground">
-          Encode a customer&apos;s request from Messenger.
+          Name, document, paste their reply — that&apos;s the whole intake.
         </p>
       </div>
       <NewOrderForm services={(services ?? []) as Service[]} />

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Search, UserPlus, X } from "lucide-react";
+import { Search, UserPlus, X, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,17 +16,12 @@ import {
 import { peso } from "@/lib/money";
 import { searchCustomers, createCustomer } from "@/lib/actions/customers";
 import { createOrder } from "@/lib/actions/orders";
-import { PasteParseBox } from "./PasteParseBox";
-import type { ParseResult } from "@/lib/actions/parse";
-import type { Customer, Service, FormFieldDef } from "@/lib/types";
+import type { Customer, Service } from "@/lib/types";
 
 type SelectedService = {
   quantity: number;
-  form_details: Record<string, string>;
-  /** keys auto-filled by Paste & Parse — highlighted until staff edits them */
-  parsedKeys: string[];
-  /** required keys the parser could not find — flagged for staff */
-  missingKeys: string[];
+  /** The customer's filled-out form, pasted from Messenger exactly as sent. */
+  pasted_details: string;
 };
 
 const emptyNewCustomer = {
@@ -42,18 +37,27 @@ const emptyNewCustomer = {
   notes: "",
 };
 
+/**
+ * Staff intake: name → document → paste the customer's reply → create.
+ *
+ * The paste is stored verbatim, not parsed into fields. A parser that guesses
+ * wrong on a PSA detail gets the application rejected, and checking its guesses
+ * costs more staff time than it saves. The printable PSA form is filled in on
+ * the order itself, when there is actually a form to print.
+ */
 export function NewOrderForm({ services }: { services: Service[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   // --- Customer ---
-  const [mode, setMode] = useState<"pick" | "new">("pick");
+  const [mode, setMode] = useState<"new" | "pick">("new");
   const [picked, setPicked] = useState<Customer | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Customer[]>([]);
   const [searching, setSearching] = useState(false);
   const [newCustomer, setNewCustomer] = useState({ ...emptyNewCustomer });
+  const [showAddress, setShowAddress] = useState(false);
 
   // --- Services ---
   const [selected, setSelected] = useState<Record<string, SelectedService>>({});
@@ -74,63 +78,17 @@ export function NewOrderForm({ services }: { services: Service[] }) {
   function toggleService(svc: Service) {
     setSelected((prev) => {
       const next = { ...prev };
-      if (next[svc.id]) {
-        delete next[svc.id];
-      } else {
-        next[svc.id] = {
-          quantity: 1,
-          form_details: {},
-          parsedKeys: [],
-          missingKeys: [],
-        };
-      }
+      if (next[svc.id]) delete next[svc.id];
+      else next[svc.id] = { quantity: 1, pasted_details: "" };
       return next;
     });
   }
 
-  function setField(svcId: string, key: string, value: string) {
+  function setPaste(svcId: string, value: string) {
     setSelected((prev) => ({
       ...prev,
-      [svcId]: {
-        ...prev[svcId],
-        form_details: { ...prev[svcId].form_details, [key]: value },
-        // Staff has reviewed this field — drop the auto-filled highlight.
-        parsedKeys: prev[svcId].parsedKeys.filter((k) => k !== key),
-        missingKeys: value.trim()
-          ? prev[svcId].missingKeys.filter((k) => k !== key)
-          : prev[svcId].missingKeys,
-      },
+      [svcId]: { ...prev[svcId], pasted_details: value },
     }));
-  }
-
-  /**
-   * Apply a parse result into the editable form (§9) — never auto-saved.
-   * Existing typed values are preserved; only blank fields are filled.
-   */
-  function applyParse(serviceId: string, result: ParseResult) {
-    setSelected((prev) => {
-      const current = prev[serviceId];
-      if (!current) return prev;
-      const details = { ...current.form_details };
-      const newlyFilled: string[] = [];
-      for (const [key, value] of Object.entries(result.values)) {
-        if (!details[key]?.trim()) {
-          details[key] = value;
-          newlyFilled.push(key);
-        }
-      }
-      return {
-        ...prev,
-        [serviceId]: {
-          ...current,
-          form_details: details,
-          parsedKeys: Array.from(
-            new Set([...current.parsedKeys, ...newlyFilled])
-          ),
-          missingKeys: result.missingRequired,
-        },
-      };
-    });
   }
 
   function setQty(svcId: string, qty: number) {
@@ -149,24 +107,23 @@ export function NewOrderForm({ services }: { services: Service[] }) {
   async function submit() {
     setError(null);
     if (chosen.length === 0) {
-      setError("Pick at least one service.");
+      setError("Pick at least one document.");
       return;
     }
 
     startTransition(async () => {
       try {
-        // Resolve customer id.
         let customerId = picked?.id ?? null;
         if (mode === "new") {
           if (!newCustomer.full_name.trim()) {
-            setError("Enter the customer's name.");
+            setError("Enter the customer's full name.");
             return;
           }
           const { id } = await createCustomer(newCustomer);
           customerId = id;
         }
         if (!customerId) {
-          setError("Pick an existing customer or create a new one.");
+          setError("Pick an existing customer or enter a new one.");
           return;
         }
 
@@ -177,7 +134,7 @@ export function NewOrderForm({ services }: { services: Service[] }) {
             service_id: s.id,
             quantity: selected[s.id].quantity,
             price_at_order: Number(s.price),
-            form_details: selected[s.id].form_details,
+            pasted_details: selected[s.id].pasted_details,
           })),
         });
         router.push(`/orders/${id}`);
@@ -189,9 +146,6 @@ export function NewOrderForm({ services }: { services: Service[] }) {
 
   return (
     <div className="space-y-6">
-      {/* Paste & Parse (§9) — fills the editable form below, never auto-saves */}
-      <PasteParseBox services={chosen} onParsed={applyParse} />
-
       {/* Step 1: Customer */}
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0">
@@ -199,19 +153,19 @@ export function NewOrderForm({ services }: { services: Service[] }) {
           <div className="flex gap-2">
             <Button
               type="button"
-              variant={mode === "pick" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setMode("pick")}
-            >
-              <Search className="h-4 w-4" /> Pick existing
-            </Button>
-            <Button
-              type="button"
               variant={mode === "new" ? "default" : "outline"}
               size="sm"
               onClick={() => setMode("new")}
             >
               <UserPlus className="h-4 w-4" /> New customer
+            </Button>
+            <Button
+              type="button"
+              variant={mode === "pick" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setMode("pick")}
+            >
+              <Search className="h-4 w-4" /> Pick existing
             </Button>
           </div>
         </CardHeader>
@@ -278,97 +232,132 @@ export function NewOrderForm({ services }: { services: Service[] }) {
               </div>
             )
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Full name *">
-                <Input
-                  value={newCustomer.full_name}
-                  onChange={(e) =>
-                    setNewCustomer({ ...newCustomer, full_name: e.target.value })
-                  }
+            <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Full name *">
+                  <Input
+                    autoFocus
+                    placeholder="Juan Dela Cruz"
+                    value={newCustomer.full_name}
+                    onChange={(e) =>
+                      setNewCustomer({
+                        ...newCustomer,
+                        full_name: e.target.value,
+                      })
+                    }
+                  />
+                </Field>
+                <Field
+                  label="Mobile number"
+                  hint="for the tracking SMS"
+                >
+                  <Input
+                    placeholder="09XXXXXXXXX"
+                    value={newCustomer.phone}
+                    onChange={(e) =>
+                      setNewCustomer({ ...newCustomer, phone: e.target.value })
+                    }
+                  />
+                </Field>
+              </div>
+
+              {/* Delivery address is only needed once the order ships, so it
+                  stays out of the way during intake. */}
+              <button
+                type="button"
+                onClick={() => setShowAddress((v) => !v)}
+                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+              >
+                <ChevronDown
+                  className={`h-4 w-4 transition-transform ${showAddress ? "" : "-rotate-90"}`}
                 />
-              </Field>
-              <Field label="Phone (PH mobile)">
-                <Input
-                  value={newCustomer.phone}
-                  onChange={(e) =>
-                    setNewCustomer({ ...newCustomer, phone: e.target.value })
-                  }
-                />
-              </Field>
-              <Field label="Messenger name">
-                <Input
-                  value={newCustomer.messenger_name}
-                  onChange={(e) =>
-                    setNewCustomer({
-                      ...newCustomer,
-                      messenger_name: e.target.value,
-                    })
-                  }
-                />
-              </Field>
-              <Field label="Messenger link">
-                <Input
-                  value={newCustomer.messenger_link}
-                  onChange={(e) =>
-                    setNewCustomer({
-                      ...newCustomer,
-                      messenger_link: e.target.value,
-                    })
-                  }
-                />
-              </Field>
-              <Field label="Address line" className="sm:col-span-2">
-                <Input
-                  value={newCustomer.address_line}
-                  onChange={(e) =>
-                    setNewCustomer({
-                      ...newCustomer,
-                      address_line: e.target.value,
-                    })
-                  }
-                />
-              </Field>
-              <Field label="Barangay">
-                <Input
-                  value={newCustomer.barangay}
-                  onChange={(e) =>
-                    setNewCustomer({ ...newCustomer, barangay: e.target.value })
-                  }
-                />
-              </Field>
-              <Field label="City / Municipality">
-                <Input
-                  value={newCustomer.city}
-                  onChange={(e) =>
-                    setNewCustomer({ ...newCustomer, city: e.target.value })
-                  }
-                />
-              </Field>
-              <Field label="Province">
-                <Input
-                  value={newCustomer.province}
-                  onChange={(e) =>
-                    setNewCustomer({ ...newCustomer, province: e.target.value })
-                  }
-                />
-              </Field>
-              <Field label="ZIP">
-                <Input
-                  value={newCustomer.zip}
-                  onChange={(e) =>
-                    setNewCustomer({ ...newCustomer, zip: e.target.value })
-                  }
-                />
-              </Field>
+                Delivery address &amp; Messenger {showAddress ? "" : "(optional now)"}
+              </button>
+
+              {showAddress && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="Messenger name">
+                    <Input
+                      value={newCustomer.messenger_name}
+                      onChange={(e) =>
+                        setNewCustomer({
+                          ...newCustomer,
+                          messenger_name: e.target.value,
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label="Messenger link">
+                    <Input
+                      value={newCustomer.messenger_link}
+                      onChange={(e) =>
+                        setNewCustomer({
+                          ...newCustomer,
+                          messenger_link: e.target.value,
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label="Address line" className="sm:col-span-2">
+                    <Input
+                      value={newCustomer.address_line}
+                      onChange={(e) =>
+                        setNewCustomer({
+                          ...newCustomer,
+                          address_line: e.target.value,
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label="Barangay">
+                    <Input
+                      value={newCustomer.barangay}
+                      onChange={(e) =>
+                        setNewCustomer({
+                          ...newCustomer,
+                          barangay: e.target.value,
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label="City / Municipality">
+                    <Input
+                      value={newCustomer.city}
+                      onChange={(e) =>
+                        setNewCustomer({ ...newCustomer, city: e.target.value })
+                      }
+                    />
+                  </Field>
+                  <Field label="Province">
+                    <Input
+                      value={newCustomer.province}
+                      onChange={(e) =>
+                        setNewCustomer({
+                          ...newCustomer,
+                          province: e.target.value,
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label="ZIP">
+                    <Input
+                      value={newCustomer.zip}
+                      onChange={(e) =>
+                        setNewCustomer({ ...newCustomer, zip: e.target.value })
+                      }
+                    />
+                  </Field>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Step 2: Services + per-service form details */}
+      {/* Step 2: Documents + the pasted reply */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">2 · Services &amp; details</CardTitle>
+          <CardTitle className="text-base">2 · Documents</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-2 sm:grid-cols-2">
@@ -405,49 +394,28 @@ export function NewOrderForm({ services }: { services: Service[] }) {
                   />
                 </div>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {(s.form_fields ?? []).map((f: FormFieldDef) => {
-                  const wasParsed = selected[s.id].parsedKeys.includes(f.key);
-                  const isMissing = selected[s.id].missingKeys.includes(f.key);
-                  const tone = wasParsed
-                    ? "border-amber-400 bg-amber-50"
-                    : isMissing
-                      ? "border-red-300 bg-red-50"
-                      : "";
-                  return (
-                    <Field
-                      key={f.key}
-                      label={f.required ? `${f.label} *` : f.label}
-                      hint={
-                        wasParsed
-                          ? "auto-filled — please check"
-                          : isMissing
-                            ? "not found — enter manually"
-                            : undefined
-                      }
-                      hintTone={wasParsed ? "parsed" : "missing"}
-                      className={f.type === "textarea" ? "sm:col-span-2" : ""}
-                    >
-                      {f.type === "textarea" ? (
-                        <Textarea
-                          className={tone}
-                          value={selected[s.id].form_details[f.key] ?? ""}
-                          onChange={(e) => setField(s.id, f.key, e.target.value)}
-                        />
-                      ) : (
-                        <Input
-                          className={tone}
-                          type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
-                          value={selected[s.id].form_details[f.key] ?? ""}
-                          onChange={(e) => setField(s.id, f.key, e.target.value)}
-                        />
-                      )}
-                    </Field>
-                  );
-                })}
-              </div>
+              <Field
+                label="Customer's filled-out form"
+                hint="pasted from Messenger, kept exactly as sent"
+              >
+                <Textarea
+                  rows={9}
+                  className="font-mono text-xs"
+                  value={selected[s.id].pasted_details}
+                  onChange={(e) => setPaste(s.id, e.target.value)}
+                  placeholder={
+                    "Paste the customer's whole reply here, e.g.\n\nFull Name: Juan Dela Cruz\nBirthdate: Jan 5, 1990\nLugar ng kapanganakan: Quezon City\nPangalan ng ina: Maria Santos\nPangalan ng ama: Pedro Dela Cruz"
+                  }
+                />
+              </Field>
             </div>
           ))}
+
+          {chosen.length === 0 && (
+            <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
+              Pick a document above, then paste the customer&apos;s reply.
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -497,26 +465,18 @@ function Field({
   children,
   className,
   hint,
-  hintTone,
 }: {
   label: string;
   children: React.ReactNode;
   className?: string;
   hint?: string;
-  hintTone?: "parsed" | "missing";
 }) {
   return (
     <div className={`space-y-1.5 ${className ?? ""}`}>
       <div className="flex items-baseline justify-between gap-2">
         <Label>{label}</Label>
         {hint && (
-          <span
-            className={`text-[11px] ${
-              hintTone === "missing" ? "text-red-600" : "text-amber-700"
-            }`}
-          >
-            {hint}
-          </span>
+          <span className="text-[11px] text-muted-foreground">{hint}</span>
         )}
       </div>
       {children}

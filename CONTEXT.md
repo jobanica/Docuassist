@@ -123,17 +123,15 @@ staff_users
 4. **Customers** — list + detail with order history (repeat customers are common).
 5. **Services & couriers settings** — CRUD services, prices, durations, form field definitions; CRUD couriers (name + tracking page URL).
 6. **Dashboard** — counts per status, orders this week/month, revenue (delivered + paid), average processing time.
-## 9. Paste & Parse (Auto-Fill Order Details)
-Staff shouldn't retype the customer's filled-out form from Messenger. The **New Order** screen has a "Paste & Parse" box at the top: staff copies the customer's entire reply from Messenger, pastes it, clicks **Parse**, and the form fields below auto-fill.
-**Two-tier parsing (hybrid):**
-1. **Tier 1 — Rule-based (free, instant, tried first).** Since the business controls the form template sent to customers, the reply is usually label-formatted ("Full Name: ...", "Birthdate: ...", "Address: ..."). A deterministic parser splits lines on known labels (with fuzzy label matching for typos/casing and Taglish label variants) and maps them to form fields. No API cost.
-2. **Tier 2 — AI fallback (Claude API, only when Tier 1 leaves required fields empty).** Send the raw pasted text to the Anthropic API (`claude-haiku` class model) with a system prompt instructing it to return **only JSON** matching the service's form schema (field keys from `services.form_fields`). Parse the JSON, fill the fields. Handles freeform/messy replies. Cost is per-token on the business's own API key — a fraction of a centavo per parse.
+## 9. Order Intake (Two Paths)
+An order reaches the system one of two ways, and they store details differently.
+**Path A — staff encoding from Messenger.** The **New Order** screen is: customer full name → pick the document(s) → paste the customer's filled-out form → create. The paste is stored **verbatim** in `order_items.pasted_details`; nothing is parsed into fields. Staff read the reply as the customer wrote it, so no parser can silently mangle a PSA detail and get the application rejected.
+**Path B — the customer's own order link (§13a).** The public form collects the service's declared `form_fields` directly from the customer, so `order_items.form_details` arrives already structured and validated. Orders from this path carry `source = 'public'`.
 **Rules:**
-- Parsed values always land in the **editable form for staff review** — never auto-saved. Staff visually confirms (wrong details = rejected PSA request) then saves.
-- Fields the parser filled are visually marked (e.g., subtle highlight); empty/uncertain fields are flagged so staff knows what to check.
-- Tier 2 must return strict JSON (no prose); strip code fences before `JSON.parse`, wrap in try/catch, and fall back gracefully to a blank form with the raw paste shown beside it if parsing fails.
-- Env: `ANTHROPIC_API_KEY`. Log parses (order draft id, tier used, tokens) for cost visibility.
-- Never send more than the pasted text to the API; no customer data is stored by the parse call itself.
+- Mobile number is captured at intake where possible — the tracking SMS depends on it. Delivery address is collapsed during intake and can be completed before shipping.
+- The printable PSA forms (§12a) fill from `form_details`. Path B fills them automatically; on Path A staff fill them **on the order detail screen**, with the pasted reply displayed directly above the fields to copy from. The print screen warns when an item's fields are still empty rather than silently printing a blank form.
+- Both `pasted_details` and `form_details` stay editable on the order after creation.
+- No AI parsing, no `ANTHROPIC_API_KEY`, no per-parse token cost.
 ## 10. Notifications (Semaphore SMS)
 - Provider: **Semaphore** (semaphore.co) — PH SMS gateway, API-key based, ~₱0.50/SMS.
 - Env: `SEMAPHORE_API_KEY`, `SEMAPHORE_SENDER_NAME`.

@@ -13,7 +13,11 @@ const orderItemSchema = z.object({
   service_id: z.string().uuid(),
   quantity: z.coerce.number().int().min(1).default(1),
   price_at_order: z.coerce.number().min(0),
+  /** Structured fields — filled by the customer's own order form, or by staff
+   *  on the order when they are about to print the PSA form. */
   form_details: z.record(z.string(), z.string()).default({}),
+  /** The customer's reply pasted verbatim by staff. Kept as sent. */
+  pasted_details: z.string().max(20000).default(""),
 });
 
 const createOrderSchema = z.object({
@@ -48,6 +52,7 @@ export async function createOrder(
       quantity: it.quantity,
       price_at_order: it.price_at_order,
       form_details: it.form_details,
+      pasted_details: it.pasted_details.trim() || null,
     }))
   );
   if (itemsErr) throw new Error(itemsErr.message);
@@ -487,4 +492,62 @@ export async function markReturned(
 
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/orders");
+}
+
+/**
+ * Edit one item's details after the order exists.
+ *
+ * Staff intake stores the customer's reply verbatim, so the boxes on the
+ * printable PSA form start empty. This is where they get filled — at print
+ * time, with the pasted reply on screen to copy from.
+ */
+export async function updateOrderItemDetails(
+  itemId: string,
+  input: { form_details?: Record<string, string>; pasted_details?: string }
+): Promise<void> {
+  await requireStaff();
+  const parsed = z
+    .object({
+      form_details: z.record(z.string(), z.string()).optional(),
+      pasted_details: z.string().max(20000).optional(),
+    })
+    .parse(input);
+
+  const supabase = createClient();
+  const { data: item, error: readErr } = await supabase
+    .from("order_items")
+    .select("order_id, services ( form_fields )")
+    .eq("id", itemId)
+    .single();
+  if (readErr) throw new Error(readErr.message);
+
+  const patch: Record<string, unknown> = {};
+
+  if (parsed.form_details) {
+    // Only keys this service actually declares — no arbitrary keys in jsonb.
+    const rel = (item as any).services;
+    const svc = Array.isArray(rel) ? rel[0] : rel;
+    const allowed = new Set(
+      ((svc?.form_fields ?? []) as { key: string }[]).map((f) => f.key)
+    );
+    const details: Record<string, string> = {};
+    for (const [k, v] of Object.entries(parsed.form_details)) {
+      if (allowed.has(k) && v.trim()) details[k] = v.trim();
+    }
+    patch.form_details = details;
+  }
+  if (parsed.pasted_details !== undefined) {
+    patch.pasted_details = parsed.pasted_details.trim() || null;
+  }
+  if (Object.keys(patch).length === 0) return;
+
+  const { error } = await supabase
+    .from("order_items")
+    .update(patch)
+    .eq("id", itemId);
+  if (error) throw new Error(error.message);
+
+  const orderId = (item as any).order_id;
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath(`/orders/${orderId}/print`);
 }

@@ -20,13 +20,13 @@ npm install
 cp .env.local.example .env.local
 # fill in Supabase URL + keys and NEXT_PUBLIC_SITE_URL
 ```
-SMS and AI parsing are **optional**: leave `SEMAPHORE_API_KEY` / `ANTHROPIC_API_KEY`
+SMS is **optional**: leave `SEMAPHORE_API_KEY`
 blank and those calls are stubbed (logged, not sent) so the app runs end-to-end.
 
 ### 3. Database
 Apply the schema to your Supabase project. Options:
 - **SQL editor (easiest):** open `supabase/setup.sql`, copy the whole file,
-  paste it into the Supabase SQL Editor and Run. It is migrations 0001–0008
+  paste it into the Supabase SQL Editor and Run. It is migrations 0001–0015
   concatenated in order — run it once on a fresh project.
 - **Supabase CLI:** `supabase db push` (applies `supabase/migrations/` in order).
 
@@ -53,7 +53,6 @@ app/(admin)/      staff area (auth-guarded): dashboard, orders, customers, setti
 app/login         staff sign-in
 app/track/[code]  public tracking page (no auth, mobile-first)
 app/api/track     public lookup route (rate-limited, whitelisted fields only)
-lib/parse/        Paste & Parse — Tier-1 rule-based + Tier-2 Anthropic fallback
 lib/sms/          Semaphore SMS (stubs without a key) + PH phone normalization
 lib/sales.ts      sales figures, all computed by query (no stored totals)
 lib/supabase      server / browser / service-role clients + session middleware

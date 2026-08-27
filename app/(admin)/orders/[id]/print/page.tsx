@@ -23,7 +23,7 @@ export default async function PrintFormsPage({
     .select(
       `id, tracking_code,
        customers ( full_name ),
-       order_items ( id, form_details, services ( code, name ) )`
+       order_items ( id, form_details, pasted_details, services ( code, name ) )`
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -69,10 +69,9 @@ export default async function PrintFormsPage({
       {items.map((item, i) => {
         const code = item.services?.code ?? "";
         const domId = `psa-form-${i}`;
-        const overflows = findOverflows(
-          code,
-          (item.form_details ?? {}) as Record<string, string>
-        );
+        const details = (item.form_details ?? {}) as Record<string, string>;
+        const hasDetails = Object.values(details).some((v) => v?.trim());
+        const overflows = findOverflows(code, details);
         return (
           <section key={item.id} className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
@@ -88,6 +87,30 @@ export default async function PrintFormsPage({
               </div>
               <PrintActions targetId={domId} />
             </div>
+
+            {!hasDetails && (
+              <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900 print:hidden">
+                <p className="font-semibold">
+                  This form will print blank.
+                </p>
+                <p className="mt-1">
+                  The PSA form fields on this item are empty. Open{" "}
+                  <Link
+                    href={`/orders/${params.id}`}
+                    className="font-medium underline"
+                  >
+                    the order
+                  </Link>{" "}
+                  and fill <strong>PSA form fields</strong> — the
+                  customer&apos;s reply is shown right above them to copy from.
+                </p>
+                {item.pasted_details && (
+                  <pre className="mt-2 max-h-52 overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-white p-3 font-mono text-[11px] leading-relaxed text-slate-700">
+                    {item.pasted_details}
+                  </pre>
+                )}
+              </div>
+            )}
 
             {overflows.length > 0 && (
               <div className="rounded-xl bg-red-50 p-3 text-xs text-red-800 print:hidden">
@@ -117,7 +140,7 @@ export default async function PrintFormsPage({
                 <PsaForm
                   serviceCode={code}
                   serviceName={item.services?.name ?? "Document"}
-                  details={(item.form_details ?? {}) as Record<string, string>}
+                  details={details}
                   trackingCode={o.tracking_code}
                   customerName={customerName}
                 />

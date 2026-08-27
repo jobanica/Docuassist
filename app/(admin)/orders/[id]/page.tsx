@@ -13,6 +13,7 @@ import { StatusStepper } from "@/components/admin/StatusStepper";
 import { OrderActions } from "@/components/admin/OrderActions";
 import { TrackingPanel } from "@/components/admin/TrackingPanel";
 import { PaymentToggle } from "@/components/admin/PaymentToggle";
+import { ItemDetails } from "@/components/admin/ItemDetails";
 import { qrDataUrl, trackingUrl } from "@/lib/qr";
 import { peso } from "@/lib/money";
 import { fmtDate, fmtDateTime, daysSince } from "@/lib/dates";
@@ -46,7 +47,7 @@ export default async function OrderDetailPage({
       `*,
        customers (*),
        couriers ( id, name, tracking_page_url ),
-       order_items ( id, quantity, price_at_order, form_details,
+       order_items ( id, quantity, price_at_order, form_details, pasted_details,
                      services ( name, code, form_fields ) )`
     )
     .eq("id", params.id)
@@ -270,18 +271,12 @@ export default async function OrderDetailPage({
                         {peso(Number(it.price_at_order) * it.quantity)}
                       </span>
                     </div>
-                    <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                      {fields.map((f) => {
-                        const v = it.form_details?.[f.key];
-                        if (!v) return null;
-                        return (
-                          <div key={f.key}>
-                            <dt className="text-muted-foreground">{f.label}</dt>
-                            <dd>{v}</dd>
-                          </div>
-                        );
-                      })}
-                    </dl>
+                    <ItemDetails
+                      itemId={it.id}
+                      fields={fields}
+                      formDetails={(it.form_details ?? {}) as Record<string, string>}
+                      pastedDetails={it.pasted_details ?? null}
+                    />
                   </div>
                 );
               })}
