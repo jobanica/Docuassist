@@ -1,7 +1,9 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { requireStaff } from "@/lib/auth";
 import {
   Card,
   CardContent,
@@ -33,6 +35,12 @@ export default async function DashboardPage({
 }: {
   searchParams: { range?: string; from?: string; to?: string };
 }) {
+  // Sales figures are admin-only (the owner's decision). Staff keep the full
+  // CRM — orders, customers, shipping, SMS — and land on the orders board,
+  // which carries the same aging highlights this page would have shown them.
+  const staff = await requireStaff();
+  if (staff.role !== "admin") redirect("/orders");
+
   const supabase = createClient();
   const range = resolveRange(
     searchParams.range,

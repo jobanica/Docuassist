@@ -9,7 +9,7 @@ export async function signIn(
 ): Promise<{ error?: string }> {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
-  const next = String(formData.get("next") ?? "/dashboard");
+  const next = String(formData.get("next") ?? "");
 
   if (!email || !password) {
     return { error: "Please enter your email and password." };
@@ -28,7 +28,7 @@ export async function signIn(
   // Must have a staff_users row to use the admin app (RLS gate).
   const { data: staff } = await supabase
     .from("staff_users")
-    .select("id")
+    .select("id, role")
     .eq("id", data.user.id)
     .maybeSingle();
 
@@ -40,5 +40,7 @@ export async function signIn(
     };
   }
 
-  redirect(next.startsWith("/") ? next : "/dashboard");
+  // Admins land on the sales dashboard; staff on the orders board.
+  const home = staff.role === "admin" ? "/dashboard" : "/orders";
+  redirect(next.startsWith("/") ? next : home);
 }

@@ -10,11 +10,13 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 
+// adminOnly entries are hidden from staff. Hiding is cosmetic — the real
+// enforcement is the role check in each page plus the DB-level guards.
 const nav = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/orders", label: "Orders", icon: Package },
-  { href: "/customers", label: "Customers", icon: Users },
-  { href: "/settings/notifications", label: "Settings", icon: Settings },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, adminOnly: true },
+  { href: "/orders", label: "Orders", icon: Package, adminOnly: false },
+  { href: "/customers", label: "Customers", icon: Users, adminOnly: false },
+  { href: "/settings/notifications", label: "Settings", icon: Settings, adminOnly: false },
 ];
 
 export default async function AdminLayout({
@@ -45,7 +47,9 @@ export default async function AdminLayout({
           <p className="text-xs text-muted-foreground">Admin</p>
         </div>
         <nav className="flex-1 space-y-1 px-3">
-          {nav.map(({ href, label, icon: Icon }) => (
+          {nav
+            .filter((item) => !item.adminOnly || staff.role === "admin")
+            .map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
               href={href}

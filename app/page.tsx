@@ -6,5 +6,15 @@ export default async function Home() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  redirect(user ? "/dashboard" : "/login");
+  if (!user) redirect("/login");
+
+  // Staff have no sales dashboard, so send them to the orders board directly
+  // rather than bouncing them off /dashboard.
+  const { data: staff } = await supabase
+    .from("staff_users")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  redirect(staff?.role === "admin" ? "/dashboard" : "/orders");
 }

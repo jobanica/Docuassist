@@ -26,7 +26,7 @@ function SubmitButton() {
 
 function LoginForm() {
   const [state, formAction] = useFormState(signIn, undefined);
-  const next = useSearchParams().get("next") ?? "/dashboard";
+  const next = useSearchParams().get("next") ?? "";
 
   return (
     <form action={formAction} className="space-y-4">

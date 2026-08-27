@@ -74,6 +74,10 @@ npm run build         # type-checks the whole app
 ## Security model
 - Everything except `/track/*` and `/login` requires a staff session.
 - RLS is **staff-only** on every table; `admin` role gates settings.
+- **Sales/revenue is admin-only.** Staff have the full CRM (orders, customers,
+  shipping, SMS) but no access to money: `/dashboard` redirects them to the
+  orders board, and the five sales RPCs raise `insufficient_privilege` for a
+  non-admin — so a staff account cannot read revenue through the API either.
 - The public tracking page has **no table access** — it calls one
   `SECURITY DEFINER` RPC (`get_tracking_info`) that returns only the
   whitelisted fields from CONTEXT.md §13, behind a rate-limited route.
