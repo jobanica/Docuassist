@@ -52,6 +52,13 @@ export interface ReturnedOrderRow {
 }
 
 /** Named ranges offered on the dashboard, plus a custom range. */
+export interface MonthPoint {
+  month: string;
+  label: string;
+  booked: number;
+  collected: number;
+}
+
 export type RangeKey = "week" | "month" | "custom";
 
 /** Resolve a range key to ISO dates in Asia/Manila terms. */
@@ -86,17 +93,22 @@ export function resolveRange(
  */
 export async function loadSales(from: string, to: string) {
   const supabase = createClient();
-  const [summary, trend, byService, byCourier, returned] = await Promise.all([
-    supabase.rpc("sales_summary", { p_from: from, p_to: to }),
-    supabase.rpc("sales_rts_trend", { p_months: 6 }),
-    supabase.rpc("sales_by_service", { p_from: from, p_to: to }),
-    supabase.rpc("sales_by_courier", { p_from: from, p_to: to }),
-    supabase.rpc("returned_orders", { p_from: from, p_to: to }),
-  ]);
+  // All issued together — the database is in Seoul, so serialising these would
+  // stack a full round trip each.
+  const [summary, trend, monthly, byService, byCourier, returned] =
+    await Promise.all([
+      supabase.rpc("sales_summary", { p_from: from, p_to: to }),
+      supabase.rpc("sales_rts_trend", { p_months: 6 }),
+      supabase.rpc("sales_monthly", { p_months: 6 }),
+      supabase.rpc("sales_by_service", { p_from: from, p_to: to }),
+      supabase.rpc("sales_by_courier", { p_from: from, p_to: to }),
+      supabase.rpc("returned_orders", { p_from: from, p_to: to }),
+    ]);
 
   return {
     summary: (summary.data ?? null) as SalesSummary | null,
     trend: (trend.data ?? []) as RtsTrendPoint[],
+    monthly: (monthly.data ?? []) as MonthPoint[],
     byService: (byService.data ?? []) as ServiceBreakdown[],
     byCourier: (byCourier.data ?? []) as CourierBreakdown[],
     returned: (returned.data ?? []) as ReturnedOrderRow[],

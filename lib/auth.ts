@@ -1,29 +1,49 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Role } from "./types";
 
 export interface StaffContext {
   id: string;
   name: string;
+  email: string | null;
   role: Role;
 }
 
 /**
- * Resolve the signed-in staff user for a Server Action / Server Component.
- * Throws if there is no session or no staff_users row (RLS would block anyway).
+ * Resolve the signed-in staff user.
+ *
+ * Wrapped in React `cache()` so the layout and the page it renders share one
+ * lookup per request instead of each doing its own getUser + staff_users
+ * round trip. That matters here: the database is in Seoul and every extra
+ * round trip is real latency.
+ *
+ * Returns null when there is no session or no staff_users row.
  */
-export async function requireStaff(): Promise<StaffContext> {
+export const getStaff = cache(async (): Promise<StaffContext | null> => {
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
+  if (!user) return null;
 
   const { data: staff } = await supabase
     .from("staff_users")
-    .select("name, role")
+    .select("name, email, role")
     .eq("id", user.id)
     .maybeSingle();
 
-  if (!staff) throw new Error("Not a staff user");
-  return { id: user.id, name: staff.name, role: staff.role as Role };
+  if (!staff) return null;
+  return {
+    id: user.id,
+    name: staff.name,
+    email: staff.email ?? user.email ?? null,
+    role: staff.role as Role,
+  };
+});
+
+/** Same, but throws — for Server Actions that must have a staff caller. */
+export async function requireStaff(): Promise<StaffContext> {
+  const staff = await getStaff();
+  if (!staff) throw new Error("Not authenticated");
+  return staff;
 }
