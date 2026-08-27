@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { sendSms, type SmsEvent, type SmsOutcome } from "./semaphore";
 
 /**
@@ -12,7 +12,9 @@ export async function notifyOrder(
   extra?: { attempt?: number }
 ): Promise<SmsOutcome> {
   try {
-    const supabase = createClient();
+    // Same reasoning as sendSms: the public order form triggers this with no
+    // staff session, so the order lookup must not depend on one.
+    const supabase = createAdminClient();
     const { data: order } = await supabase
       .from("orders")
       .select(

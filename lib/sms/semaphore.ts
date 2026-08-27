@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { interpolate } from "@/lib/publicCopy";
 import { trackingUrl } from "@/lib/qr";
 import { peso } from "@/lib/money";
@@ -11,10 +11,12 @@ export type SmsEvent =
   | "details_received"
   | "shipped"
   | "failed_attempt"
-  | "delivered";
+  | "delivered"
+  | "otp";
 
 export interface SmsContext {
-  orderId: string;
+  /** Null for messages not tied to an order yet, e.g. a signup OTP. */
+  orderId: string | null;
   /** Customer's first name, for {name} */
   name?: string | null;
   phone?: string | null;
@@ -24,6 +26,8 @@ export interface SmsContext {
   trackingNumber?: string | null;
   /** Attempt number for {n} on failed_attempt */
   attempt?: number | null;
+  /** One-time code for {code} on the otp template. */
+  code?: string | null;
 }
 
 export type SmsOutcome = "sent" | "stubbed" | "failed" | "skipped";
@@ -32,11 +36,12 @@ export type SmsOutcome = "sent" | "stubbed" | "failed" | "skipped";
 export function renderTemplate(template: string, ctx: SmsContext): string {
   return interpolate(template, {
     name: ctx.name ?? "",
-    link: trackingUrl(ctx.trackingCode),
+    link: ctx.trackingCode ? trackingUrl(ctx.trackingCode) : "",
     total: ctx.totalAmount != null ? peso(ctx.totalAmount) : "",
     courier: ctx.courierName ?? "",
     number: ctx.trackingNumber ?? "",
     n: ctx.attempt != null ? String(ctx.attempt) : "",
+    code: ctx.code ?? "",
   });
 }
 
@@ -56,7 +61,12 @@ export async function sendSms(
   event: SmsEvent,
   ctx: SmsContext
 ): Promise<SmsOutcome> {
-  const supabase = createClient();
+  // Service role, deliberately: notification_settings and notifications_log are
+  // staff-only under RLS, but SMS is also triggered by unauthenticated paths
+  // (the public order form's OTP). With the cookie client those calls silently
+  // skipped — no text, no log, no error. This is infrastructure, not
+  // user-scoped data, so it reads and writes with the service key.
+  const supabase = createAdminClient();
 
   async function log(
     status: SmsOutcome,
@@ -108,7 +118,7 @@ export async function sendSms(
         `[sms:stub] ${event} -> ${phone}: ${message}\n` +
           "         (SEMAPHORE_API_KEY not set — nothing was actually sent.)"
       );
-      await log("stubbed", phone, message);
+      await log("stubbed", phone, event === "otp" ? "(otp stubbed)" : message);
       return "stubbed";
     }
 
@@ -134,7 +144,9 @@ export async function sendSms(
       return "failed";
     }
 
-    await log("sent", phone, text.slice(0, 1000));
+    // The OTP body contains the code — log that a send happened, not what
+    // it said, so the log can't be used to complete a verification.
+    await log("sent", phone, event === "otp" ? "(otp sent)" : text.slice(0, 1000));
     return "sent";
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

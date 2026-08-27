@@ -21,6 +21,8 @@ export interface OrderRow {
   created_at: string;
   status_since: string;
   delivery_attempts: number;
+  /** 'public' = the customer submitted it themselves through the order link. */
+  source: string;
   customer_name: string;
   customer_phone: string | null;
   service_codes: string[];
@@ -156,6 +158,14 @@ export function OrdersTable({
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <StatusBadge code={o.status} label={o.status_label} />
+                      {o.source === "public" && (
+                        <Badge
+                          className="bg-violet-100 text-violet-700"
+                          title="Submitted by the customer through your order link"
+                        >
+                          Online
+                        </Badge>
+                      )}
                       {o.delivery_attempts > 0 && o.status === "shipped" && (
                         <Badge className={attemptBadgeClasses(o.delivery_attempts)}>
                           Attempt {o.delivery_attempts}/3

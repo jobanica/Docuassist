@@ -18,7 +18,7 @@ export default async function OrdersPage() {
         .from("orders")
         .select(
           `id, tracking_code, status, total_amount, created_at, status_since,
-           delivery_attempts,
+           delivery_attempts, source,
            customers ( full_name, phone ),
            order_items ( services ( code, name ) )`
         )
@@ -47,6 +47,7 @@ export default async function OrdersPage() {
       created_at: o.created_at,
       status_since: o.status_since,
       delivery_attempts: o.delivery_attempts,
+      source: o.source ?? "staff",
       customer_name: o.customers?.full_name ?? "—",
       customer_phone: o.customers?.phone ?? null,
       service_codes: svcCodes,

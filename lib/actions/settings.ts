@@ -92,3 +92,26 @@ export async function updateBusinessInfo(input: {
 
   revalidatePath("/settings/business");
 }
+
+/**
+ * Public self-service ordering: whether the customer-facing form is open, and
+ * whether a customer must confirm their mobile number with a one-time code
+ * before an order is created (§ owner's choice — OTP costs an SMS per send).
+ */
+export async function updatePublicOrderSettings(input: {
+  public_orders_enabled: boolean;
+  otp_required: boolean;
+}): Promise<void> {
+  await requireAdmin();
+  const supabase = createClient();
+  const { error } = await supabase.from("app_settings").upsert(
+    [
+      { key: "public_orders_enabled", value: String(input.public_orders_enabled) },
+      { key: "otp_required", value: String(input.otp_required) },
+    ],
+    { onConflict: "key" }
+  );
+  if (error) throw new Error(error.message);
+  revalidatePath("/settings/public-form");
+  revalidatePath("/order");
+}

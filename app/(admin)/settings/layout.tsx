@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { Tag, MessageSquare, Building2 } from "lucide-react";
+import { Tag, MessageSquare, Building2, Link2 } from "lucide-react";
 
 const tabs = [
   { href: "/settings/services", label: "Services & prices", icon: Tag },
   { href: "/settings/notifications", label: "SMS notifications", icon: MessageSquare },
   { href: "/settings/business", label: "Business info", icon: Building2 },
+  { href: "/settings/public-form", label: "Online order form", icon: Link2 },
 ];
 
 export default function SettingsLayout({
