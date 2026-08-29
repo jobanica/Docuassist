@@ -20,13 +20,13 @@ npm install
 cp .env.local.example .env.local
 # fill in Supabase URL + keys and NEXT_PUBLIC_SITE_URL
 ```
-SMS is **optional**: leave `SEMAPHORE_API_KEY`
+SMS and the AI auto-fill step are **optional**: leave `SEMAPHORE_API_KEY` / `ANTHROPIC_API_KEY`
 blank and those calls are stubbed (logged, not sent) so the app runs end-to-end.
 
 ### 3. Database
 Apply the schema to your Supabase project. Options:
 - **SQL editor (easiest):** open `supabase/setup.sql`, copy the whole file,
-  paste it into the Supabase SQL Editor and Run. It is migrations 0001–0018
+  paste it into the Supabase SQL Editor and Run. It is migrations 0001–0021
   concatenated in order — run it once on a fresh project.
 - **Supabase CLI:** `supabase db push` (applies `supabase/migrations/` in order).
 

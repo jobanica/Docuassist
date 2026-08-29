@@ -1,6 +1,6 @@
 -- =============================================================================
 -- DocuAssist PH — full schema setup for a fresh Supabase project.
--- Migrations 0001–0018 concatenated in order. Run once on a fresh project.
+-- Migrations 0001–0021 concatenated in order. Run once on a fresh project.
 -- =============================================================================
 
 
@@ -1797,3 +1797,83 @@ create policy notifications_log_staff_select on notifications_log
   );
 create policy notifications_log_staff_write on notifications_log
   for insert with check (is_staff());
+
+-- >>> 0019_parsing_toggle.sql <<<
+-- =============================================================================
+-- 0019_parsing_toggle.sql — auto-fill (parsing) is opt-in, admin-controlled.
+--
+-- Tier 1 is rule-based and free, so it defaults ON. Tier 2 calls the Anthropic
+-- API and costs money per parse, so it defaults OFF — nobody should discover
+-- the AI fallback by way of a bill. Both are settings rather than env vars so
+-- the admin can turn them off mid-day without a redeploy.
+-- =============================================================================
+insert into app_settings (key, value) values
+  ('parsing_enabled',    'true'),
+  ('parsing_ai_enabled', 'false')
+on conflict (key) do nothing;
+
+-- >>> 0020_full_name_synonyms.sql <<<
+-- =============================================================================
+-- 0020_full_name_synonyms.sql — customers write "Full Name:", not "First Name:".
+-- Without these the owner's own name was the one field auto-fill missed, which
+-- is the one that matters most on the form. The parser splits the matched value
+-- across Last / First / Middle.
+-- =============================================================================
+update services
+   set form_fields = (
+     select jsonb_agg(
+       case
+         when f->>'key' = 'first_name' then
+           jsonb_set(f, '{synonyms}',
+             to_jsonb(array(
+               select distinct e from unnest(
+                 array(select jsonb_array_elements_text(coalesce(f->'synonyms','[]'::jsonb)))
+                 || array['full name','buong pangalan','complete name','name of applicant','pangalan ng aplikante']
+               ) e
+             ))
+           )
+         else f
+       end
+       order by ord
+     )
+     from jsonb_array_elements(form_fields) with ordinality t(f, ord)
+   )
+ where form_fields @> '[{"key":"first_name"}]';
+
+-- >>> 0021_parent_name_synonyms.sql <<<
+-- =============================================================================
+-- 0021_parent_name_synonyms.sql — the ways customers actually name the parents.
+-- The parser splits whatever matches across Last / First / Middle, so these only
+-- need to catch the wording; the three boxes are filled from one line.
+-- =============================================================================
+update services
+   set form_fields = (
+     select jsonb_agg(
+       case
+         when f->>'key' in ('father_first', 'mother_first') then
+           jsonb_set(f, '{synonyms}',
+             to_jsonb(array(
+               select distinct e from unnest(
+                 array(select jsonb_array_elements_text(coalesce(f->'synonyms','[]'::jsonb)))
+                 || case f->>'key'
+                      when 'father_first' then array[
+                        'name of father','fathers name','father name',
+                        'buong pangalan ng ama','pangalan ng tatay','tatay',
+                        'ama','father full name']
+                      else array[
+                        'name of mother','mothers name','mother name',
+                        'buong pangalan ng ina','pangalan ng nanay','nanay',
+                        'ina','mother full name','mothers maiden name',
+                        'maiden name ng ina']
+                    end
+               ) e
+             ))
+           )
+         else f
+       end
+       order by ord
+     )
+     from jsonb_array_elements(form_fields) with ordinality t(f, ord)
+   )
+ where form_fields @> '[{"key":"father_first"}]'
+    or form_fields @> '[{"key":"mother_first"}]';

@@ -9,9 +9,11 @@
     "lint": "next lint",
     "create-staff": "tsx scripts/create-staff.ts",
     "test:sms": "tsx lib/sms/__tests__/sms.test.ts",
-    "seed:demo": "tsx scripts/seed-demo.ts"
+    "seed:demo": "tsx scripts/seed-demo.ts",
+    "test:parser": "tsx lib/parse/__tests__/parser.test.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.121.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.4",
     "class-variance-authority": "^0.7.0",

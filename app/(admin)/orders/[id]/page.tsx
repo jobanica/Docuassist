@@ -48,16 +48,21 @@ export default async function OrderDetailPage({
       `*,
        customers (*),
        couriers ( id, name, tracking_page_url ),
-       order_items ( id, quantity, price_at_order, form_details, pasted_details,
-                     services ( name, code, form_fields ) )`
+       order_items ( id, service_id, quantity, price_at_order, form_details,
+                     pasted_details, services ( name, code, form_fields ) )`
     )
     .eq("id", params.id)
     .maybeSingle();
 
   if (!order) notFound();
 
-  const [{ data: statuses }, { data: history }, { data: couriers }, messengerPages] =
-    await Promise.all([
+  const [
+    { data: statuses },
+    { data: history },
+    { data: couriers },
+    messengerPages,
+    { data: parsingSetting },
+  ] = await Promise.all([
       supabase.from("order_statuses").select("*").order("sort_order"),
       supabase
         .from("order_status_history")
@@ -70,9 +75,15 @@ export default async function OrderDetailPage({
         .eq("active", true)
         .order("name"),
       listMessengerPages(),
+      supabase
+        .from("app_settings")
+        .select("value")
+        .eq("key", "parsing_enabled")
+        .maybeSingle(),
     ]);
 
   const o = order as any;
+  const parsingEnabled = (parsingSetting?.value ?? "true") !== "false";
   const cust = o.customers;
   const statusList = (statuses ?? []) as OrderStatus[];
   const statusLabel =
@@ -280,6 +291,9 @@ export default async function OrderDetailPage({
                     </div>
                     <ItemDetails
                       itemId={it.id}
+                      orderId={o.id}
+                      serviceId={it.service_id}
+                      parsingEnabled={parsingEnabled}
                       fields={fields}
                       formDetails={(it.form_details ?? {}) as Record<string, string>}
                       pastedDetails={it.pasted_details ?? null}

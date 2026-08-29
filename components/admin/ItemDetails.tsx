@@ -2,13 +2,23 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Copy, Check, Pencil, Save, X } from "lucide-react";
+import {
+  ChevronDown,
+  Copy,
+  Check,
+  Pencil,
+  Save,
+  X,
+  Wand2,
+  AlertCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { unwrap } from "@/lib/action-result";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { updateOrderItemDetails } from "@/lib/actions/orders";
+import { parsePastedText } from "@/lib/actions/parse";
 import type { FormFieldDef } from "@/lib/types";
 
 /**
@@ -22,14 +32,21 @@ import type { FormFieldDef } from "@/lib/types";
  */
 export function ItemDetails({
   itemId,
+  orderId,
+  serviceId,
   fields,
   formDetails,
   pastedDetails,
+  parsingEnabled,
 }: {
   itemId: string;
+  orderId: string;
+  serviceId: string;
   fields: FormFieldDef[];
   formDetails: Record<string, string>;
   pastedDetails: string | null;
+  /** Admin switch (Settings → Auto-fill). Off hides the button entirely. */
+  parsingEnabled: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -44,6 +61,45 @@ export function ItemDetails({
   // and there is a paste to copy across.
   const [openFields, setOpenFields] = useState(false);
   const [values, setValues] = useState<Record<string, string>>(formDetails);
+
+  // Keys the parser filled this session, highlighted until staff edit or save
+  // them. Auto-fill never writes to the database on its own.
+  const [autoFilled, setAutoFilled] = useState<string[]>([]);
+  const [parseNote, setParseNote] = useState<string | null>(null);
+  const [parsing, setParsing] = useState(false);
+
+  async function autoFill() {
+    setError(null);
+    setParseNote(null);
+    setParsing(true);
+    try {
+      const r = unwrap(
+        await parsePastedText(pastedDetails ?? "", serviceId, orderId)
+      );
+      const next = { ...values };
+      const filled: string[] = [];
+      for (const [k, v] of Object.entries(r.values)) {
+        // Never overwrite something a person already typed.
+        if (next[k]?.trim()) continue;
+        next[k] = v;
+        filled.push(k);
+      }
+      setValues(next);
+      setAutoFilled(filled);
+      setOpenFields(true);
+      setParseNote(
+        filled.length === 0
+          ? "Nothing new could be read from the reply — fill the fields by hand."
+          : `Filled ${filled.length} field${filled.length === 1 ? "" : "s"}${
+              r.tier === 2 ? " (AI helped)" : ""
+            }. Check them, then Save.`
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not read that reply.");
+    } finally {
+      setParsing(false);
+    }
+  }
 
   function save(patch: Parameters<typeof updateOrderItemDetails>[1], done?: () => void) {
     setError(null);
@@ -175,6 +231,29 @@ export function ItemDetails({
                 These fill the printable PSA form. Copy them across from the
                 reply above — what you type here is what gets printed.
               </p>
+
+              {parsingEnabled && pastedDetails && (
+                <div className="space-y-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={parsing || pending}
+                    onClick={autoFill}
+                  >
+                    <Wand2 className="h-3.5 w-3.5" />
+                    {parsing ? "Reading…" : "Auto-fill from the reply"}
+                  </Button>
+                  {parseNote && (
+                    <p className="flex items-start gap-1.5 rounded-md bg-amber-50 p-2 text-xs text-amber-900">
+                      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        {parseNote} Nothing is stored until you press{" "}
+                        <strong>Save form fields</strong>.
+                      </span>
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="grid gap-3 sm:grid-cols-2">
                 {fields.map((f) => (
                   <div
@@ -188,13 +267,18 @@ export function ItemDetails({
                       <Textarea
                         rows={2}
                         value={values[f.key] ?? ""}
-                        onChange={(e) =>
-                          setValues({ ...values, [f.key]: e.target.value })
-                        }
+                        onChange={(e) => {
+                          setValues({ ...values, [f.key]: e.target.value });
+                          setAutoFilled((a) => a.filter((k) => k !== f.key));
+                        }}
                       />
                     ) : (
                       <Input
-                        className="h-9"
+                        className={`h-9 ${
+                          autoFilled.includes(f.key)
+                            ? "border-amber-400 bg-amber-50"
+                            : ""
+                        }`}
                         type={
                           f.type === "number"
                             ? "number"
@@ -203,9 +287,10 @@ export function ItemDetails({
                               : "text"
                         }
                         value={values[f.key] ?? ""}
-                        onChange={(e) =>
-                          setValues({ ...values, [f.key]: e.target.value })
-                        }
+                        onChange={(e) => {
+                          setValues({ ...values, [f.key]: e.target.value });
+                          setAutoFilled((a) => a.filter((k) => k !== f.key));
+                        }}
                       />
                     )}
                   </div>
@@ -214,7 +299,12 @@ export function ItemDetails({
               <Button
                 size="sm"
                 disabled={pending}
-                onClick={() => save({ form_details: values })}
+                onClick={() =>
+                  save({ form_details: values }, () => {
+                    setAutoFilled([]);
+                    setParseNote(null);
+                  })
+                }
               >
                 <Save className="h-3.5 w-3.5" />
                 {pending ? "Saving…" : "Save form fields"}

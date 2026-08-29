@@ -120,3 +120,26 @@ export async function updatePublicOrderSettings(input: {
     revalidatePath("/order");
   });
 }
+
+/**
+ * Auto-fill (parsing) switches. Admin only, and read per parse so turning it
+ * off takes effect immediately rather than at the next deploy.
+ */
+export async function updateParsingSettings(input: {
+  parsing_enabled: boolean;
+  parsing_ai_enabled: boolean;
+}): Promise<ActionResult<void>> {
+  return run(async () => {
+    await requireAdmin();
+    const supabase = createClient();
+    const { error } = await supabase.from("app_settings").upsert(
+      [
+        { key: "parsing_enabled", value: String(input.parsing_enabled) },
+        { key: "parsing_ai_enabled", value: String(input.parsing_ai_enabled) },
+      ],
+      { onConflict: "key" }
+    );
+    if (error) throw new Error(error.message);
+    revalidatePath("/settings/parsing");
+  });
+}

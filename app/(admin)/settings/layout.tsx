@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Tag, MessageSquare, Building2, Link2, Users } from "lucide-react";
+import { Tag, MessageSquare, Building2, Link2, Users, Wand2 } from "lucide-react";
 import { getStaff } from "@/lib/auth";
 
 const tabs = [
@@ -7,6 +7,7 @@ const tabs = [
   { href: "/settings/notifications", label: "SMS notifications", icon: MessageSquare },
   { href: "/settings/business", label: "Business info", icon: Building2 },
   { href: "/settings/public-form", label: "Online order form", icon: Link2 },
+  { href: "/settings/parsing", label: "Auto-fill", icon: Wand2 },
   { href: "/settings/staff", label: "Staff accounts", icon: Users, adminOnly: true },
 ];
 

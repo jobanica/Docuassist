@@ -132,6 +132,15 @@ An order reaches the system one of two ways, and they store details differently.
 - The printable PSA forms (§12a) fill from `form_details`. Path B fills them automatically; on Path A staff fill them **on the order detail screen**, with the pasted reply displayed directly above the fields to copy from. The print screen warns when an item's fields are still empty rather than silently printing a blank form.
 - Both `pasted_details` and `form_details` stay editable on the order after creation.
 - No AI parsing, no `ANTHROPIC_API_KEY`, no per-parse token cost.
+## 9d. Auto-Fill (Parsing) — Admin Toggle
+Staff shouldn't retype what the customer already sent, but a parser that guesses wrong on a PSA detail gets the application rejected. Auto-fill therefore proposes; it never saves.
+- **Where.** On the order, the pasted reply sits directly above the PSA form fields. An **Auto-fill from the reply** button there fills those fields. Intake stays as it is (§9) — name, document, paste, create — because that is the step that needs to be fast.
+- **Never auto-saved.** Filled boxes are highlighted amber and land in the form only; nothing reaches the database until staff press **Save form fields**. Editing a box clears its highlight.
+- **Two switches, admin only** (Settings → Auto-fill), stored in `app_settings` and read on every parse so a change takes effect on the next click, not the next deploy:
+  - `parsing_enabled` (default **on**) — the rule-based pass. Splits "Label: value" lines with fuzzy matching for typos, casing and Taglish variants. Free, instant, no API.
+  - `parsing_ai_enabled` (default **off**) — the Anthropic fallback (`claude-haiku-4-5`, `output_config.format` JSON schema built from the service's own `form_fields`). Runs only when required fields are still empty after the free pass, and only when the admin has accepted the per-parse cost. Off by default so nobody meets the AI by way of a bill. With `ANTHROPIC_API_KEY` unset it is skipped and the free pass still runs.
+- **Name splitting.** Customers send one line ("Pangalan ng ina: Maria Clara Santos") but the PSA form has Last / First / Middle boxes. Matched values are split across all three for the owner, the father and the mother, keeping surname particles together ("Dela Cruz", "De los Santos"). Boxes the customer filled separately are never overwritten.
+- Parses are logged to `parse_logs` (order, service, tier, tokens) for cost visibility; logging never blocks a parse.
 ## 9b. Duplicate Warning on Intake
 The same request arrives twice often enough to cost money — a customer messages again after not hearing back, or two staff pick up the same thread. Encoding it twice means paying PSA twice and shipping twice.
 - Before creating anything, **New Order** checks for existing orders belonging to the same person: matched on normalized PH mobile number (so `09xx`, `+639xx` and spaced forms all count as one) or on a case- and spacing-insensitive full name, looking back 90 days and ignoring cancelled orders.
