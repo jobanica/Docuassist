@@ -43,6 +43,7 @@ export interface OrderRow {
   /** Batch tags on this order's customer. */
   tag_ids: string[];
   /** Staff who encoded it. Null for a customer's own online submission. */
+  created_by_id: string | null;
   created_by_name: string | null;
   service_codes: string[];
   service_names: string[];
@@ -89,6 +90,7 @@ export function OrdersTable({
   // silently drop a selection the staff member already made.
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [tagFilter, setTagFilter] = useState<string>("all");
+  const [byFilter, setByFilter] = useState<string>("all");
   const [tags, setTags] = useState<Tag[]>(initialTags);
   const [applying, setApplying] = useState<string[]>([]);
   const [tagNote, setTagNote] = useState<string | null>(null);
@@ -110,6 +112,9 @@ export function OrdersTable({
       if (tagFilter === "untagged" && o.tag_ids.length > 0) return false;
       if (tagFilter !== "all" && tagFilter !== "untagged" &&
           !o.tag_ids.includes(tagFilter)) return false;
+      if (byFilter === "public" && o.created_by_id) return false;
+      if (byFilter !== "all" && byFilter !== "public" &&
+          o.created_by_id !== byFilter) return false;
       if (from && o.created_at.slice(0, 10) < from) return false;
       if (to && o.created_at.slice(0, 10) > to) return false;
       if (needle) {
@@ -131,7 +136,7 @@ export function OrdersTable({
       );
     }
     return rows;
-  }, [orders, q, status, service, from, to, tagFilter]);
+  }, [orders, q, status, service, from, to, tagFilter, byFilter]);
 
   const onCallList = status === FAILED_ATTEMPTS;
 
@@ -177,6 +182,23 @@ export function OrdersTable({
   }, [orders, picked, statuses]);
 
   const tagById = useMemo(() => new Map(tags.map((t) => [t.id, t])), [tags]);
+
+  /**
+   * Who has orders on this board, for the "encoded by" filter.
+   *
+   * Read off the rows rather than the staff list: a scoped account only sees
+   * its own documents, and offering names whose orders it cannot see would be
+   * a filter that always returns nothing.
+   */
+  const encoders = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const o of orders) {
+      if (o.created_by_id && o.created_by_name) {
+        seen.set(o.created_by_id, o.created_by_name);
+      }
+    }
+    return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [orders]);
 
   /**
    * Tag the customers behind the selected orders.
@@ -314,6 +336,22 @@ export function OrdersTable({
             </option>
           ))}
         </select>
+        {encoders.length > 0 && (
+          <select
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            value={byFilter}
+            onChange={(e) => setByFilter(e.target.value)}
+            aria-label="Filter by who encoded the order"
+          >
+            <option value="all">Anyone</option>
+            {encoders.map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+            <option value="public">Online form</option>
+          </select>
+        )}
         <select
           className="h-10 rounded-md border border-input bg-background px-3 text-sm"
           value={tagFilter}
