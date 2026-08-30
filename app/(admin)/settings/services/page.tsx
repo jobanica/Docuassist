@@ -14,7 +14,9 @@ export default async function ServicesSettingsPage() {
   const { data: services } = await supabase
     .from("services")
     .select("*")
-    .order("active", { ascending: false })
+    // Same order as everywhere else, so the up/down arrows move a row to
+    // where it will actually appear. Disabled services stay in place, dimmed.
+    .order("sort_order")
     .order("name");
 
   return (

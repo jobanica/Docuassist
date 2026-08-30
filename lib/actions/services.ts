@@ -125,3 +125,48 @@ export async function setServiceActive(
     revalidatePath("/orders/new");
   });
 }
+
+/**
+ * Move a service up or down the list.
+ *
+ * Order is a business decision that changes when a new document is added, so
+ * it lives in the data and is edited here rather than needing a deploy. The
+ * swap is between neighbours in the current order, so positions stay distinct
+ * however the numbers were seeded.
+ */
+export async function moveService(
+  id: string,
+  direction: "up" | "down"
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    await requireAdmin();
+    const supabase = createClient();
+
+    const { data: rows, error } = await supabase
+      .from("services")
+      .select("id, sort_order, name")
+      .order("sort_order")
+      .order("name");
+    if (error) throw new Error(error.message);
+
+    const list = rows ?? [];
+    const i = list.findIndex((s) => s.id === id);
+    if (i === -1) throw new Error("That service no longer exists.");
+    const j = direction === "up" ? i - 1 : i + 1;
+    if (j < 0 || j >= list.length) return; // already at the end — nothing to do
+
+    // Rewrite both positions from the list index rather than swapping the
+    // stored values, which would be a no-op wherever two rows share a number.
+    const a = list[i];
+    const b = list[j];
+    const [{ error: e1 }, { error: e2 }] = await Promise.all([
+      supabase.from("services").update({ sort_order: (j + 1) * 10 }).eq("id", a.id),
+      supabase.from("services").update({ sort_order: (i + 1) * 10 }).eq("id", b.id),
+    ]);
+    if (e1 || e2) throw new Error((e1 ?? e2)!.message);
+
+    revalidatePath("/settings/services");
+    revalidatePath("/orders/new");
+    revalidatePath("/order");
+  });
+}

@@ -16,7 +16,7 @@ export default async function OrdersPage() {
     await Promise.all([
       getStaff(),
       supabase.from("order_statuses").select("*").order("sort_order"),
-      supabase.from("services").select("*").order("name"),
+      supabase.from("services").select("*").order("sort_order").order("name"),
       supabase
         .from("orders")
         .select(

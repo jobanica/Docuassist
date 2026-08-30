@@ -18,7 +18,12 @@ export default async function StaffSettingsPage() {
   const [rows, pages, { data: services }] = await Promise.all([
     listStaff(),
     listMessengerPages(),
-    supabase.from("services").select("*").eq("active", true).order("name"),
+    supabase
+      .from("services")
+      .select("*")
+      .eq("active", true)
+      .order("sort_order")
+      .order("name"),
   ]);
 
   return (

@@ -2,7 +2,15 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Save, X, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import {
+  Plus,
+  Save,
+  X,
+  Trash2,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toMessage, unwrap } from "@/lib/action-result";
 import { Input } from "@/components/ui/input";
@@ -12,6 +20,7 @@ import {
   updateService,
   createService,
   setServiceActive,
+  moveService,
   type ServiceInput,
 } from "@/lib/actions/services";
 import type { Service, FormFieldDef } from "@/lib/types";
@@ -79,8 +88,21 @@ export function ServicesEditor({
         stay exactly as they were.
       </p>
 
-      {services.map((s) => (
-        <ServiceRow key={s.id} service={s} canEdit={canEdit} />
+      {canEdit && services.length > 1 && (
+        <p className="text-xs text-slate-500">
+          This order is the order documents appear in everywhere — the new-order
+          screen, the customer&apos;s online form, and the filters.
+        </p>
+      )}
+
+      {services.map((s, i) => (
+        <ServiceRow
+          key={s.id}
+          service={s}
+          canEdit={canEdit}
+          first={i === 0}
+          last={i === services.length - 1}
+        />
       ))}
 
       {canEdit &&
@@ -106,9 +128,13 @@ export function ServicesEditor({
 function ServiceRow({
   service,
   canEdit,
+  first,
+  last,
 }: {
   service: Service;
   canEdit: boolean;
+  first: boolean;
+  last: boolean;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -166,6 +192,37 @@ function ServiceRow({
         </span>
         {canEdit && (
           <>
+            {/* Order is a business decision, not something to redeploy for. */}
+            <span className="flex flex-col">
+              <button
+                type="button"
+                aria-label={`Move ${service.name} up`}
+                disabled={first || pending}
+                onClick={() =>
+                  startTransition(async () => {
+                    unwrap(await moveService(service.id, "up"));
+                    router.refresh();
+                  })
+                }
+                className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30 disabled:hover:bg-transparent"
+              >
+                <ChevronUp className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                aria-label={`Move ${service.name} down`}
+                disabled={last || pending}
+                onClick={() =>
+                  startTransition(async () => {
+                    unwrap(await moveService(service.id, "down"));
+                    router.refresh();
+                  })
+                }
+                className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30 disabled:hover:bg-transparent"
+              >
+                <ChevronDown className="h-4 w-4" />
+              </button>
+            </span>
             <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
               Edit
             </Button>

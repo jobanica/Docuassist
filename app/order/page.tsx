@@ -20,6 +20,7 @@ export default async function PublicOrderPage() {
       .from("services")
       .select("id, code, name, price, form_fields, processing_days_max, shipping_days_estimate")
       .eq("active", true)
+      .order("sort_order")
       .order("name"),
     db.from("app_settings").select("key, value"),
     // The default page, same one the tracking pages fall back to.

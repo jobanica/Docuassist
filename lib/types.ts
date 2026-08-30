@@ -38,6 +38,9 @@ export interface Service {
   shipping_days_estimate: number;
   form_fields: FormFieldDef[];
   active: boolean;
+  /** Where this document sits in every list. Lower first; the business order,
+   *  not alphabetical. */
+  sort_order: number;
   created_at: string;
 }
 

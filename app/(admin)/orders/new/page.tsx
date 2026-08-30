@@ -13,7 +13,12 @@ export default async function NewOrderPage() {
   const [staff, { data: services }, pages, { data: parsingSetting }] =
     await Promise.all([
       getStaff(),
-      supabase.from("services").select("*").eq("active", true).order("name"),
+      supabase
+        .from("services")
+        .select("*")
+        .eq("active", true)
+        .order("sort_order")
+        .order("name"),
       listMessengerPages(),
       supabase
         .from("app_settings")
