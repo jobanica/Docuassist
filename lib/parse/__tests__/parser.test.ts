@@ -2,6 +2,7 @@
  * Tier-1 parser tests (§9). No test runner dependency — run with:
  *   npm run test:parser
  */
+import { DELIVERY_FIELDS, DELIVERY_ONLY_IN_BLOCK, NEVER_IN_DELIVERY_BLOCK } from "@/lib/parse/delivery";
 import {
   parseTier1,
   normalizeDate,
@@ -185,6 +186,42 @@ MIDDLE NAME: Reyes`, psa);
   const r2 = parseTier1(`NAME OF FATHER
 Pedro Reyes Dela Cruz`, psa);
   check("bare name under a heading", r2.values.father_first, "Pedro Reyes Dela Cruz");
+}
+
+console.log("\n[11] Delivery details, kept apart from the birthplace");
+{
+  const doc = [
+    { key: "last_name", label: "Last Name", type: "text", required: true, synonyms: ["apelyido"] },
+    { key: "first_name", label: "First Name", type: "text", required: true, synonyms: ["first name"] },
+    { key: "birth_city", label: "Place of Birth — City", type: "text", required: true, synonyms: ["place of birth","city"] },
+    { key: "birth_province", label: "Place of Birth — Province", type: "text", required: false, synonyms: ["province"] },
+  ] as any;
+  const fields = [...doc, ...DELIVERY_FIELDS] as any;
+  const opts = { deliveryOnly: DELIVERY_ONLY_IN_BLOCK, documentOnly: NEVER_IN_DELIVERY_BLOCK };
+
+  const r = parseTier1(`APELYIDO: Nasari
+FIRST NAME: Evin
+PLACE OF BIRTH
+Mampang Zamboanga City
+Province: Zamboanga del sur
+CONTACT NUMBER: 0917 123 4567
+
+DELIVERY ADDRESS
+Blk 5 Lot 12 Mahogany St
+Barangay: Talon Uno
+City: Las Pinas City
+Province: Metro Manila
+ZIP: 1747`, fields, opts);
+
+  check("birthplace city stays the birthplace", r.values.birth_city, "Mampang Zamboanga City");
+  check("birthplace province stays", r.values.birth_province, "Zamboanga del sur");
+  check("delivery city is the address", r.values.delivery_city, "Las Pinas City");
+  check("delivery province is the address", r.values.delivery_province, "Metro Manila");
+  check("barangay", r.values.delivery_barangay, "Talon Uno");
+  check("zip", r.values.delivery_zip, "1747");
+  check("phone found outside a block", r.values.delivery_phone, "0917 123 4567");
+  check("bare address line under the heading", r.values.delivery_address_line, "Blk 5 Lot 12 Mahogany St");
+  check("delivery block did not steal the name", r.values.last_name, "Nasari");
 }
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

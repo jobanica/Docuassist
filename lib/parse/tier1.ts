@@ -6,6 +6,13 @@ import {
   splitLabelValue,
 } from "./labels";
 
+export interface ParseOptions {
+  /** Keys that only match while inside a delivery block. */
+  deliveryOnly?: Set<string>;
+  /** Keys that never match inside a delivery block. */
+  documentOnly?: Set<string>;
+}
+
 export interface ParseOutcome {
   /** field key -> extracted value (only fields we actually filled) */
   values: Record<string, string>;
@@ -83,6 +90,8 @@ function coerce(field: FormFieldDef, raw: string): string {
  * applicant's boxes and the parents' boxes stay empty.
  */
 const SECTIONS: { test: RegExp; prefix: string }[] = [
+  // Delivery first: "delivery address" must not be read as an owner block.
+  { test: /\b(delivery|shipping|padala|ipadala|padalhan|ship to|deliver to|address for delivery|complete address)\b/, prefix: "delivery" },
   { test: /\b(father|ama|tatay|papa|daddy)\b/, prefix: "father_" },
   { test: /\b(mother|ina|nanay|mama|mommy|maiden)\b/, prefix: "mother_" },
   // Anything that puts us back on the person the document is for.
@@ -105,7 +114,7 @@ function sectionFor(line: string): string | null {
 
 /** Re-point an owner name field at whichever person the current block is about. */
 function scoped(key: string, prefix: string, has: Set<string>): string {
-  if (!prefix) return key;
+  if (!prefix || prefix === "delivery") return key;
   const part = NAME_PART[key];
   if (!part) return key;
   const scopedKey = prefix + part;
@@ -129,10 +138,13 @@ function scoped(key: string, prefix: string, has: Set<string>): string {
  */
 export function parseTier1(
   text: string,
-  fields: FormFieldDef[]
+  fields: FormFieldDef[],
+  opts: ParseOptions = {}
 ): ParseOutcome {
   const values: Record<string, string> = {};
   const has = new Set(fields.map((f) => f.key));
+  const deliveryOnly = opts.deliveryOnly ?? new Set<string>();
+  const documentOnly = opts.documentOnly ?? new Set<string>();
   const lines = text.split(/\r?\n/);
 
   let section = "";
@@ -148,7 +160,12 @@ export function parseTier1(
   const bestField = (label: string): { field: FormFieldDef; score: number } | null => {
     let field: FormFieldDef | null = null;
     let best = 0;
+    const inDelivery = section === "delivery";
     for (const f of fields) {
+      // "City" means the birthplace under a birth block and the address under
+      // a delivery block. Only one set of fields is in play at a time.
+      if (inDelivery && documentOnly.has(f.key)) continue;
+      if (!inDelivery && deliveryOnly.has(f.key)) continue;
       const score = Math.max(
         labelScore(label, f.label),
         ...(f.synonyms ?? []).map((syn) => labelScore(label, syn))
@@ -192,7 +209,14 @@ export function parseTier1(
         section = sec;
         // "NAME OF FATHER" followed by a bare "Pedro Reyes Cruz" — take that
         // line as the whole name, which expandNameGroups then splits.
-        const firstKey = section ? `${section}first` : "first_name";
+        // A bare line right under a person heading is that person's whole
+        // name; under a delivery heading it is the address.
+        const firstKey =
+          section === "delivery"
+            ? "delivery_address_line"
+            : section
+              ? `${section}first`
+              : "first_name";
         pendingKey = has.has(firstKey) ? firstKey : null;
         lastKey = null;
         continue;

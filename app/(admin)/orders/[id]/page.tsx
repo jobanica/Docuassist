@@ -14,6 +14,7 @@ import { OrderActions } from "@/components/admin/OrderActions";
 import { TrackingPanel } from "@/components/admin/TrackingPanel";
 import { PaymentToggle } from "@/components/admin/PaymentToggle";
 import { ItemDetails } from "@/components/admin/ItemDetails";
+import { CustomerCard } from "@/components/admin/CustomerCard";
 import { listMessengerPages } from "@/lib/actions/messenger-pages";
 import { qrDataUrl, trackingUrl } from "@/lib/qr";
 import { peso } from "@/lib/money";
@@ -238,30 +239,20 @@ export default async function OrderDetailPage({
 
         {/* Right: customer + items + history */}
         <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Customer</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-              <Info label="Phone" value={cust?.phone} />
-              <Info label="Messenger" value={cust?.messenger_name} />
-              <Info
-                label="Address"
-                value={
-                  [
-                    cust?.address_line,
-                    cust?.barangay,
-                    cust?.city,
-                    cust?.province,
-                    cust?.zip,
-                  ]
-                    .filter(Boolean)
-                    .join(", ") || null
-                }
-                full
-              />
-            </CardContent>
-          </Card>
+          <CustomerCard
+            customer={cust}
+            orderId={o.id}
+            parsingEnabled={parsingEnabled}
+            parseSource={(() => {
+              // Auto-fill reads whichever item actually carries a pasted reply.
+              const withPaste = (o.order_items ?? []).find(
+                (it: any) => it.pasted_details?.trim()
+              );
+              return withPaste
+                ? { text: withPaste.pasted_details, serviceId: withPaste.service_id }
+                : null;
+            })()}
+          />
 
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0">

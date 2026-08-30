@@ -60,3 +60,21 @@ export async function createCustomer(
     return { id: data.id };
   });
 }
+
+export async function updateCustomer(
+  id: string,
+  input: Partial<CustomerInput>
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    await requireStaff();
+    const parsed = customerSchema.partial().parse(input);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("customers")
+      .update(parsed)
+      .eq("id", id);
+    if (error) throw new Error(error.message);
+    revalidatePath("/customers");
+    revalidatePath(`/customers/${id}`);
+  });
+}

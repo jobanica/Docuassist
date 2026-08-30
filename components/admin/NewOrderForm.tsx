@@ -235,16 +235,34 @@ export function NewOrderForm({
           },
         };
       });
-      // The applicant's name is in the reply too — save staff typing it twice.
-      // Only when the field is still empty, never over what they typed.
+      // The applicant's name and delivery details are in the same reply — save
+      // staff typing them twice. Only into fields still empty, never over what
+      // they typed.
       const owner = [r.values.first_name, r.values.middle_name, r.values.last_name]
         .filter((x) => x && x.trim())
         .join(" ")
         .trim();
       let nameFilled = false;
-      if (owner && mode === "new" && !newCustomer.full_name.trim()) {
-        setNewCustomer((c) => ({ ...c, full_name: owner }));
-        nameFilled = true;
+      let deliveryFilled = 0;
+      if (mode === "new") {
+        setNewCustomer((c) => {
+          const next = { ...c };
+          if (owner && !next.full_name.trim()) {
+            next.full_name = owner;
+            nameFilled = true;
+          }
+          for (const [k, val] of Object.entries(r.customer)) {
+            if (k === "full_name") continue;
+            const cur = (next as Record<string, string>)[k];
+            if (cur !== undefined && !cur.trim()) {
+              (next as Record<string, string>)[k] = val;
+              deliveryFilled++;
+            }
+          }
+          return next;
+        });
+        // Open the address block so what was filled is actually seen.
+        if (deliveryFilled > 0) setShowAddress(true);
       }
 
       const n = Object.keys(r.values).length;
@@ -254,7 +272,13 @@ export function NewOrderForm({
           n === 0
             ? "Nothing could be read from that reply — fill the boxes by hand."
             : `Filled ${n} box${n === 1 ? "" : "es"}${
-                nameFilled ? " and the customer's name" : ""
+                nameFilled ? ", the customer's name" : ""
+              }${
+                deliveryFilled > 0
+                  ? ` and ${deliveryFilled} delivery field${
+                      deliveryFilled === 1 ? "" : "s"
+                    }`
+                  : ""
               }${
                 r.tier === 2 ? " (AI helped)" : ""
               }. Check them before you create the order.`,

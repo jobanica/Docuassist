@@ -4,6 +4,12 @@ import { run, type ActionResult } from "@/lib/action-result";
 import { createClient } from "@/lib/supabase/server";
 import { requireStaff } from "@/lib/auth";
 import { expandNameGroups, parseTier1 } from "@/lib/parse/tier1";
+import {
+  DELIVERY_FIELDS,
+  DELIVERY_ONLY_IN_BLOCK,
+  DELIVERY_TO_CUSTOMER,
+  NEVER_IN_DELIVERY_BLOCK,
+} from "@/lib/parse/delivery";
 import { parseTier2 } from "@/lib/parse/tier2";
 import type { FormFieldDef } from "@/lib/types";
 
@@ -14,6 +20,8 @@ export interface ParseResult {
   filledKeys: string[];
   /** required keys still empty — flagged so staff knows what to check */
   missingRequired: string[];
+  /** Delivery details keyed by their `customers` column (phone, city, ...). */
+  customer: Record<string, string>;
   /** which tier produced the final result (2 means the AI fallback ran) */
   tier: 1 | 2;
   /** true when Tier-2 was needed but unavailable/failed */
@@ -53,13 +61,15 @@ export async function parsePastedText(
 
     const trimmed = text.trim();
     if (!trimmed) {
-      return {
+      const empty: ParseResult = {
         values: {},
         filledKeys: [],
         missingRequired: [],
+        customer: {},
         tier: 1,
         aiUnavailable: false,
       };
+      return empty;
     }
     // Bound what we ever send to the API / process.
     const input = trimmed.slice(0, MAX_PASTE_CHARS);
@@ -71,10 +81,17 @@ export async function parsePastedText(
       .single();
     if (error) throw new Error(error.message);
 
-    const fields = (service.form_fields ?? []) as FormFieldDef[];
+    const docFields = (service.form_fields ?? []) as FormFieldDef[];
+    // The delivery details ride along in the same pass — they are in the same
+    // message, and a second parse would double the cost for no benefit.
+    const fields = [...docFields, ...DELIVERY_FIELDS];
+    const scoping = {
+      deliveryOnly: DELIVERY_ONLY_IN_BLOCK,
+      documentOnly: NEVER_IN_DELIVERY_BLOCK,
+    };
 
     // --- Tier 1: free, instant, deterministic ---
-    const t1 = parseTier1(input, fields);
+    const t1 = parseTier1(input, fields, scoping);
     let values = { ...t1.values };
     let filledKeys = [...t1.filledKeys];
     let tier: 1 | 2 = 1;
@@ -106,7 +123,17 @@ export async function parsePastedText(
     // three boxes. Spread it before deciding what's still missing.
     filledKeys = filledKeys.concat(expandNameGroups(values, fields));
 
-    const missingRequired = fields
+    // Split the delivery details back out — they belong to the customer, not
+    // the document, and are saved to a different table.
+    const customer: Record<string, string> = {};
+    for (const [k, col] of Object.entries(DELIVERY_TO_CUSTOMER)) {
+      const v = values[k];
+      if (v?.trim()) customer[col] = v.trim();
+      delete values[k];
+    }
+    filledKeys = filledKeys.filter((k) => !(k in DELIVERY_TO_CUSTOMER));
+
+    const missingRequired = docFields
       .filter((f) => f.required && !values[f.key])
       .map((f) => f.key);
 
@@ -123,6 +150,6 @@ export async function parsePastedText(
       /* logging is best-effort */
     }
 
-    return { values, filledKeys, missingRequired, tier, aiUnavailable };
+    return { values, filledKeys, missingRequired, customer, tier, aiUnavailable };
   });
 }

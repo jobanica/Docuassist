@@ -62,6 +62,10 @@ function systemPrompt(fields: FormFieldDef[]): string {
       " the applicant's. Labels before any heading belong to the applicant.",
     "- Names may arrive whole on one line. Split them as First / Middle / Last," +
       " keeping surname particles together (Dela Cruz, De los Santos).",
+    "- delivery_* fields are where the parcel is sent, which is not the same as" +
+      " where the person was born. Only fill delivery_city / delivery_province" +
+      " from an address or delivery block, never from a place of birth, and" +
+      " never copy a birthplace into them.",
     "- Copy names, places, and numbers exactly as written; do not translate or reformat them.",
     "- For date fields, return YYYY-MM-DD. If the year is missing or ambiguous, return \"\".",
     "- For number fields, return digits only.",
