@@ -10,7 +10,7 @@ import {
 import { PublicStepper } from "@/components/track/PublicStepper";
 import { ArrivalHero } from "@/components/track/ArrivalHero";
 import { CourierTracking } from "@/components/track/CourierTracking";
-import { statusHelper, attemptNotice } from "@/lib/publicCopy";
+import { statusHelper, attemptNotice, statusPillClasses } from "@/lib/publicCopy";
 import { peso } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
@@ -100,8 +100,10 @@ export default async function TrackPage({
       {/* The answer they came for, before anything else. */}
       <ArrivalHero info={info} />
 
-      {/* Summary */}
-      <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm">
+      {/* Summary. Centred so the status badge lands in the middle of the
+          card — after the arrival date it is the thing being looked for, and
+          left-aligned at 14px it read as a label rather than an answer. */}
+      <section className="mt-4 rounded-2xl bg-white p-5 text-center shadow-sm">
         <p className="text-slate-900">
           Hi <span className="font-semibold">{info.first_name ?? "there"}</span>!
           Here&apos;s the status of your{" "}
@@ -110,9 +112,15 @@ export default async function TrackPage({
           </span>{" "}
           order.
         </p>
-        <div className="mt-3 inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">
+        {/* Coloured by stage rather than always blue, so the badge agrees with
+            the stepper below and the arrival card above. */}
+        <p
+          className={`mt-3 inline-flex items-center rounded-full px-5 py-2 text-lg font-bold ring-4 ${statusPillClasses(
+            info.status
+          )}`}
+        >
           {info.status_label}
-        </div>
+        </p>
         {helper && <p className="mt-3 text-sm text-slate-600">{helper}</p>}
       </section>
 

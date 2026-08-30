@@ -60,3 +60,30 @@ export function attemptNotice(info: TrackingInfo): AttemptNotice | null {
   }
   return { text, strong };
 }
+
+/**
+ * Colour for the big status badge on the tracking page.
+ *
+ * Keyed to the same meaning the rest of the page uses — green for arrived, red
+ * for gone wrong, blue for on the move — so a customer glancing at the badge,
+ * the stepper and the arrival card is not reading three different stories.
+ */
+export function statusPillClasses(code: string): string {
+  switch (code) {
+    case "delivered":
+      return "bg-emerald-50 text-emerald-700 ring-emerald-100";
+    case "shipped":
+      return "bg-blue-50 text-blue-700 ring-blue-100";
+    case "released":
+      return "bg-violet-50 text-violet-700 ring-violet-100";
+    case "processing":
+      return "bg-amber-50 text-amber-800 ring-amber-100";
+    case "returned":
+      return "bg-rose-50 text-rose-700 ring-rose-100";
+    case "cancelled":
+      return "bg-slate-100 text-slate-600 ring-slate-200";
+    default:
+      // new_inquiry and details_received: received, nothing to worry about yet.
+      return "bg-sky-50 text-sky-700 ring-sky-100";
+  }
+}
