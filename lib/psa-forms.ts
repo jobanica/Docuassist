@@ -21,6 +21,9 @@ export interface FormRow {
   caption?: string;
   /** Checkbox options (kind: "checkbox"). */
   options?: string[];
+  /** Ticked when the order carries no value of its own — the "Request for"
+   *  row is answered by which document was ordered, not by the customer. */
+  defaultChecked?: string;
 }
 
 export interface FormSection {
@@ -55,12 +58,19 @@ function nameBlock(heading: string, prefix: string, lastLabel = "Last Name"): Fo
 const OWNER_HEADING = "OWNER'S PERSONAL INFORMATION (FOR MARRIED FEMALE, PLEASE USE MAIDEN NAME)";
 
 const birthLike = (title: string, paper: string, dateLabel: string, placeLabel: string,
-                   cityKey: string, provKey: string, countryKey: string): PsaFormTemplate => ({
+                   cityKey: string, provKey: string, countryKey: string,
+                   requestOptions: string[], requestDefault: string): PsaFormTemplate => ({
   title,
   paper,
   sections: [
     {
       rows: [
+        {
+          label: "Request for",
+          kind: "checkbox",
+          options: requestOptions,
+          defaultChecked: requestDefault,
+        },
         { label: "Number of copies", key: "copies", kind: "boxes", boxes: 3 },
         { label: "Birth Reference No. (BReN, if known)", key: "bren", kind: "boxes", boxes: 18 },
         { label: "Sex", key: "sex", kind: "checkbox", options: ["Male", "Female"] },
@@ -88,13 +98,17 @@ export const PSA_FORMS: Record<string, PsaFormTemplate> = {
   psa_birth: birthLike(
     "APPLICATION FORM - BIRTH CERTIFICATE", "White",
     "Date of Birth", "Place of Birth",
-    "birth_city", "birth_province", "birth_country"
+    "birth_city", "birth_province", "birth_country",
+    ["BIRTH CERTIFICATE", "AUTHENTICATION", "CDLI"], "BIRTH CERTIFICATE"
   ),
 
   cenomar: birthLike(
     "APPLICATION FORM - CERTIFICATE OF NO RECORD OF MARRIAGE (CENOMAR)", "Green",
     "Date of Birth", "Place of Birth",
-    "birth_city", "birth_province", "birth_country"
+    "birth_city", "birth_province", "birth_country",
+    // CENOMAR is its own request type — the birth form's options would be wrong
+    // on this sheet.
+    ["CENOMAR", "ADVISORY ON MARRIAGES", "AUTHENTICATION"], "CENOMAR"
   ),
 
   psa_marriage: {

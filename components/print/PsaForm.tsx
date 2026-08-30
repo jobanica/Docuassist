@@ -86,6 +86,8 @@ function Row({
               // Tick the box when the encoded value matches this option.
               const on =
                 value.trim().toLowerCase() === opt.toLowerCase() ||
+                (!value.trim() &&
+                  row.defaultChecked?.toLowerCase() === opt.toLowerCase()) ||
                 (opt === "Others" &&
                   value.trim() !== "" &&
                   !(row.options ?? []).some(
@@ -168,20 +170,37 @@ export function PsaForm({
       <div className="bg-black py-[3px] text-center text-[11px] font-bold tracking-wide text-white">
         THIS FORM IS NOT FOR SALE
       </div>
-      <div className="mt-1 text-center leading-tight">
-        <p className="text-[10px]">Republic of the Philippines</p>
-        <p className="text-[11px] font-bold">Philippine Statistics Authority</p>
-        <p className="text-[10px] font-semibold">
-          OFFICE OF THE CIVIL REGISTRAR GENERAL
-        </p>
-        <p className="mt-0.5 text-[11px] font-bold">{tpl.title}</p>
+      <div className="mt-1 flex items-center gap-3">
+        {/* The PSA seal sits at the top left of the real sheet. Same-origin so
+            html-to-image can inline it when staff copy the form as an image. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/psa-logo.svg"
+          alt="Philippine Statistics Authority"
+          width={58}
+          height={56}
+          className="shrink-0"
+        />
+        <div className="flex-1 text-center leading-tight">
+          <p className="text-[10px]">Republic of the Philippines</p>
+          <p className="text-[11px] font-bold">Philippine Statistics Authority</p>
+          <p className="text-[10px] font-semibold">
+            OFFICE OF THE CIVIL REGISTRAR GENERAL
+          </p>
+          <p className="mt-0.5 text-[11px] font-bold">{tpl.title}</p>
+        </div>
+        {/* Balances the seal so the title stays centred on the sheet. */}
+        <span className="w-[58px] shrink-0" aria-hidden />
       </div>
 
       <div className="mt-2 border border-black px-2 py-1 text-[8px] leading-snug">
         <p className="font-bold">
           IMPORTANT: PLEASE READ GENERAL INSTRUCTIONS BEFORE FILLING OUT THE FORM
         </p>
-        <p>1. Please PRINT letters in the spaces provided.</p>
+        <p>
+          1. Please PRINT letters in the spaces provided. Please CHECK (✓)
+          appropriate box (es).
+        </p>
         <p>2. A valid ID is required from the owner of the document.</p>
         <p>
           3. An authorization letter and ID of the document owner with the ID of
