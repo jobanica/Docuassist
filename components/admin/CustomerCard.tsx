@@ -185,9 +185,9 @@ export function CustomerCard({
           issues={places}
           overridden={placesOk}
           onOverride={setPlacesOk}
-          onFix={(i) => {
+          onFix={(i, value) => {
             if (!i.fix) return;
-            const next = { ...v, [i.fix.field]: i.fix.value };
+            const next = { ...v, [i.fix.field]: value };
             setV(next);
             setAuto((a) => a.filter((k) => k !== i.fix!.field));
             recheck(next);

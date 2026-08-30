@@ -307,6 +307,24 @@ NEED LANDMARK;`, f, opts);
     { group: "delivery", cityLabel: "Delivery city", provinceLabel: "Delivery province",
       city: "Tulunan", province: "Davao del Sur" },
   ])[0].message, "Tulunan is in Cotabato, not Davao del Sur.");
+
+  // A name shared by several provinces must offer all of them. Carmen exists
+  // six times over; naming only the first sends staff to "fix" a province that
+  // may well have been right.
+  const carmen = placeIssues([
+    { group: "birth", cityLabel: "Place of birth — city", provinceLabel: "Place of birth — province",
+      city: "Carmen", province: "Davao del Sur" },
+  ])[0];
+  check("every Carmen province is offered",
+    [carmen.fix!.value, ...(carmen.alternatives ?? [])].join(", "),
+    "Agusan Del Norte, Bohol, Cebu, Cotabato, Davao Del Norte, Surigao Del Sur");
+  check("the message names them all", carmen.message,
+    'There are 6 places called "Carmen" — in Agusan Del Norte, Bohol, Cebu, Cotabato, Davao Del Norte or Surigao Del Sur — but none in Davao del Sur.');
+  // Carmen really is in Davao del Norte, so that pairing must still pass.
+  check("Carmen + Davao del Norte accepted", placeIssues([
+    { group: "birth", cityLabel: "Place of birth — city", provinceLabel: "Place of birth — province",
+      city: "Carmen", province: "Davao del Norte" },
+  ]).length, 0);
 }
 
 console.log("\n[15] Sex is one of two answers, or nothing");

@@ -20,8 +20,9 @@ export function PlaceWarnings({
   onOverride,
 }: {
   issues: PlaceIssue[];
-  /** Apply the suggested official name to the field it came from. */
-  onFix?: (issue: PlaceIssue) => void;
+  /** Apply one of the offered values to the field the issue came from. A
+   *  shared city name offers several, so the chosen one is passed explicitly. */
+  onFix?: (issue: PlaceIssue, value: string) => void;
   /** Set once staff have deliberately chosen to keep what they wrote. */
   overridden?: boolean;
   onOverride?: (v: boolean) => void;
@@ -62,25 +63,33 @@ export function PlaceWarnings({
           : `${issues.length} places don't exist — fix them before saving`}
       </p>
       <ul className="mt-2 space-y-1.5">
-        {issues.map((i, n) => (
-          <li
-            key={n}
-            className="flex flex-wrap items-center gap-2 text-xs text-red-800"
-          >
-            <span>
-              <span className="font-medium">{i.label}:</span> {i.message}
-            </span>
-            {onFix && i.suggestion && (
-              <button
-                type="button"
-                onClick={() => onFix(i)}
-                className="inline-flex items-center gap-1 rounded-md border border-red-300 bg-white px-2 py-0.5 text-[11px] font-medium text-red-800 hover:bg-red-100"
-              >
-                <Wand2 className="h-3 w-3" /> Use &ldquo;{i.suggestion}&rdquo;
-              </button>
-            )}
-          </li>
-        ))}
+        {issues.map((i, n) => {
+          // A city name shared by several provinces gets a button each — there
+          // is no single right answer, and picking one for staff would just be
+          // a guess dressed up as a correction.
+          const options = i.fix ? [i.fix.value, ...(i.alternatives ?? [])] : [];
+          return (
+            <li
+              key={n}
+              className="flex flex-wrap items-center gap-2 text-xs text-red-800"
+            >
+              <span>
+                <span className="font-medium">{i.label}:</span> {i.message}
+              </span>
+              {onFix &&
+                options.map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => onFix(i, v)}
+                    className="inline-flex items-center gap-1 rounded-md border border-red-300 bg-white px-2 py-0.5 text-[11px] font-medium text-red-800 hover:bg-red-100"
+                  >
+                    <Wand2 className="h-3 w-3" /> Use &ldquo;{v}&rdquo;
+                  </button>
+                ))}
+            </li>
+          );
+        })}
       </ul>
       <p className="mt-2 text-[11px] text-red-700">
         A wrong city gets a PSA request rejected or a parcel returned, so this

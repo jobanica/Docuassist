@@ -941,10 +941,10 @@ export function NewOrderForm({
             issues={places}
             overridden={placesOk}
             onOverride={setPlacesOk}
-            onFix={(i) => {
+            onFix={(i, value) => {
               if (!i.fix) return;
               if (i.group === "delivery") {
-                const next = { ...newCustomer, [i.fix.field]: i.fix.value };
+                const next = { ...newCustomer, [i.fix.field]: value };
                 setNewCustomer(next);
                 setShowAddress(true);
                 recheckPlaces(
@@ -956,7 +956,7 @@ export function NewOrderForm({
                   i.fix.field === "city" ? "birth_city" : "birth_province";
                 const svc = chosen[0];
                 if (!svc) return;
-                setField(svc.id, key, i.fix.value);
+                setField(svc.id, key, value);
               }
             }}
           />

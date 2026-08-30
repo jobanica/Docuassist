@@ -320,11 +320,11 @@ export function ItemDetails({
                 issues={places}
                 overridden={placesOk}
                 onOverride={setPlacesOk}
-                onFix={(i) => {
+                onFix={(i, value) => {
                   if (!i.fix) return;
                   const key =
                     i.fix.field === "city" ? "birth_city" : "birth_province";
-                  const next = { ...values, [key]: i.fix.value };
+                  const next = { ...values, [key]: value };
                   setValues(next);
                   setAutoFilled((a) => a.filter((k) => k !== key));
                   checkPlaces([

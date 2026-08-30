@@ -25,6 +25,10 @@ export interface PlaceCheck {
   suggestion?: string;
   /** Set when the city is real but sits in a different province. */
   wrongProvince?: string;
+  /** Every province that has a city or municipality by this name. 114 of them
+   *  are shared — there are six Carmens and nine San Isidros — so naming only
+   *  the first would send staff to correct a province that was never wrong. */
+  provinces?: string[];
 }
 
 export interface PlaceIssue {
@@ -40,6 +44,16 @@ export interface PlaceIssue {
    *  mismatch the city is right and the province is wrong, so the fix is the
    *  province — not the name that was flagged. */
   fix?: { field: "city" | "province"; value: string };
+  /** Equally valid values for the same field, offered alongside `fix`. A city
+   *  name shared by several provinces has no single right answer, so staff get
+   *  one button per province rather than a guess. */
+  alternatives?: string[];
+}
+
+/** "a, b or c" — for listing every province a shared city name belongs to. */
+function joinOr(list: string[]): string {
+  if (list.length <= 1) return list[0] ?? "";
+  return `${list.slice(0, -1).join(", ")} or ${list[list.length - 1]}`;
 }
 
 function norm(v: string): string {
@@ -166,11 +180,13 @@ export function checkCity(input: string, province?: string): PlaceCheck {
     const hit = pick(exact);
     // Real city, wrong province — the pairing is what fails, not the name.
     if (prov && !exact.some((e) => e.province === prov)) {
+      const provinces = Array.from(new Set(exact.map((e) => e.province))).sort();
       return {
         input: raw,
         status: "suggest",
         suggestion: hit.name,
-        wrongProvince: hit.province,
+        wrongProvince: provinces[0],
+        provinces,
       };
     }
     return { input: raw, status: "ok", suggestion: hit.name };
@@ -242,6 +258,7 @@ export function placeIssues(
     if (p.city?.trim()) {
       const r = checkCity(p.city, p.province);
       if (r.wrongProvince) {
+        const provinces = r.provinces ?? [r.wrongProvince];
         out.push({
           label: p.cityLabel,
           input: r.input,
@@ -249,7 +266,16 @@ export function placeIssues(
           suggestion: r.wrongProvince,
           group: p.group,
           fix: { field: "province", value: r.wrongProvince },
-          message: `${r.suggestion} is in ${r.wrongProvince}, not ${p.province}.`,
+          alternatives: provinces.slice(1),
+          message:
+            provinces.length > 1
+              // Named by what they wrote, not by one match: the same alias can
+              // cover a city and a municipality with slightly different
+              // official names, and only the provinces are certain.
+              ? `There are ${provinces.length} places called "${r.input}" — in ${joinOr(
+                  provinces
+                )} — but none in ${p.province}.`
+              : `${r.suggestion} is in ${r.wrongProvince}, not ${p.province}.`,
         });
       } else if (r.status === "suggest") {
         out.push({
