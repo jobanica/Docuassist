@@ -12,9 +12,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { unwrap } from "@/lib/action-result";
+import { toMessage, unwrap } from "@/lib/action-result";
 import { updateCustomer } from "@/lib/actions/customers";
 import { parsePastedText } from "@/lib/actions/parse";
+import { PlaceWarnings } from "./PlaceWarnings";
+import { checkPlaces } from "@/lib/actions/places";
+import type { PlaceIssue } from "@/lib/parse/places";
 import type { Customer } from "@/lib/types";
 
 const FIELDS: { key: keyof Customer; label: string; wide?: boolean }[] = [
@@ -56,6 +59,7 @@ export function CustomerCard({
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [auto, setAuto] = useState<string[]>([]);
+  const [places, setPlaces] = useState<PlaceIssue[]>([]);
   const [v, setV] = useState<Record<string, string>>(
     Object.fromEntries(FIELDS.map((f) => [f.key, (customer as any)[f.key] ?? ""]))
   );
@@ -64,6 +68,23 @@ export function CustomerCard({
     [customer.address_line, customer.barangay, customer.city, customer.province, customer.zip]
       .filter(Boolean)
       .join(", ") || null;
+
+  function recheck(next: Record<string, string>) {
+    checkPlaces([
+      {
+        cityLabel: "Delivery city",
+        provinceLabel: "Delivery province",
+        city: next.city,
+        province: next.province,
+      },
+    ])
+      .then((res) => {
+        if (res.ok) setPlaces(res.value);
+      })
+      .catch(() => {
+        /* never block editing on a failed check */
+      });
+  }
 
   function save() {
     setError(null);
@@ -75,7 +96,7 @@ export function CustomerCard({
         setNote(null);
         router.refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not save.");
+        setError(toMessage(e));
       }
     });
   }
@@ -100,6 +121,7 @@ export function CustomerCard({
         return next;
       });
       setAuto(filled);
+      setPlaces(r.places.filter((i) => i.label.startsWith("Delivery")));
       setEditing(true);
       setNote(
         filled.length === 0
@@ -109,7 +131,7 @@ export function CustomerCard({
             }. Check them, then Save.`
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not read that reply.");
+      setError(toMessage(e));
     } finally {
       setParsing(false);
     }
@@ -132,7 +154,14 @@ export function CustomerCard({
             </Button>
           )}
           {!editing && (
-            <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setEditing(true);
+                recheck(v);
+              }}
+            >
               <Pencil className="h-3.5 w-3.5" /> Edit
             </Button>
           )}
@@ -147,6 +176,8 @@ export function CustomerCard({
           </p>
         )}
         {error && <p className="text-sm text-destructive">{error}</p>}
+
+        <PlaceWarnings issues={places} />
 
         {editing ? (
           <>
@@ -172,8 +203,10 @@ export function CustomerCard({
                     }`}
                     value={v[f.key as string] ?? ""}
                     onChange={(e) => {
-                      setV({ ...v, [f.key]: e.target.value });
+                      const next = { ...v, [f.key]: e.target.value };
+                      setV(next);
                       setAuto((a) => a.filter((k) => k !== f.key));
+                      if (f.key === "city" || f.key === "province") recheck(next);
                     }}
                   />
                 </div>

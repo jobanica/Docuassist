@@ -13,7 +13,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { unwrap } from "@/lib/action-result";
+import { toMessage, unwrap } from "@/lib/action-result";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,6 +30,9 @@ import {
   type DuplicateReport,
 } from "@/lib/actions/duplicates";
 import { DuplicateWarning } from "./DuplicateWarning";
+import { PlaceWarnings } from "./PlaceWarnings";
+import { checkPlaces } from "@/lib/actions/places";
+import type { PlaceIssue } from "@/lib/parse/places";
 import { createOrder } from "@/lib/actions/orders";
 import { parsePastedText } from "@/lib/actions/parse";
 import type {
@@ -111,6 +114,7 @@ export function NewOrderForm({
   // --- Auto-fill ---
   const [parsing, setParsing] = useState<string | null>(null);
   const [parseNote, setParseNote] = useState<Record<string, string>>({});
+  const [places, setPlaces] = useState<PlaceIssue[]>([]);
 
   // --- Duplicate check ---
   // Held until the staff member has seen it; `acknowledged` is what lets the
@@ -195,6 +199,33 @@ export function NewOrderForm({
     }));
   }
 
+  /** Re-check the places after a manual edit, so a correction clears the flag. */
+  function recheckPlaces(
+    doc: Record<string, string>,
+    cust: typeof newCustomer
+  ) {
+    checkPlaces([
+      {
+        cityLabel: "Place of birth — city",
+        provinceLabel: "Place of birth — province",
+        city: doc.birth_city,
+        province: doc.birth_province,
+      },
+      {
+        cityLabel: "Delivery city",
+        provinceLabel: "Delivery province",
+        city: cust.city,
+        province: cust.province,
+      },
+    ])
+      .then((res) => {
+        if (res.ok) setPlaces(res.value);
+      })
+      .catch(() => {
+        /* a check that cannot run must not block intake */
+      });
+  }
+
   function setField(svcId: string, key: string, value: string) {
     setSelected((prev) => ({
       ...prev,
@@ -205,6 +236,10 @@ export function NewOrderForm({
         autoFilled: prev[svcId].autoFilled.filter((k) => k !== key),
       },
     }));
+    if (key === "birth_city" || key === "birth_province") {
+      const doc = { ...selected[svcId].form_details, [key]: value };
+      recheckPlaces(doc, newCustomer);
+    }
   }
 
   async function autoFill(svcId: string) {
@@ -265,6 +300,8 @@ export function NewOrderForm({
         if (deliveryFilled > 0) setShowAddress(true);
       }
 
+      setPlaces(r.places);
+
       const n = Object.keys(r.values).length;
       setParseNote((prev) => ({
         ...prev,
@@ -284,7 +321,7 @@ export function NewOrderForm({
               }. Check them before you create the order.`,
       }));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not read that reply.");
+      setError(toMessage(e));
     } finally {
       setParsing(null);
     }
@@ -373,7 +410,7 @@ export function NewOrderForm({
         );
         router.push(`/orders/${id}`);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Something went wrong.");
+        setError(toMessage(e));
       }
     });
   }
@@ -878,6 +915,8 @@ export function NewOrderForm({
               )}
             </div>
           )}
+
+          <PlaceWarnings issues={places} />
 
           {dupes && dupes.matches.length > 0 && (
             <DuplicateWarning

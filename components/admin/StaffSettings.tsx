@@ -15,7 +15,7 @@ import {
   Save,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { unwrap, type ActionResult } from "@/lib/action-result";
+import { toMessage, type ActionResult, unwrap } from "@/lib/action-result";
 import { Input } from "@/components/ui/input";
 import { fmtDate } from "@/lib/dates";
 import {
@@ -80,7 +80,7 @@ export function StaffSettings({
         after?.();
         router.refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Something went wrong.");
+        setError(toMessage(e));
       }
     });
   }

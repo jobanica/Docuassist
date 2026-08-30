@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Save, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { unwrap } from "@/lib/action-result";
+import { toMessage, unwrap } from "@/lib/action-result";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { updateBusinessInfo } from "@/lib/actions/settings";
@@ -33,7 +33,7 @@ export function BusinessSettings({
         setTimeout(() => setSaved(false), 2000);
         router.refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not save.");
+        setError(toMessage(e));
       }
     });
   }

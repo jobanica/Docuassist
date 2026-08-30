@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Save, ShieldAlert, Info, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { unwrap } from "@/lib/action-result";
+import { toMessage, unwrap } from "@/lib/action-result";
 import { updateParsingSettings } from "@/lib/actions/settings";
 
 /**
@@ -37,7 +37,7 @@ export function ParsingSettings({
         setTimeout(() => setSaved(false), 2000);
         router.refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not save.");
+        setError(toMessage(e));
       }
     });
   }

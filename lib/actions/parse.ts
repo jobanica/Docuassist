@@ -4,6 +4,7 @@ import { run, type ActionResult } from "@/lib/action-result";
 import { createClient } from "@/lib/supabase/server";
 import { requireStaff } from "@/lib/auth";
 import { expandNameGroups, parseTier1 } from "@/lib/parse/tier1";
+import { placeIssues, type PlaceIssue } from "@/lib/parse/places";
 import {
   DELIVERY_FIELDS,
   DELIVERY_ONLY_IN_BLOCK,
@@ -22,6 +23,8 @@ export interface ParseResult {
   missingRequired: string[];
   /** Delivery details keyed by their `customers` column (phone, city, ...). */
   customer: Record<string, string>;
+  /** Cities/provinces that don't exist or don't match, for staff to confirm. */
+  places: PlaceIssue[];
   /** which tier produced the final result (2 means the AI fallback ran) */
   tier: 1 | 2;
   /** true when Tier-2 was needed but unavailable/failed */
@@ -66,6 +69,7 @@ export async function parsePastedText(
         filledKeys: [],
         missingRequired: [],
         customer: {},
+        places: [],
         tier: 1,
         aiUnavailable: false,
       };
@@ -133,6 +137,22 @@ export async function parsePastedText(
     }
     filledKeys = filledKeys.filter((k) => !(k in DELIVERY_TO_CUSTOMER));
 
+    // Check the places against the PSA's own list before staff act on them.
+    const places = placeIssues([
+      {
+        cityLabel: "Place of birth — city",
+        provinceLabel: "Place of birth — province",
+        city: values.birth_city,
+        province: values.birth_province,
+      },
+      {
+        cityLabel: "Delivery city",
+        provinceLabel: "Delivery province",
+        city: customer.city,
+        province: customer.province,
+      },
+    ]);
+
     const missingRequired = docFields
       .filter((f) => f.required && !values[f.key])
       .map((f) => f.key);
@@ -150,6 +170,6 @@ export async function parsePastedText(
       /* logging is best-effort */
     }
 
-    return { values, filledKeys, missingRequired, customer, tier, aiUnavailable };
+    return { values, filledKeys, missingRequired, customer, places, tier, aiUnavailable };
   });
 }

@@ -13,7 +13,28 @@ export type ActionResult<T = void> =
   | { ok: true; value: T }
   | { ok: false; error: string };
 
+/**
+ * A Server Action call that never reached the server.
+ *
+ * Next.js gives each deployment its own action IDs, so a tab opened before a
+ * deploy posts to an ID that no longer exists and the browser reports a bare
+ * "Failed to fetch". The action did not run — nothing was saved — but the raw
+ * message tells the person nothing about what to do.
+ */
+function isStaleOrOffline(e: unknown): boolean {
+  if (!(e instanceof Error)) return false;
+  return (
+    e instanceof TypeError &&
+    /failed to fetch|networkerror|load failed|network request failed/i.test(
+      e.message
+    )
+  );
+}
+
 export function toMessage(e: unknown): string {
+  if (isStaleOrOffline(e)) {
+    return "Couldn't reach the server — the app may have been updated since you opened this page. Refresh and try again; nothing was saved.";
+  }
   if (e instanceof ZodError) {
     // Zod's own .message is a JSON dump of every issue; the first issue's
     // message is the sentence actually written for the user.

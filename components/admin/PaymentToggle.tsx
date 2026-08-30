@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { setPaymentStatus } from "@/lib/actions/orders";
-import { unwrap } from "@/lib/action-result";
+import { toMessage, unwrap } from "@/lib/action-result";
 import { peso } from "@/lib/money";
 
 /** COD payment toggle, shown on delivered orders (§8). */
@@ -27,7 +27,7 @@ export function PaymentToggle({
         unwrap(await setPaymentStatus(orderId, next));
         router.refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not update payment.");
+        setError(toMessage(e));
       }
     });
   }

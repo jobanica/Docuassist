@@ -2,6 +2,7 @@
  * Tier-1 parser tests (§9). No test runner dependency — run with:
  *   npm run test:parser
  */
+import { checkCity, checkProvince, placeIssues } from "@/lib/parse/places";
 import { DELIVERY_FIELDS, DELIVERY_ONLY_IN_BLOCK, NEVER_IN_DELIVERY_BLOCK } from "@/lib/parse/delivery";
 import {
   parseTier1,
@@ -222,6 +223,39 @@ ZIP: 1747`, fields, opts);
   check("phone found outside a block", r.values.delivery_phone, "0917 123 4567");
   check("bare address line under the heading", r.values.delivery_address_line, "Blk 5 Lot 12 Mahogany St");
   check("delivery block did not steal the name", r.values.last_name, "Nasari");
+}
+
+console.log("\n[12] Real cities and provinces (PSGC)");
+{
+  const city = (c: string, p?: string) => { const r = checkCity(c, p); return `${r.status}${r.suggestion ? ":" + r.suggestion : ""}${r.wrongProvince ? " (in " + r.wrongProvince + ")" : ""}`; };
+  const prov = (v: string) => { const r = checkProvince(v); return `${r.status}${r.suggestion ? ":" + r.suggestion : ""}`; };
+
+  check("exact city", city("Las Piñas City"), "ok:City of Las Piñas");
+  check("no accent typed", city("Las Pinas City"), "ok:City of Las Piñas");
+  check("City of X written as X City", city("Batac City"), "ok:City of Batac");
+  check("plain municipality", city("Adams"), "ok:Adams");
+  check("misspelled city", city("Zamboango City"), "suggest:City of Zamboanga");
+  check("barangay glued to a city", city("Mampang Zamboanga City"), "suggest:City of Zamboanga");
+  check("pure nonsense", city("Xyzzyville"), "unknown");
+
+  check("exact province", prov("Zamboanga del Sur"), "ok:Zamboanga Del Sur");
+  check("misspelled province", prov("Zamboanga del sor"), "suggest:Zamboanga Del Sur");
+  check("NCR alias", prov("NCR"), "ok:Metro Manila");
+  check("not a province", prov("Talon Uno"), "unknown");
+
+  // A real city paired with the wrong province.
+  check("city/province mismatch", city("Cebu City", "Metro Manila"), "suggest:City of Cebu (in Cebu)");
+  // The same name in two provinces resolves by the province given.
+  check("San Fernando, La Union", city("San Fernando", "La Union"), "ok:City of San Fernando");
+  check("San Fernando, Pampanga", city("San Fernando", "Pampanga"), "ok:City of San Fernando");
+
+  const issues = placeIssues([
+    { cityLabel: "Delivery city", provinceLabel: "Delivery province",
+      city: "Zamboango City", province: "Zamboanga del sor" },
+  ]);
+  check("issues raised", issues.length, 2);
+  check("province issue reads well", issues[0].message,
+    '"Zamboanga del sor" isn\'t a province — did they mean Zamboanga Del Sur?');
 }
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

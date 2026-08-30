@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Save, Copy, Check, ExternalLink, ShieldAlert, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { unwrap } from "@/lib/action-result";
+import { toMessage, unwrap } from "@/lib/action-result";
 import { updatePublicOrderSettings } from "@/lib/actions/settings";
 
 export function PublicFormSettings({
@@ -36,7 +36,7 @@ export function PublicFormSettings({
         setTimeout(() => setSaved(false), 2000);
         router.refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not save.");
+        setError(toMessage(e));
       }
     });
   }

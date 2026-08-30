@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Save, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { unwrap, type ActionResult } from "@/lib/action-result";
+import { toMessage, type ActionResult, unwrap } from "@/lib/action-result";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -96,7 +96,7 @@ function EventCard({
         }
         router.refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not save.");
+        setError(toMessage(e));
       }
     });
   }

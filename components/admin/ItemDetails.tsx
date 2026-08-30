@@ -13,12 +13,15 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { unwrap } from "@/lib/action-result";
+import { toMessage, unwrap } from "@/lib/action-result";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { updateOrderItemDetails } from "@/lib/actions/orders";
 import { parsePastedText } from "@/lib/actions/parse";
+import { PlaceWarnings } from "./PlaceWarnings";
+import { checkPlaces } from "@/lib/actions/places";
+import type { PlaceIssue } from "@/lib/parse/places";
 import type { FormFieldDef } from "@/lib/types";
 
 /**
@@ -66,6 +69,7 @@ export function ItemDetails({
   // them. Auto-fill never writes to the database on its own.
   const [autoFilled, setAutoFilled] = useState<string[]>([]);
   const [parseNote, setParseNote] = useState<string | null>(null);
+  const [places, setPlaces] = useState<PlaceIssue[]>([]);
   const [parsing, setParsing] = useState(false);
 
   async function autoFill() {
@@ -86,6 +90,7 @@ export function ItemDetails({
       }
       setValues(next);
       setAutoFilled(filled);
+      setPlaces(r.places.filter((i) => i.label.startsWith("Place of birth")));
       setOpenFields(true);
       setParseNote(
         filled.length === 0
@@ -95,7 +100,7 @@ export function ItemDetails({
             }. Check them, then Save.`
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not read that reply.");
+      setError(toMessage(e));
     } finally {
       setParsing(false);
     }
@@ -109,7 +114,7 @@ export function ItemDetails({
         done?.();
         router.refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not save.");
+        setError(toMessage(e));
       }
     });
   }
@@ -288,14 +293,29 @@ export function ItemDetails({
                         }
                         value={values[f.key] ?? ""}
                         onChange={(e) => {
-                          setValues({ ...values, [f.key]: e.target.value });
+                          const next = { ...values, [f.key]: e.target.value };
+                          setValues(next);
                           setAutoFilled((a) => a.filter((k) => k !== f.key));
+                          if (f.key === "birth_city" || f.key === "birth_province") {
+                            checkPlaces([
+                              {
+                                cityLabel: "Place of birth — city",
+                                provinceLabel: "Place of birth — province",
+                                city: next.birth_city,
+                                province: next.birth_province,
+                              },
+                            ])
+                              .then((res) => res.ok && setPlaces(res.value))
+                              .catch(() => {});
+                          }
                         }}
                       />
                     )}
                   </div>
                 ))}
               </div>
+              <PlaceWarnings issues={places} />
+
               <Button
                 size="sm"
                 disabled={pending}

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Printer, Copy, Check, Download, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toMessage } from "@/lib/action-result";
 
 /**
  * Print / copy-as-image / download-as-image for the filled PSA form.
@@ -71,7 +72,7 @@ export function PrintActions({ targetId }: { targetId: string }) {
       a.remove();
       URL.revokeObjectURL(url);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not build the image.");
+      setError(toMessage(e));
     } finally {
       setBusy(null);
     }

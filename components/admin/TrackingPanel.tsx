@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Copy, Check, Download, ExternalLink, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { unwrap } from "@/lib/action-result";
+import { toMessage, unwrap } from "@/lib/action-result";
 import { setOrderMessengerPage } from "@/lib/actions/messenger-pages";
 import type { MessengerPage } from "@/lib/types";
 
@@ -40,7 +40,7 @@ export function TrackingPanel({
         unwrap(await setOrderMessengerPage(orderId, next || null));
         router.refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not save.");
+        setError(toMessage(e));
       }
     });
   }

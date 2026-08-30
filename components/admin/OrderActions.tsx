@@ -12,7 +12,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { unwrap, type ActionResult } from "@/lib/action-result";
+import { toMessage, type ActionResult, unwrap } from "@/lib/action-result";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -103,7 +103,7 @@ export function OrderActions({
         setAttemptOther("");
         router.refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Action failed.");
+        setError(toMessage(e));
       }
     });
   }
