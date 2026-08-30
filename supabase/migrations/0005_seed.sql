@@ -14,7 +14,7 @@ insert into order_statuses (code, label, sort_order, is_terminal, public_helper)
   ('released',         'Released',         4, false,
      'Your document has been released and is being prepared for shipping.'),
   ('shipped',          'Shipped',          5, false,
-     'Your documents are on the way via {courier}! Tracking #: {number}. Please prepare ₱{total} for cash on delivery.'),
+     'Your documents are on the way via {courier}! Tracking #: {number}. Please prepare {total} for cash on delivery.'),
   ('delivered',        'Delivered',        6, true,
      'Delivered na! Salamat sa pagtitiwala sa DocuAssist PH. 💙'),
   ('cancelled',        'Cancelled',        7, true,
@@ -98,8 +98,8 @@ on conflict do nothing;
 -- --- SMS templates + toggles (§10) — failed_attempt defaults ON --------------
 insert into notification_settings (event_key, enabled, template) values
   ('details_received', true,  'Order confirmed! Track here: {link}'),
-  ('shipped',          true,  'Your documents are on the way via {courier}. COD ₱{total}. Track: {link}'),
-  ('failed_attempt',   true,  'Hi {name}, delivery attempt {n}/3 for your DocuAssist PH order was unsuccessful. Courier will retry — please keep your phone on and prepare ₱{total} COD. {link}'),
+  ('shipped',          true,  'Your documents are on the way via {courier}. COD {total}. Track: {link}'),
+  ('failed_attempt',   true,  'Hi {name}, delivery attempt {n}/3 for your DocuAssist PH order was unsuccessful. Courier will retry — please keep your phone on and prepare {total} COD. {link}'),
   ('delivered',        false, 'Salamat, {name}! Your DocuAssist PH order was delivered. We appreciate your trust. 💙')
 on conflict (event_key) do nothing;
 

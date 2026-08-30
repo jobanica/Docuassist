@@ -8,6 +8,7 @@ import {
   clientIp,
 } from "@/lib/tracking";
 import { PublicStepper } from "@/components/track/PublicStepper";
+import { ArrivalHero } from "@/components/track/ArrivalHero";
 import { CourierTracking } from "@/components/track/CourierTracking";
 import { statusHelper, attemptNotice } from "@/lib/publicCopy";
 import { peso } from "@/lib/money";
@@ -96,8 +97,11 @@ export default async function TrackPage({
 
   return (
     <Shell>
+      {/* The answer they came for, before anything else. */}
+      <ArrivalHero info={info} />
+
       {/* Summary */}
-      <section className="rounded-2xl bg-white p-5 shadow-sm">
+      <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm">
         <p className="text-slate-900">
           Hi <span className="font-semibold">{info.first_name ?? "there"}</span>!
           Here&apos;s the status of your{" "}

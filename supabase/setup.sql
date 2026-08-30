@@ -1,6 +1,6 @@
 -- =============================================================================
 -- DocuAssist PH — full schema setup for a fresh Supabase project.
--- Migrations 0001–0022 concatenated in order. Run once on a fresh project.
+-- Migrations 0001–0023 concatenated in order. Run once on a fresh project.
 -- =============================================================================
 
 
@@ -516,7 +516,7 @@ insert into order_statuses (code, label, sort_order, is_terminal, public_helper)
   ('released',         'Released',         4, false,
      'Your document has been released and is being prepared for shipping.'),
   ('shipped',          'Shipped',          5, false,
-     'Your documents are on the way via {courier}! Tracking #: {number}. Please prepare ₱{total} for cash on delivery.'),
+     'Your documents are on the way via {courier}! Tracking #: {number}. Please prepare {total} for cash on delivery.'),
   ('delivered',        'Delivered',        6, true,
      'Delivered na! Salamat sa pagtitiwala sa DocuAssist PH. 💙'),
   ('cancelled',        'Cancelled',        7, true,
@@ -600,8 +600,8 @@ on conflict do nothing;
 -- --- SMS templates + toggles (§10) — failed_attempt defaults ON --------------
 insert into notification_settings (event_key, enabled, template) values
   ('details_received', true,  'Order confirmed! Track here: {link}'),
-  ('shipped',          true,  'Your documents are on the way via {courier}. COD ₱{total}. Track: {link}'),
-  ('failed_attempt',   true,  'Hi {name}, delivery attempt {n}/3 for your DocuAssist PH order was unsuccessful. Courier will retry — please keep your phone on and prepare ₱{total} COD. {link}'),
+  ('shipped',          true,  'Your documents are on the way via {courier}. COD {total}. Track: {link}'),
+  ('failed_attempt',   true,  'Hi {name}, delivery attempt {n}/3 for your DocuAssist PH order was unsuccessful. Courier will retry — please keep your phone on and prepare {total} COD. {link}'),
   ('delivered',        false, 'Salamat, {name}! Your DocuAssist PH order was delivered. We appreciate your trust. 💙')
 on conflict (event_key) do nothing;
 
@@ -1936,3 +1936,24 @@ create policy customer_tags_staff_insert on customer_tags
   for insert with check (is_staff() and staff_can_see_customer(customer_id));
 create policy customer_tags_staff_delete on customer_tags
   for delete using (is_staff() and staff_can_see_customer(customer_id));
+
+-- >>> 0023_peso_sign.sql <<<
+-- =============================================================================
+-- 0023_peso_sign.sql — one peso sign, not two.
+--
+-- The seeded copy wrote "₱{total}", but {total} is filled by peso(), which
+-- already formats the amount with the sign. Customers were reading
+-- "₱₱685.00" on the tracking page and in the COD reminders — the two places
+-- where the amount matters most.
+--
+-- Only the literal sign in front of the token is removed; the amount and its
+-- formatting are untouched.
+-- =============================================================================
+
+update order_statuses
+   set public_helper = replace(public_helper, '₱{total}', '{total}')
+ where public_helper like '%₱{total}%';
+
+update notification_settings
+   set template = replace(template, '₱{total}', '{total}')
+ where template like '%₱{total}%';
