@@ -105,6 +105,16 @@ export const NEVER_IN_DELIVERY_BLOCK = new Set([
   "birth_city",
   "birth_province",
   "birth_country",
+  // The TIN and PhilHealth forms ask for the applicant's own address, phone
+  // and ID number in labels identical to the delivery block's — "Barangay",
+  // "City", "Phone". Inside the delivery block those belong to the courier.
+  "address_line",
+  "barangay",
+  "municipality",
+  "zip",
+  "house_number",
+  "subdivision",
+  "contact_number",
 ]);
 
 /** Parsed delivery keys → the columns they are stored in on `customers`. */

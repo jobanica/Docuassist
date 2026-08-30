@@ -97,7 +97,12 @@ function coerce(field: FormFieldDef, raw: string): string {
  */
 const SECTIONS: { test: RegExp; prefix: string }[] = [
   // Delivery first: "delivery address" must not be read as an owner block.
-  { test: /\b(delivery|shipping|padala|ipadala|padalhan|ship to|deliver to|address for delivery|complete address)\b/, prefix: "delivery" },
+  // "complete address" is deliberately NOT here: on the TIN and PhilHealth
+  // templates it heads the APPLICANT's address, with "Delivery Address" a
+  // separate block further down. Treating it as a delivery header sent the
+  // applicant's own address to the courier fields and, first-wins, left the
+  // real delivery block with nowhere to go.
+  { test: /\b(delivery|shipping|padala|ipadala|padalhan|ship to|deliver to|address for delivery)\b/, prefix: "delivery" },
   { test: /\b(father|ama|tatay|papa|daddy)\b/, prefix: "father_" },
   { test: /\b(mother|ina|nanay|mama|mommy|maiden)\b/, prefix: "mother_" },
   // Anything that puts us back on the person the document is for.

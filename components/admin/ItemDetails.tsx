@@ -25,6 +25,7 @@ import { documentPlacePair } from "@/lib/parse/place-fields";
 import type { PlaceIssue } from "@/lib/parse/places";
 import { SurnameWarnings } from "./SurnameWarnings";
 import { surnameIssues } from "@/lib/parse/surname";
+import { PSA_FORMS } from "@/lib/psa-forms";
 import type { FormFieldDef } from "@/lib/types";
 
 /**
@@ -79,6 +80,9 @@ export function ItemDetails({
   // Which keys hold this document's place of event — birth_*, marriage_* or
   // death_* depending on the template.
   const placePair = documentPlacePair(fields);
+  // TIN and PhilHealth have no PSA sheet behind them, so the copy that talks
+  // about printing would be wrong.
+  const hasPsaForm = Boolean(PSA_FORMS[serviceCode]);
   const [error, setError] = useState<string | null>(null);
 
   const [editingPaste, setEditingPaste] = useState(false);
@@ -248,7 +252,7 @@ export function ItemDetails({
               <ChevronDown
                 className={`h-3.5 w-3.5 transition-transform ${openFields ? "" : "-rotate-90"}`}
               />
-              PSA form fields
+              {hasPsaForm ? "PSA form fields" : "Form fields"}
             </span>
             <span
               className={
@@ -256,7 +260,9 @@ export function ItemDetails({
               }
             >
               {filledCount === 0
-                ? "empty — fill before printing"
+                ? hasPsaForm
+                  ? "empty — fill before printing"
+                  : "empty"
                 : `${filledCount} of ${fields.length} filled`}
             </span>
           </button>
@@ -264,8 +270,9 @@ export function ItemDetails({
           {openFields && (
             <div className="space-y-3 border-t p-3">
               <p className="text-xs text-muted-foreground">
-                These fill the printable PSA form. Copy them across from the
-                reply above — what you type here is what gets printed.
+                {hasPsaForm
+                  ? "These fill the printable PSA form. Copy them across from the reply above — what you type here is what gets printed."
+                  : "The details this document needs. Copy them across from the reply above."}
               </p>
 
               {parsingEnabled && pastedDetails && (

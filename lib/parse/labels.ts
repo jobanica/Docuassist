@@ -88,10 +88,23 @@ export function labelMatches(candidate: string, target: string): boolean {
 export function splitLabelValue(
   line: string
 ): { label: string; value: string } | null {
-  const m = line.match(/^\s*([^:\-=\t]{1,60}?)\s*[:\-=\t]\s*(.*)$/);
-  if (!m) return null;
-  const label = m[1].trim();
-  const value = m[2].trim();
-  if (!label) return null;
-  return { label, value };
+  // A colon, equals or tab separates a label from its value unambiguously.
+  const strong = line.match(/^\s*([^:=\t]{1,60}?)\s*[:=\t]\s*(.*)$/);
+  if (strong && strong[1].trim()) {
+    return { label: strong[1].trim(), value: strong[2].trim() };
+  }
+
+  // "Philhealth # 12-345678901-2" — a label ending in # with the value after a
+  // space. Their forms write it this way, and it has no other reading.
+  const hash = line.match(/^\s*([^:=\t]{1,40}?#)\s+(.+)$/);
+  if (hash) return { label: hash[1].trim(), value: hash[2].trim() };
+
+  // A hyphen separates only when it is not inside the value: "Barangay -
+  // Mabiga" is a label, "12-345678901-2" is a PhilHealth number and splitting
+  // it there threw the first group away.
+  const dash = line.match(/^\s*([^-]{1,60}?)\s*-\s*(.*)$/);
+  if (dash && dash[1].trim() && !/\d\s*$/.test(dash[1])) {
+    return { label: dash[1].trim(), value: dash[2].trim() };
+  }
+  return null;
 }

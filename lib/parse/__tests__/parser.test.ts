@@ -556,5 +556,92 @@ console.log("\n[21] A half-written province, when the city already knows it");
     one("", "tawi")[0].message, '"tawi" is not a Philippine province.');
 }
 
+console.log("\n[22] The TIN and PhilHealth intake forms");
+{
+  const TIN_FIELDS = [{"key": "tin_number", "label": "TIN ID #", "type": "text", "required": false, "synonyms": ["tin id", "tin id number", "tin id no", "tin no", "tin number", "tin", "existing tin"]}, {"key": "last_name", "label": "Last Name (Apilyedo)", "type": "text", "required": true, "synonyms": ["apilyedo", "apelyido", "apellido", "surname", "last name", "family name"]}, {"key": "first_name", "label": "First Name", "type": "text", "required": true, "synonyms": ["firstname", "first name", "pangalan", "given name"]}, {"key": "middle_name", "label": "Middle Name", "type": "text", "required": false, "synonyms": ["middlename", "middle name", "gitnang pangalan"]}, {"key": "birthdate", "label": "Birthday", "type": "date", "required": true, "synonyms": ["birthday", "bday", "birthdate", "date of birth", "dob", "kapanganakan"]}, {"key": "civil_status", "label": "Civil Status", "type": "text", "required": true, "synonyms": ["civil status", "cvil status", "status", "estado", "estado sibil"]}, {"key": "sex", "label": "Gender", "type": "text", "required": true, "synonyms": ["gender", "sex", "kasarian"]}, {"key": "contact_number", "label": "Contact #", "type": "text", "required": true, "synonyms": ["contact", "contact no", "contact number", "cp", "cp no", "cp number", "cellphone", "mobile"]}, {"key": "address_line", "label": "Complete Address", "type": "text", "required": true, "synonyms": ["complete address", "address", "tirahan", "home address", "residence"]}, {"key": "zip", "label": "ZIP code", "type": "text", "required": false, "synonyms": ["zipcode", "zip code", "zip", "postal code"]}] as any;
+  const PH_FIELDS = [{"key": "philhealth_number", "label": "PhilHealth #", "type": "text", "required": false, "synonyms": ["philhealth", "philhealth no", "philhealth number", "philhealth id", "pin", "philhealth pin"]}, {"key": "last_name", "label": "Last Name (Apilyedo)", "type": "text", "required": true, "synonyms": ["apilyedo", "apelyido", "apellido", "surname", "last name", "family name"]}, {"key": "first_name", "label": "First Name (Pangalan)", "type": "text", "required": true, "synonyms": ["pangalan", "first name", "firstname", "given name"]}, {"key": "middle_name", "label": "Middle Name", "type": "text", "required": false, "synonyms": ["middlename", "middle name", "gitnang pangalan"]}, {"key": "birthdate", "label": "Birthday", "type": "date", "required": true, "synonyms": ["bday", "birthday", "birthdate", "date of birth", "dob", "kapanganakan"]}, {"key": "birth_place", "label": "Place of Birth", "type": "text", "required": true, "synonyms": ["bplace", "birthplace", "place of birth", "lugar ng kapanganakan"]}, {"key": "sex", "label": "Sex", "type": "text", "required": true, "synonyms": ["sex", "gender", "kasarian"]}, {"key": "civil_status", "label": "Civil Status", "type": "text", "required": true, "synonyms": ["status", "civil status", "estado", "estado sibil"]}, {"key": "contact_number", "label": "Mobile Number (CP #)", "type": "text", "required": true, "synonyms": ["cp", "cp no", "cp number", "contact", "contact no", "contact number", "cellphone", "mobile"]}, {"key": "house_number", "label": "House #", "type": "text", "required": false, "synonyms": ["house", "house no", "house number", "blk", "block", "lot"]}, {"key": "subdivision", "label": "Subdivision", "type": "text", "required": false, "synonyms": ["subdivision", "subd", "village", "purok", "street"]}, {"key": "barangay", "label": "Barangay", "type": "text", "required": true, "synonyms": ["barangay", "brgy", "bgy", "baranggay"]}, {"key": "municipality", "label": "City / Municipality", "type": "text", "required": true, "synonyms": ["municipality", "city", "bayan", "town", "lungsod"]}, {"key": "zip", "label": "ZIP code", "type": "text", "required": false, "synonyms": ["zipcode", "zip code", "zip", "postal code"]}, {"key": "mother_last", "label": "Mother \u2014 Maiden Last Name", "type": "text", "required": true, "synonyms": ["apilyedo sa dalaga pa", "apelyido sa dalaga pa", "maiden last name", "mothers maiden last name", "mother last name"]}, {"key": "mother_first", "label": "Mother \u2014 First Name", "type": "text", "required": true, "synonyms": ["pangalan ng ina", "mother first name", "mothers first name"]}, {"key": "mother_middle", "label": "Mother \u2014 Middle Name", "type": "text", "required": false, "synonyms": ["mother middle name", "mothers middle name"]}] as any;
+  const opts = { deliveryOnly: DELIVERY_ONLY_IN_BLOCK, documentOnly: NEVER_IN_DELIVERY_BLOCK };
+
+  const tin = parseTier1(`TIN ID
+
+TIN ID #: 123-456-789-000
+
+APILYEDO: Dela Cruz
+FIRSTNAME: Juan
+MIDDLENAME: Santos
+BIRTHDAY: March 4 1990
+CVIL STATUS: Single
+GENDER: Male
+CONTACT #: 09171234567
+COMPLETE ADDRESS: 123 Rizal St., Purok 2
+ZIPCODE : 2010
+Delivery Address:
+Receiver's Name: Maria Dela Cruz
+Phone Number: 09281234567
+Purok/Street: Purok 5 Mabini St.
+Barangay: Mabiga
+City: Mabalacat
+Province: Pampanga`, [...TIN_FIELDS, ...DELIVERY_FIELDS], opts);
+
+  check("TIN number survives its hyphens", tin.values.tin_number, "123-456-789-000");
+  check("APILYEDO is the last name", tin.values.last_name, "Dela Cruz");
+  check("a typo'd label still lands", tin.values.civil_status, "Single");
+  // The applicant's own address and the courier's are both in this reply.
+  check("the applicant's address", tin.values.address_line, "123 Rizal St., Purok 2");
+  check("the applicant's phone", tin.values.contact_number, "09171234567");
+  check("the courier's address", tin.values.delivery_address_line, "Purok 5 Mabini St.");
+  check("the courier's phone", tin.values.delivery_phone, "09281234567");
+  check("the receiver's name", tin.values.delivery_name, "Maria Dela Cruz");
+  check("nothing required is missing",
+    TIN_FIELDS.filter((f: any) => f.required && !tin.values[f.key]).length, 0);
+
+  const ph = parseTier1(`Philhealth
+Philhealth # 12-345678901-2
+
+Apilyedo: Reyes
+Pangalan: Ana
+Middle Name: Cruz
+BDAY: July 9 1995
+BPLACE: Matnog Sorsogon
+SEX: Female
+STATUS: Married
+CP #: 09181234567
+COMPLETE ADDRESS
+HOUSE #: 45
+SUBDIVISION: San Rafael Village
+BARANGAY: Bariis
+MUNICIPALITY: Matnog
+ZIPCODE: 4708
+
+MOTHER MAIDEN INFO
+Apilyedo sa Dalaga pa: Gatona
+Pangalan: Judy
+Middle Name: Lim
+
+Delivery Address:
+Receiver's Name: Ana Reyes
+Phone Number: 09281112222
+Purok/Street: Purok 3
+Barangay: Bariis
+City: Matnog
+Province: Sorsogon`, [...PH_FIELDS, ...DELIVERY_FIELDS], opts);
+
+  // A hyphenated ID on a line with no colon: the old split threw "12-" away.
+  check("PhilHealth number keeps its first group", ph.values.philhealth_number, "12-345678901-2");
+  check("Pangalan is the first name", ph.values.first_name, "Ana");
+  // "Pangalan" and "Middle Name" appear twice — the mother's block re-points them.
+  check("the mother's maiden surname", ph.values.mother_last, "Gatona");
+  check("her first name, same label as the applicant's", ph.values.mother_first, "Judy");
+  check("and the applicant keeps his own", ph.values.middle_name, "Cruz");
+  // "COMPLETE ADDRESS" heads the applicant's block, not the courier's.
+  check("the applicant's barangay", ph.values.barangay, "Bariis");
+  check("the applicant's municipality", ph.values.municipality, "Matnog");
+  check("the courier's barangay is separate", ph.values.delivery_barangay, "Bariis");
+  check("the courier's city is separate", ph.values.delivery_city, "Matnog");
+  check("and the province only the courier asks for", ph.values.delivery_province, "Sorsogon");
+  check("nothing required is missing",
+    PH_FIELDS.filter((f: any) => f.required && !ph.values[f.key]).length, 0);
+}
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

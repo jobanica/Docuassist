@@ -33,6 +33,7 @@ import { DuplicateWarning } from "./DuplicateWarning";
 import { PlaceWarnings } from "./PlaceWarnings";
 import { checkPlaces } from "@/lib/actions/places";
 import { documentPlacePair } from "@/lib/parse/place-fields";
+import { PSA_FORMS } from "@/lib/psa-forms";
 import type { PlaceIssue } from "@/lib/parse/places";
 import { SurnameWarnings } from "./SurnameWarnings";
 import { surnameIssues } from "@/lib/parse/surname";
@@ -813,7 +814,9 @@ export function NewOrderForm({
                     <Wand2 className="h-4 w-4" />
                     {parsing === s.id
                       ? "Reading…"
-                      : "Auto-fill the PSA form from this paste"}
+                      : PSA_FORMS[s.code]
+                        ? "Auto-fill the PSA form from this paste"
+                        : "Auto-fill the form from this paste"}
                   </Button>
                   {!selected[s.id].pasted_details.trim() && (
                     <p className="text-xs text-muted-foreground">
@@ -852,13 +855,17 @@ export function NewOrderForm({
                           selected[s.id].fieldsOpen ? "" : "-rotate-90"
                         }`}
                       />
-                      PSA form fields
+                      {/* TIN and PhilHealth are not PSA documents and have no
+                          sheet to print; only the wording changes. */}
+                      {PSA_FORMS[s.code] ? "PSA form fields" : "Form fields"}
                     </span>
                     <span className="text-muted-foreground">
                       {countFilled(selected[s.id].form_details)} of{" "}
                       {(s.form_fields ?? []).length} filled
                       {countFilled(selected[s.id].form_details) === 0 &&
-                        " — optional now, needed to print"}
+                        (PSA_FORMS[s.code]
+                          ? " — optional now, needed to print"
+                          : " — optional now")}
                     </span>
                   </button>
 
