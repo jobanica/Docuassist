@@ -40,7 +40,10 @@ export interface PsaFormTemplate {
   sections: FormSection[];
 }
 
-const NAME_BOXES = 26;
+/* Name and place rows run the full width of the form, the way the printed PSA
+   sheet does: 30 boxes at 18px is exactly the space left beside the label
+   gutter, so the last box lands on the right margin. */
+const NAME_BOXES = 30;
 const PLACE_BOXES = 30;
 
 /** Owner / parent name block shared by the birth and CENOMAR forms. */

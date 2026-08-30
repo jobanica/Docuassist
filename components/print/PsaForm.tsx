@@ -33,7 +33,7 @@ function Boxes({ value, count }: { value: string; count: number }) {
       {Array.from({ length: count }, (_, i) => (
         <span
           key={i}
-          className="flex h-[18px] w-[15px] shrink-0 items-center justify-center border-l border-black text-[11px] font-semibold leading-none last:border-r"
+          className="flex h-[22px] w-[18px] shrink-0 items-center justify-center border-l border-black text-[13px] font-semibold leading-none last:border-r"
           style={{ borderBottom: "1px solid #000" }}
         >
           {chars[i] ?? ""}
@@ -54,7 +54,7 @@ function Row({
 
   return (
     <div className="flex items-start gap-2 py-[3px]">
-      <span className="w-[150px] shrink-0 pt-[3px] text-[9px] leading-tight">
+      <span className="w-[150px] shrink-0 pt-[4px] text-[11px] leading-tight">
         {row.label}
       </span>
       <div className="min-w-0">
@@ -66,15 +66,15 @@ function Row({
             <div className="flex items-start gap-2">
               <div>
                 <Boxes value={d.month} count={12} />
-                <p className="text-center text-[7px] tracking-wide">MONTH</p>
+                <p className="text-center text-[8px] tracking-wide">MONTH</p>
               </div>
               <div>
                 <Boxes value={d.day} count={2} />
-                <p className="text-center text-[7px] tracking-wide">DAY</p>
+                <p className="text-center text-[8px] tracking-wide">DAY</p>
               </div>
               <div>
                 <Boxes value={d.year} count={4} />
-                <p className="text-center text-[7px] tracking-wide">YEAR</p>
+                <p className="text-center text-[8px] tracking-wide">YEAR</p>
               </div>
             </div>
           );
@@ -94,8 +94,8 @@ function Row({
                     (o) => o.toLowerCase() === value.trim().toLowerCase()
                   ));
               return (
-                <span key={opt} className="flex items-center gap-1 text-[9px]">
-                  <span className="flex h-[11px] w-[11px] items-center justify-center border border-black text-[9px] font-bold leading-none">
+                <span key={opt} className="flex items-center gap-1.5 text-[11px]">
+                  <span className="flex h-[13px] w-[13px] items-center justify-center border border-black text-[11px] font-bold leading-none">
                     {on ? "✓" : ""}
                   </span>
                   {opt}
@@ -107,13 +107,13 @@ function Row({
               !(row.options ?? []).some(
                 (o) => o.toLowerCase() === value.trim().toLowerCase()
               ) && (
-                <span className="text-[9px] italic">({value})</span>
+                <span className="text-[11px] italic">({value})</span>
               )}
           </div>
         )}
 
         {row.caption && (
-          <p className="text-[7px] tracking-wide">{row.caption}</p>
+          <p className="text-[8px] tracking-wide">{row.caption}</p>
         )}
       </div>
     </div>
@@ -189,7 +189,7 @@ export function PsaForm({
         <span className="w-[58px] shrink-0" aria-hidden />
       </div>
 
-      <div className="mt-2 border border-black px-2 py-1 text-[8px] leading-snug">
+      <div className="mt-2 border border-black px-2 py-1 text-[9px] leading-snug">
         <p className="font-bold">
           IMPORTANT: PLEASE READ GENERAL INSTRUCTIONS BEFORE FILLING OUT THE FORM
         </p>
@@ -217,7 +217,7 @@ export function PsaForm({
             style={{ flexGrow: section.rows.length }}
           >
             {section.heading && (
-              <p className="border-b border-black bg-gray-100 px-2 py-[2px] text-[9px] font-bold">
+              <p className="border-b border-black bg-gray-100 px-2 py-[3px] text-[10px] font-bold">
                 {section.heading}
               </p>
             )}
@@ -232,13 +232,13 @@ export function PsaForm({
 
       {/* Footer */}
       <div className="mt-2 border border-black px-2 py-1">
-        <p className="text-center text-[9px]">
+        <p className="text-center text-[10px]">
           PRESENTED VALID IDs AND AUTHORIZATION LETTER?{" "}
           <span className="ml-2">☐ YES</span>
           <span className="ml-3">☐ NO</span>
         </p>
       </div>
-      <p className="mt-1 text-center text-[8px] font-semibold">
+      <p className="mt-1 text-center text-[9px] font-semibold">
         UNCLAIMED DOCUMENTS AFTER THIRTY (30) DAYS FROM THE DATE OF RELEASE WILL
         BE DISPOSED OF.
       </p>
