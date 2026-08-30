@@ -185,11 +185,20 @@ export function CustomerCard({
           issues={places}
           overridden={placesOk}
           onOverride={setPlacesOk}
-          onFix={(i, value) => {
-            if (!i.fix) return;
-            const next = { ...v, [i.fix.field]: value };
+          onFix={(i, patch) => {
+            const next = { ...v };
+            const touched: string[] = [];
+            if (patch.city !== undefined) {
+              next.city = patch.city;
+              touched.push("city");
+            }
+            if (patch.province !== undefined) {
+              next.province = patch.province;
+              touched.push("province");
+            }
+            if (touched.length === 0) return;
             setV(next);
-            setAuto((a) => a.filter((k) => k !== i.fix!.field));
+            setAuto((a) => a.filter((k) => !touched.includes(k)));
             recheck(next);
           }}
         />

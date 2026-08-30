@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { MapPinOff, Copy, Check, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { PlaceIssue } from "@/lib/parse/places";
+import type { PlaceIssue, PlaceFix } from "@/lib/parse/places";
 
 /**
  * Cities and provinces that don't check out against the PSA's list.
@@ -20,9 +20,9 @@ export function PlaceWarnings({
   onOverride,
 }: {
   issues: PlaceIssue[];
-  /** Apply one of the offered values to the field the issue came from. A
-   *  shared city name offers several, so the chosen one is passed explicitly. */
-  onFix?: (issue: PlaceIssue, value: string) => void;
+  /** Apply one of the offered corrections. A patch rather than a value, since
+   *  the right fix often touches the city and the province together. */
+  onFix?: (issue: PlaceIssue, patch: PlaceFix["patch"]) => void;
   /** Set once staff have deliberately chosen to keep what they wrote. */
   overridden?: boolean;
   onOverride?: (v: boolean) => void;
@@ -67,7 +67,7 @@ export function PlaceWarnings({
           // A city name shared by several provinces gets a button each — there
           // is no single right answer, and picking one for staff would just be
           // a guess dressed up as a correction.
-          const options = i.fix ? [i.fix.value, ...(i.alternatives ?? [])] : [];
+          const options = i.fixes ?? [];
           return (
             <li
               key={n}
@@ -77,14 +77,14 @@ export function PlaceWarnings({
                 <span className="font-medium">{i.label}:</span> {i.message}
               </span>
               {onFix &&
-                options.map((v) => (
+                options.map((f) => (
                   <button
-                    key={v}
+                    key={f.label}
                     type="button"
-                    onClick={() => onFix(i, v)}
+                    onClick={() => onFix(i, f.patch)}
                     className="inline-flex items-center gap-1 rounded-md border border-red-300 bg-white px-2 py-0.5 text-[11px] font-medium text-red-800 hover:bg-red-100"
                   >
-                    <Wand2 className="h-3 w-3" /> Use &ldquo;{v}&rdquo;
+                    <Wand2 className="h-3 w-3" /> Use &ldquo;{f.label}&rdquo;
                   </button>
                 ))}
             </li>

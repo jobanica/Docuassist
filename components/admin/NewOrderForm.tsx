@@ -975,27 +975,39 @@ export function NewOrderForm({
             issues={places}
             overridden={placesOk}
             onOverride={setPlacesOk}
-            onFix={(i, value) => {
-              if (!i.fix) return;
+            onFix={(i, patch) => {
               if (i.group === "delivery") {
-                const next = { ...newCustomer, [i.fix.field]: value };
+                const next = { ...newCustomer };
+                if (patch.city !== undefined) next.city = patch.city;
+                if (patch.province !== undefined) next.province = patch.province;
                 setNewCustomer(next);
                 setShowAddress(true);
                 recheckPlaces(
                   chosen[0] ? selected[chosen[0].id].form_details : {},
                   next
                 );
-              } else {
-                const svc = chosen[0];
-                if (!svc) return;
-                const pair = documentPlacePair(svc.form_fields ?? []);
-                if (!pair) return;
-                setField(
-                  svc.id,
-                  i.fix.field === "city" ? pair.cityKey : pair.provinceKey,
-                  value
-                );
+                return;
               }
+              const svc = chosen[0];
+              if (!svc) return;
+              const pair = documentPlacePair(svc.form_fields ?? []);
+              if (!pair) return;
+              // Both at once when the fix moves the province out of the city
+              // box, so one click doesn't leave the other half wrong.
+              const doc = { ...selected[svc.id].form_details };
+              if (patch.city !== undefined) doc[pair.cityKey] = patch.city;
+              if (patch.province !== undefined) doc[pair.provinceKey] = patch.province;
+              setSelected((prev) => ({
+                ...prev,
+                [svc.id]: {
+                  ...prev[svc.id],
+                  form_details: doc,
+                  autoFilled: prev[svc.id].autoFilled.filter(
+                    (k) => k !== pair.cityKey && k !== pair.provinceKey
+                  ),
+                },
+              }));
+              recheckPlaces(doc, newCustomer, svc.id);
             }}
           />
 

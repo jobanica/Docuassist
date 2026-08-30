@@ -348,15 +348,21 @@ export function ItemDetails({
                 issues={places}
                 overridden={placesOk}
                 onOverride={setPlacesOk}
-                onFix={(i, value) => {
-                  if (!i.fix || !placePair) return;
-                  const key =
-                    i.fix.field === "city"
-                      ? placePair.cityKey
-                      : placePair.provinceKey;
-                  const next = { ...values, [key]: value };
+                onFix={(i, patch) => {
+                  if (!placePair) return;
+                  const next = { ...values };
+                  const touched: string[] = [];
+                  if (patch.city !== undefined) {
+                    next[placePair.cityKey] = patch.city;
+                    touched.push(placePair.cityKey);
+                  }
+                  if (patch.province !== undefined) {
+                    next[placePair.provinceKey] = patch.province;
+                    touched.push(placePair.provinceKey);
+                  }
+                  if (touched.length === 0) return;
                   setValues(next);
-                  setAutoFilled((a) => a.filter((k) => k !== key));
+                  setAutoFilled((a) => a.filter((k) => !touched.includes(k)));
                   checkPlaces(pairCheck(placePair, next))
                     .then((res) => res.ok && setPlaces(res.value))
                     .catch(() => {});

@@ -7,6 +7,7 @@ import {
   checkProvince,
   placeIssues,
   documentPlacePair,
+  resolveCompound,
 } from "@/lib/parse/places";
 import { surnameIssues } from "@/lib/parse/surname";
 import {
@@ -327,8 +328,9 @@ NEED LANDMARK;`, f, opts);
       city: "Carmen", province: "Davao del Sur" },
   ])[0];
   check("every Carmen province is offered",
-    [carmen.fix!.value, ...(carmen.alternatives ?? [])].join(", "),
+    (carmen.fixes ?? []).map((f) => f.label).join(", "),
     "Agusan Del Norte, Bohol, Cebu, Cotabato, Davao Del Norte, Surigao Del Sur");
+  check("each one patches the province", (carmen.fixes ?? [])[0].patch.province, "Agusan Del Norte");
   check("the message names them all", carmen.message,
     'There are 6 places called "Carmen" — in Agusan Del Norte, Bohol, Cebu, Cotabato, Davao Del Norte or Surigao Del Sur — but none in Davao del Sur.');
   // Carmen really is in Davao del Norte, so that pairing must still pass.
@@ -444,6 +446,40 @@ BARANGAY:tumaga`, f, opts);
 FIRST NAME: Alwajir`, owner, opts);
   check("an owner's name is not a receiver", r2.values.delivery_name, undefined);
   check("the owner's own field still fills", r2.values.last_name, "Nur");
+}
+
+console.log("\n[19] A whole address typed into the city box");
+{
+  // The reported line: a barangay, a municipality written with an initial, and
+  // a province, all in the city field. Matching it as one city name finds
+  // "City of Zamboanga", which is a different place entirely.
+  const issues = placeIssues([
+    { group: "birth", cityLabel: "Place of Marriage — City / Municipality",
+      provinceLabel: "Place of Marriage — Province",
+      city: "casacon roseller Rt lim Zamboanga sibugay", province: "pampanga" },
+  ]);
+  const city = issues.find((i) => i.label.includes("City"))!;
+  check("it reads as the right municipality", city.suggestion, "Roseller Lim");
+  check("one button fixes both fields", city.fixes?.[0].label,
+    "Roseller Lim, Zamboanga Sibugay");
+  check("the patch carries the city", city.fixes?.[0].patch.city, "Roseller Lim");
+  check("and the province", city.fixes?.[0].patch.province, "Zamboanga Sibugay");
+  check("the message explains what happened", city.message,
+    '"casacon roseller Rt lim Zamboanga sibugay" reads as Roseller Lim in Zamboanga Sibugay — the province was written in the city box.');
+
+  // Same shape, from a real paste on file.
+  const r2 = resolveCompound("purok 5 bariis matnog sorsogon", "");
+  check("purok + barangay + town + province", `${r2?.city}, ${r2?.province}`,
+    "Matnog, Sorsogon");
+
+  // A province is required to resolve: without one there is nothing to narrow
+  // to, and guessing across 1,634 municipalities would invent answers.
+  check("no province, no compound guess",
+    resolveCompound("some barangay somewhere", ""), null);
+  // A correct pair must not be rewritten.
+  check("a correct pair is left alone",
+    placeIssues([{ group: "birth", cityLabel: "c", provinceLabel: "p",
+      city: "Tulunan", province: "Cotabato" }]).length, 0);
 }
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

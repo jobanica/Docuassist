@@ -40,14 +40,23 @@ export interface PlaceIssue {
   message: string;
   /** Which pair this belongs to, so the UI knows which fields to touch. */
   group: "birth" | "delivery";
-  /** The one-click correction: which field to change, and to what. For a
-   *  mismatch the city is right and the province is wrong, so the fix is the
-   *  province — not the name that was flagged. */
-  fix?: { field: "city" | "province"; value: string };
-  /** Equally valid values for the same field, offered alongside `fix`. A city
-   *  name shared by several provinces has no single right answer, so staff get
-   *  one button per province rather than a guess. */
-  alternatives?: string[];
+  /**
+   * One-click corrections, in the order they should be offered.
+   *
+   * A patch rather than a single field, because the right answer is often
+   * both: "Roseller Rt Lim Zamboanga Sibugay" typed into the city box is a
+   * city AND a province, and fixing only one of them leaves the other wrong.
+   * A city name shared by several provinces offers one patch per province —
+   * there is no single right answer, so staff pick rather than being guessed
+   * at.
+   */
+  fixes?: PlaceFix[];
+}
+
+export interface PlaceFix {
+  /** What the button says, e.g. `Roseller Lim, Zamboanga Sibugay`. */
+  label: string;
+  patch: { city?: string; province?: string };
 }
 
 /**
@@ -154,6 +163,103 @@ for (const [alias, canonical] of [
   ["mm", "Metro Manila"],
 ] as const) {
   provinceByAlias.set(norm(alias), canonical);
+}
+
+/** Cities indexed by province, so a known province narrows the search. */
+const cityKeysByProvince = new Map<string, { key: string; entry: CityEntry }[]>();
+for (const c of cityKeys) {
+  const list = cityKeysByProvince.get(c.entry.province);
+  if (list) list.push(c);
+  else cityKeysByProvince.set(c.entry.province, [c]);
+}
+
+/** Province aliases longest-first, so "Zamboanga Sibugay" wins over "Zamboanga". */
+const provinceAliases = Array.from(provinceByAlias.entries()).sort(
+  (a, b) => b[0].length - a[0].length
+);
+
+function words(v: string): string[] {
+  return norm(v).split(" ").filter(Boolean);
+}
+
+/**
+ * Pull a province out of free text and hand back what is left.
+ *
+ * Customers routinely type the whole place into the city box — "casacon
+ * roseller Rt lim Zamboanga sibugay" is a barangay, a municipality and a
+ * province in one line. Peeling the province off is what makes the rest
+ * matchable at all.
+ */
+function peelProvince(input: string): { province?: string; rest: string } {
+  const a = norm(input);
+  if (!a) return { rest: "" };
+  for (const [alias, canonical] of provinceAliases) {
+    if (alias.length < 4) continue;
+    const re = new RegExp(
+      `(^|\\s)${alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|\\s)`
+    );
+    if (re.test(a)) {
+      return { province: canonical, rest: a.replace(re, " ").replace(/\s+/g, " ").trim() };
+    }
+  }
+  return { rest: a };
+}
+
+/**
+ * Do all of a city's words appear in the input, in order?
+ *
+ * "Roseller Lim" against "casacon roseller rt lim" — the initial sitting in
+ * the middle is exactly how people write "Roseller T. Lim", and neither a
+ * whole-phrase containment test nor an edit distance gets there.
+ */
+function wordsInOrder(name: string[], input: string[]): boolean {
+  if (name.length === 0) return false;
+  // Short names ("Bay", "Naga") match far too much this way; those are already
+  // handled by the exact and containment passes.
+  if (name.join("").length < 6) return false;
+  let i = 0;
+  for (const w of input) {
+    if (w === name[i]) i++;
+    if (i === name.length) return true;
+  }
+  return false;
+}
+
+/**
+ * Last resort for a city box holding more than a city: peel the province, then
+ * find the municipality inside what is left. Returns both, because correcting
+ * only one of them leaves the other wrong.
+ */
+export function resolveCompound(
+  cityInput: string,
+  provinceInput?: string
+): { city: string; province: string } | null {
+  const peeled = peelProvince(cityInput);
+  // The province named in the city box wins over an empty province field, and
+  // over one that disagrees — the customer wrote them together for a reason.
+  const provinceGuess =
+    peeled.province ??
+    (provinceInput?.trim()
+      ? provinceByAlias.get(norm(provinceInput)) ?? undefined
+      : undefined);
+  if (!provinceGuess) return null;
+
+  const rest = words(peeled.rest);
+  if (rest.length === 0) return null;
+
+  const candidates = cityKeysByProvince.get(provinceGuess) ?? [];
+  let best: CityEntry | undefined;
+  let bestLen = 0;
+  for (const c of candidates) {
+    const name = c.key.split(" ").filter(Boolean);
+    if (!wordsInOrder(name, rest)) continue;
+    if (c.key.length > bestLen) {
+      best = c.entry;
+      bestLen = c.key.length;
+    }
+  }
+  if (!best) return null;
+  return { city: best.name, province: provinceGuess };
 }
 
 /** Levenshtein tolerance that scales with the length of the name. */
@@ -280,7 +386,9 @@ export function placeIssues(
           kind: "spelling",
           suggestion: r.suggestion,
           group: p.group,
-          fix: { field: "province", value: r.suggestion! },
+          fixes: [
+            { label: r.suggestion!, patch: { province: r.suggestion! } },
+          ],
           message: `"${r.input}" isn't a province — did they mean ${r.suggestion}?`,
         });
       } else if (r.status === "unknown") {
@@ -296,7 +404,37 @@ export function placeIssues(
 
     if (p.city?.trim()) {
       const r = checkCity(p.city, p.province);
-      if (r.wrongProvince) {
+
+      // A city box holding a whole address is the common shape of this: peel
+      // the province out of it and the municipality inside usually resolves,
+      // where matching the line as one city name never could.
+      const compound =
+        r.status === "ok" ? null : resolveCompound(p.city, p.province);
+      if (compound) {
+        const provinceChanges =
+          !p.province?.trim() ||
+          norm(p.province) !== norm(compound.province);
+        out.push({
+          label: p.cityLabel,
+          input: r.input,
+          kind: "spelling",
+          suggestion: compound.city,
+          group: p.group,
+          fixes: [
+            {
+              label: provinceChanges
+                ? `${compound.city}, ${compound.province}`
+                : compound.city,
+              patch: provinceChanges
+                ? { city: compound.city, province: compound.province }
+                : { city: compound.city },
+            },
+          ],
+          message: provinceChanges
+            ? `"${r.input}" reads as ${compound.city} in ${compound.province} — the province was written in the city box.`
+            : `"${r.input}" isn't a city or municipality — did they mean ${compound.city}?`,
+        });
+      } else if (r.wrongProvince) {
         const provinces = r.provinces ?? [r.wrongProvince];
         out.push({
           label: p.cityLabel,
@@ -304,8 +442,7 @@ export function placeIssues(
           kind: "province_mismatch",
           suggestion: r.wrongProvince,
           group: p.group,
-          fix: { field: "province", value: r.wrongProvince },
-          alternatives: provinces.slice(1),
+          fixes: provinces.map((v) => ({ label: v, patch: { province: v } })),
           message:
             provinces.length > 1
               // Named by what they wrote, not by one match: the same alias can
@@ -323,7 +460,7 @@ export function placeIssues(
           kind: "spelling",
           suggestion: r.suggestion,
           group: p.group,
-          fix: { field: "city", value: r.suggestion! },
+          fixes: [{ label: r.suggestion!, patch: { city: r.suggestion! } }],
           message: `"${r.input}" isn't a city or municipality — did they mean ${r.suggestion}?`,
         });
       } else if (r.status === "unknown") {
