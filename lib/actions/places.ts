@@ -15,6 +15,7 @@ export async function checkPlaces(pairs: {
   provinceLabel: string;
   city?: string;
   province?: string;
+  group: "birth" | "delivery";
 }[]): Promise<ActionResult<PlaceIssue[]>> {
   return run(async () => {
     await requireStaff();

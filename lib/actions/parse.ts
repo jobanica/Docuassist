@@ -140,12 +140,14 @@ export async function parsePastedText(
     // Check the places against the PSA's own list before staff act on them.
     const places = placeIssues([
       {
+        group: "birth" as const,
         cityLabel: "Place of birth — city",
         provinceLabel: "Place of birth — province",
         city: values.birth_city,
         province: values.birth_province,
       },
       {
+        group: "delivery" as const,
         cityLabel: "Delivery city",
         provinceLabel: "Delivery province",
         city: customer.city,

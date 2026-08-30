@@ -250,12 +250,24 @@ console.log("\n[12] Real cities and provinces (PSGC)");
   check("San Fernando, Pampanga", city("San Fernando", "Pampanga"), "ok:City of San Fernando");
 
   const issues = placeIssues([
-    { cityLabel: "Delivery city", provinceLabel: "Delivery province",
+    { group: "delivery", cityLabel: "Delivery city", provinceLabel: "Delivery province",
       city: "Zamboango City", province: "Zamboanga del sor" },
   ]);
   check("issues raised", issues.length, 2);
   check("province issue reads well", issues[0].message,
     '"Zamboanga del sor" isn\'t a province — did they mean Zamboanga Del Sur?');
+}
+
+console.log("\n[13] Template instructions are not values");
+{
+  const f = [
+    { key: "mother_first", label: "Mother — First Name", type: "text", required: false, synonyms: ["pangalan ng ina"] },
+    { key: "father_first", label: "Father — First Name", type: "text", required: false, synonyms: ["pangalan ng ama"] },
+  ] as any;
+  const r = parseTier1(`Pangalan ng ina: (PANGALAN SA DALAGA PA)
+Pangalan ng ama: Antonio Layo (kung meron)`, f);
+  check("bare instruction is not stored", r.values.mother_first, undefined);
+  check("instruction stripped off a real value", r.values.father_first, "Antonio Layo");
 }
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

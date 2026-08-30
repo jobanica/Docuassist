@@ -34,6 +34,12 @@ export interface PlaceIssue {
   kind: "unknown" | "spelling" | "province_mismatch";
   suggestion?: string;
   message: string;
+  /** Which pair this belongs to, so the UI knows which fields to touch. */
+  group: "birth" | "delivery";
+  /** The one-click correction: which field to change, and to what. For a
+   *  mismatch the city is right and the province is wrong, so the fix is the
+   *  province — not the name that was flagged. */
+  fix?: { field: "city" | "province"; value: string };
 }
 
 function norm(v: string): string {
@@ -196,7 +202,13 @@ export function checkCity(input: string, province?: string): PlaceCheck {
 
 /** Turn a city/province pair into the warnings staff should act on. */
 export function placeIssues(
-  pairs: { cityLabel: string; provinceLabel: string; city?: string; province?: string }[]
+  pairs: {
+    cityLabel: string;
+    provinceLabel: string;
+    city?: string;
+    province?: string;
+    group: "birth" | "delivery";
+  }[]
 ): PlaceIssue[] {
   const out: PlaceIssue[] = [];
 
@@ -209,6 +221,8 @@ export function placeIssues(
           input: r.input,
           kind: "spelling",
           suggestion: r.suggestion,
+          group: p.group,
+          fix: { field: "province", value: r.suggestion! },
           message: `"${r.input}" isn't a province — did they mean ${r.suggestion}?`,
         });
       } else if (r.status === "unknown") {
@@ -216,6 +230,7 @@ export function placeIssues(
           label: p.provinceLabel,
           input: r.input,
           kind: "unknown",
+          group: p.group,
           message: `"${r.input}" is not a Philippine province.`,
         });
       }
@@ -228,7 +243,9 @@ export function placeIssues(
           label: p.cityLabel,
           input: r.input,
           kind: "province_mismatch",
-          suggestion: r.suggestion,
+          suggestion: r.wrongProvince,
+          group: p.group,
+          fix: { field: "province", value: r.wrongProvince },
           message: `${r.suggestion} is in ${r.wrongProvince}, not ${p.province}.`,
         });
       } else if (r.status === "suggest") {
@@ -237,6 +254,8 @@ export function placeIssues(
           input: r.input,
           kind: "spelling",
           suggestion: r.suggestion,
+          group: p.group,
+          fix: { field: "city", value: r.suggestion! },
           message: `"${r.input}" isn't a city or municipality — did they mean ${r.suggestion}?`,
         });
       } else if (r.status === "unknown") {
@@ -244,6 +263,7 @@ export function placeIssues(
           label: p.cityLabel,
           input: r.input,
           kind: "unknown",
+          group: p.group,
           message: `"${r.input}" is not a Philippine city or municipality.`,
         });
       }

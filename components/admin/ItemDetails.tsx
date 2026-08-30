@@ -70,6 +70,7 @@ export function ItemDetails({
   const [autoFilled, setAutoFilled] = useState<string[]>([]);
   const [parseNote, setParseNote] = useState<string | null>(null);
   const [places, setPlaces] = useState<PlaceIssue[]>([]);
+  const [placesOk, setPlacesOk] = useState(false);
   const [parsing, setParsing] = useState(false);
 
   async function autoFill() {
@@ -299,6 +300,7 @@ export function ItemDetails({
                           if (f.key === "birth_city" || f.key === "birth_province") {
                             checkPlaces([
                               {
+                                group: "birth" as const,
                                 cityLabel: "Place of birth — city",
                                 provinceLabel: "Place of birth — province",
                                 city: next.birth_city,
@@ -314,15 +316,45 @@ export function ItemDetails({
                   </div>
                 ))}
               </div>
-              <PlaceWarnings issues={places} />
+              <PlaceWarnings
+                issues={places}
+                overridden={placesOk}
+                onOverride={setPlacesOk}
+                onFix={(i) => {
+                  if (!i.fix) return;
+                  const key =
+                    i.fix.field === "city" ? "birth_city" : "birth_province";
+                  const next = { ...values, [key]: i.fix.value };
+                  setValues(next);
+                  setAutoFilled((a) => a.filter((k) => k !== key));
+                  checkPlaces([
+                    {
+                      group: "birth" as const,
+                      cityLabel: "Place of birth — city",
+                      provinceLabel: "Place of birth — province",
+                      city: next.birth_city,
+                      province: next.birth_province,
+                    },
+                  ])
+                    .then((res) => res.ok && setPlaces(res.value))
+                    .catch(() => {});
+                }}
+              />
 
               <Button
                 size="sm"
-                disabled={pending}
+                disabled={pending || (places.length > 0 && !placesOk)}
+                title={
+                  places.length > 0 && !placesOk
+                    ? "Fix the flagged place first"
+                    : undefined
+                }
                 onClick={() =>
                   save({ form_details: values }, () => {
                     setAutoFilled([]);
                     setParseNote(null);
+                    setPlaces([]);
+                    setPlacesOk(false);
                   })
                 }
               >

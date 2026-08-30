@@ -65,7 +65,13 @@ export function normalizeDate(raw: string): string {
 }
 
 function coerce(field: FormFieldDef, raw: string): string {
-  const value = raw.replace(/\s+/g, " ").trim();
+  // Form templates carry their instructions inline — "(PANGALAN SA DALAGA PA)",
+  // "(kung meron)". Customers leave them in, and they are not values; printed
+  // on a PSA form they are worse than a blank box.
+  const value = raw
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   if (!value) return "";
   if (field.type === "date") return normalizeDate(value);
   if (field.type === "number") {

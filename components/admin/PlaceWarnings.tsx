@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MapPinOff, Copy, Check } from "lucide-react";
+import { MapPinOff, Copy, Check, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { PlaceIssue } from "@/lib/parse/places";
 
@@ -13,7 +13,19 @@ import type { PlaceIssue } from "@/lib/parse/places";
  * the list looks wrong. The point is to catch it before a PSA rejection or a
  * returned parcel, both of which cost money.
  */
-export function PlaceWarnings({ issues }: { issues: PlaceIssue[] }) {
+export function PlaceWarnings({
+  issues,
+  onFix,
+  overridden,
+  onOverride,
+}: {
+  issues: PlaceIssue[];
+  /** Apply the suggested official name to the field it came from. */
+  onFix?: (issue: PlaceIssue) => void;
+  /** Set once staff have deliberately chosen to keep what they wrote. */
+  overridden?: boolean;
+  onOverride?: (v: boolean) => void;
+}) {
   const [copied, setCopied] = useState(false);
   if (issues.length === 0) return null;
 
@@ -46,20 +58,50 @@ export function PlaceWarnings({ issues }: { issues: PlaceIssue[] }) {
       <p className="flex items-center gap-2 text-sm font-semibold text-red-900">
         <MapPinOff className="h-4 w-4 shrink-0" />
         {issues.length === 1
-          ? "Check this address with the customer"
-          : `Check ${issues.length} details with the customer`}
+          ? "This place doesn't exist — fix it before saving"
+          : `${issues.length} places don't exist — fix them before saving`}
       </p>
-      <ul className="mt-2 space-y-1">
+      <ul className="mt-2 space-y-1.5">
         {issues.map((i, n) => (
-          <li key={n} className="text-xs text-red-800">
-            <span className="font-medium">{i.label}:</span> {i.message}
+          <li
+            key={n}
+            className="flex flex-wrap items-center gap-2 text-xs text-red-800"
+          >
+            <span>
+              <span className="font-medium">{i.label}:</span> {i.message}
+            </span>
+            {onFix && i.suggestion && (
+              <button
+                type="button"
+                onClick={() => onFix(i)}
+                className="inline-flex items-center gap-1 rounded-md border border-red-300 bg-white px-2 py-0.5 text-[11px] font-medium text-red-800 hover:bg-red-100"
+              >
+                <Wand2 className="h-3 w-3" /> Use &ldquo;{i.suggestion}&rdquo;
+              </button>
+            )}
           </li>
         ))}
       </ul>
       <p className="mt-2 text-[11px] text-red-700">
-        A wrong city gets a PSA request rejected or a parcel returned. Confirm
-        before processing — or keep what they wrote if you know it&apos;s right.
+        A wrong city gets a PSA request rejected or a parcel returned, so this
+        blocks saving. Fix it, or confirm with the customer first.
       </p>
+      {onOverride && (
+        <label className="mt-2 flex items-start gap-2 rounded-md bg-white p-2 text-[11px] text-red-800">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-3.5 w-3.5 shrink-0"
+            checked={Boolean(overridden)}
+            onChange={(e) => onOverride(e.target.checked)}
+          />
+          <span>
+            Keep what the customer wrote — I&apos;ve checked and it&apos;s
+            right. Use this only when you know the place; the list is the PSA&apos;s
+            own and is rarely wrong.
+          </span>
+        </label>
+      )}
+
       <Button
         type="button"
         size="sm"

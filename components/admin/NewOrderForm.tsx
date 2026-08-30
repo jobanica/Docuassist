@@ -115,6 +115,7 @@ export function NewOrderForm({
   const [parsing, setParsing] = useState<string | null>(null);
   const [parseNote, setParseNote] = useState<Record<string, string>>({});
   const [places, setPlaces] = useState<PlaceIssue[]>([]);
+  const [placesOk, setPlacesOk] = useState(false);
 
   // --- Duplicate check ---
   // Held until the staff member has seen it; `acknowledged` is what lets the
@@ -206,12 +207,14 @@ export function NewOrderForm({
   ) {
     checkPlaces([
       {
+        group: "birth" as const,
         cityLabel: "Place of birth — city",
         provinceLabel: "Place of birth — province",
         city: doc.birth_city,
         province: doc.birth_province,
       },
       {
+        group: "delivery" as const,
         cityLabel: "Delivery city",
         provinceLabel: "Delivery province",
         city: cust.city,
@@ -347,6 +350,17 @@ export function NewOrderForm({
       setError("Pick at least one document.");
       return;
     }
+    // A place that doesn't exist means a rejected PSA filing or a returned
+    // parcel, so it stops here rather than being saved and discovered later.
+    if (places.length > 0 && !placesOk) {
+      setError(
+        places.length === 1
+          ? "Fix the flagged place before creating the order."
+          : `Fix the ${places.length} flagged places before creating the order.`
+      );
+      return;
+    }
+
     const name = mode === "new" ? newCustomer.full_name.trim() : picked?.full_name ?? "";
     if (mode === "new" && !name) {
       setError("Enter the customer's full name.");
@@ -916,7 +930,29 @@ export function NewOrderForm({
             </div>
           )}
 
-          <PlaceWarnings issues={places} />
+          <PlaceWarnings
+            issues={places}
+            overridden={placesOk}
+            onOverride={setPlacesOk}
+            onFix={(i) => {
+              if (!i.fix) return;
+              if (i.group === "delivery") {
+                const next = { ...newCustomer, [i.fix.field]: i.fix.value };
+                setNewCustomer(next);
+                setShowAddress(true);
+                recheckPlaces(
+                  chosen[0] ? selected[chosen[0].id].form_details : {},
+                  next
+                );
+              } else {
+                const key =
+                  i.fix.field === "city" ? "birth_city" : "birth_province";
+                const svc = chosen[0];
+                if (!svc) return;
+                setField(svc.id, key, i.fix.value);
+              }
+            }}
+          />
 
           {dupes && dupes.matches.length > 0 && (
             <DuplicateWarning

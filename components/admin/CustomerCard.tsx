@@ -60,6 +60,7 @@ export function CustomerCard({
   const [error, setError] = useState<string | null>(null);
   const [auto, setAuto] = useState<string[]>([]);
   const [places, setPlaces] = useState<PlaceIssue[]>([]);
+  const [placesOk, setPlacesOk] = useState(false);
   const [v, setV] = useState<Record<string, string>>(
     Object.fromEntries(FIELDS.map((f) => [f.key, (customer as any)[f.key] ?? ""]))
   );
@@ -72,6 +73,7 @@ export function CustomerCard({
   function recheck(next: Record<string, string>) {
     checkPlaces([
       {
+        group: "delivery" as const,
         cityLabel: "Delivery city",
         provinceLabel: "Delivery province",
         city: next.city,
@@ -94,6 +96,8 @@ export function CustomerCard({
         setEditing(false);
         setAuto([]);
         setNote(null);
+        setPlaces([]);
+        setPlacesOk(false);
         router.refresh();
       } catch (e) {
         setError(toMessage(e));
@@ -177,7 +181,18 @@ export function CustomerCard({
         )}
         {error && <p className="text-sm text-destructive">{error}</p>}
 
-        <PlaceWarnings issues={places} />
+        <PlaceWarnings
+          issues={places}
+          overridden={placesOk}
+          onOverride={setPlacesOk}
+          onFix={(i) => {
+            if (!i.fix) return;
+            const next = { ...v, [i.fix.field]: i.fix.value };
+            setV(next);
+            setAuto((a) => a.filter((k) => k !== i.fix!.field));
+            recheck(next);
+          }}
+        />
 
         {editing ? (
           <>
@@ -213,7 +228,16 @@ export function CustomerCard({
               ))}
             </div>
             <div className="flex gap-2">
-              <Button size="sm" disabled={pending} onClick={save}>
+              <Button
+                size="sm"
+                disabled={pending || (places.length > 0 && !placesOk)}
+                title={
+                  places.length > 0 && !placesOk
+                    ? "Fix the flagged place first"
+                    : undefined
+                }
+                onClick={save}
+              >
                 <Save className="h-3.5 w-3.5" />
                 {pending ? "Saving…" : "Save"}
               </Button>
