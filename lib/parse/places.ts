@@ -44,6 +44,9 @@ export interface PlaceIssue {
 
 function norm(v: string): string {
   return v
+    // "Cotabato ( north)" is Cotabato. Customers and staff add these asides
+    // constantly; flagging them as unknown provinces would be noise.
+    .replace(/\([^)]*\)/g, " ")
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase()

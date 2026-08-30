@@ -104,6 +104,13 @@ const SECTIONS: { test: RegExp; prefix: string }[] = [
   { test: /\b(owner|applicant|document owner|child|bata|sarili|personal information|requester)\b/, prefix: "" },
 ];
 
+/**
+ * Fields a customer legitimately wraps across lines. Everything else — a
+ * province, a city, a name — is one line, and treating a following line as
+ * more of it corrupts the value.
+ */
+const MULTILINE_KEYS = new Set(["delivery_address_line", "address_line"]);
+
 /** Owner name keys and their per-parent equivalents. */
 const NAME_PART: Record<string, string> = {
   last_name: "last",
@@ -199,8 +206,7 @@ export function parseTier1(
         const key = scoped(hit.field.key, section, has);
         put(key, hit.field, split.value);
         pendingKey = null;
-        lastKey =
-          hit.field.type === "text" || hit.field.type === "textarea" ? key : null;
+        lastKey = MULTILINE_KEYS.has(key) || hit.field.type === "textarea" ? key : null;
         continue;
       }
     }
@@ -233,7 +239,12 @@ export function parseTier1(
       // A plain line under a label still waiting for its value. A value can
       // look like a label by accident — "Mampang Zamboanga City" contains
       // "city" — so only an exact label match outranks the waiting field.
-      if (pendingKey && !values[pendingKey] && !(hit && hit.score >= 100)) {
+      //
+      // A line that carries its own separator ("RECEIVER NAME:") is a label
+      // the form asked and the customer left blank. It is never a value, or an
+      // empty prompt ends up printed as somebody's address.
+      const isLabelLine = Boolean(split);
+      if (!isLabelLine && pendingKey && !values[pendingKey] && !(hit && hit.score >= 100)) {
         const key = pendingKey;
         // Parent name fields share the owner field's type, so fall back to it.
         const target =
@@ -242,7 +253,7 @@ export function parseTier1(
         if (target) {
           put(key, target, line.trim());
           lastKey =
-            target.type === "text" || target.type === "textarea" ? key : null;
+            MULTILINE_KEYS.has(key) || target.type === "textarea" ? key : null;
           pendingKey = null;
           continue;
         }
@@ -254,8 +265,11 @@ export function parseTier1(
         continue;
       }
 
-      // Otherwise it is a wrapped continuation of the previous text field.
-      if (lastKey && values[lastKey]) {
+      // Otherwise it may be a wrapped continuation of the previous field —
+      // but only for fields that genuinely run to several lines. A province,
+      // a city or a name is one line, so a trailing note like
+      // "NEED LANDMARK;" must not be glued onto the end of it.
+      if (lastKey && values[lastKey] && MULTILINE_KEYS.has(lastKey)) {
         values[lastKey] = `${values[lastKey]} ${line.trim()}`.replace(/\s+/g, " ");
       }
     }

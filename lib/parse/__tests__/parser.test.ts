@@ -64,11 +64,14 @@ check("typo 'NAEM'", r.values.full_name_on_record, "Pedro Cruz");
 check("numeric date M/D/Y", r.values.date_of_event, "1988-05-12");
 check("typo 'brith'", r.values.place_of_event, "Davao");
 
-console.log("\n[4] Wrapped multi-line value");
+console.log("\n[4] A stray line is not glued onto a single-line field");
+// This used to join into "Calamba Laguna", which is not a city. A city, a
+// province and a name are one line each; only an address wraps.
 r = parseTier1(`Full Name: Jose Rizal
 Place of Birth: Calamba
 Laguna`, fields);
-check("wrapped place joined", r.values.place_of_event, "Calamba Laguna");
+check("place keeps just its own value", r.values.place_of_event, "Calamba");
+check("the name is untouched", r.values.full_name_on_record, "Jose Rizal");
 
 console.log("\n[5] Freeform (no labels) -> Tier 1 finds nothing, flags required");
 r = parseTier1(`hi po gusto ko po sana mag request ng birth certificate salamat po`, fields);
@@ -268,6 +271,41 @@ console.log("\n[13] Template instructions are not values");
 Pangalan ng ama: Antonio Layo (kung meron)`, f);
   check("bare instruction is not stored", r.values.mother_first, undefined);
   check("instruction stripped off a real value", r.values.father_first, "Antonio Layo");
+}
+
+console.log("\n[14] The reported delivery block");
+{
+  const f = [...DELIVERY_FIELDS] as any;
+  const opts = { deliveryOnly: DELIVERY_ONLY_IN_BLOCK, documentOnly: NEVER_IN_DELIVERY_BLOCK };
+  const r = parseTier1(`DELIVERY DETAILS
+RECEIVER NAME:
+PHONE NUMBER 1: 09566034051
+PHONE NUMBER 2:09975463155
+PUROK/STREET: purok8, New Alimodian
+BARANGAY: Banayal
+CITY: Tulunan
+PROVINCE: Cotabato ( north)
+NEED LANDMARK;`, f, opts);
+
+  check("purok/street is the address line", r.values.delivery_address_line, "purok8, New Alimodian");
+  check("an unanswered prompt is not an address", r.values.delivery_address_line !== "RECEIVER NAME:", true);
+  check("first phone wins", r.values.delivery_phone, "09566034051");
+  check("barangay", r.values.delivery_barangay, "Banayal");
+  check("city", r.values.delivery_city, "Tulunan");
+  check("trailing note not glued to the province", r.values.delivery_province, "Cotabato");
+
+  // The parsed pair must not raise a false alarm.
+  check("Tulunan + Cotabato accepted", placeIssues([
+    { group: "delivery", cityLabel: "Delivery city", provinceLabel: "Delivery province",
+      city: r.values.delivery_city, province: r.values.delivery_province },
+  ]).length, 0);
+  // An aside in a hand-typed province is tolerated, not flagged.
+  check("province with an aside accepted", checkProvince("Cotabato ( north)").status, "ok");
+  // A wrong pairing is still caught.
+  check("wrong province still caught", placeIssues([
+    { group: "delivery", cityLabel: "Delivery city", provinceLabel: "Delivery province",
+      city: "Tulunan", province: "Davao del Sur" },
+  ])[0].message, "Tulunan is in Cotabato, not Davao del Sur.");
 }
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
