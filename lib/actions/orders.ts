@@ -41,6 +41,34 @@ export async function createOrder(
     const parsed = createOrderSchema.parse(input);
     const supabase = createClient();
 
+    // A parcel needs all four parts of an address, so an order that is ready
+    // to work cannot be missing them. A stub raised before the customer has
+    // replied is exempt — that is what the stub is for.
+    if (parsed.initial_status === "details_received") {
+      const { data: c } = await supabase
+        .from("customers")
+        .select("address_line, barangay, city, province")
+        .eq("id", parsed.customer_id)
+        .maybeSingle();
+      const missing = (
+        [
+          ["address_line", "house no. / street / purok"],
+          ["barangay", "barangay"],
+          ["city", "city or municipality"],
+          ["province", "province"],
+        ] as const
+      )
+        .filter(([k]) => !String((c as any)?.[k] ?? "").trim())
+        .map(([, label]) => label);
+      if (missing.length > 0) {
+        throw new Error(
+          `The delivery address needs the ${missing.join(
+            ", "
+          )}. Add it to the customer, or save this as a new inquiry for now.`
+        );
+      }
+    }
+
     const { data: order, error: orderErr } = await supabase
       .from("orders")
       .insert({

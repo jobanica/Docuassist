@@ -8,6 +8,7 @@ import {
   placeIssues,
   documentPlacePair,
   resolveCompound,
+  checkBarangay,
 } from "@/lib/parse/places";
 import { surnameIssues } from "@/lib/parse/surname";
 import {
@@ -480,6 +481,48 @@ console.log("\n[19] A whole address typed into the city box");
   check("a correct pair is left alone",
     placeIssues([{ group: "birth", cityLabel: "c", provinceLabel: "p",
       city: "Tulunan", province: "Cotabato" }]).length, 0);
+}
+
+console.log("\n[20] The barangay has to be in that city");
+{
+  check("a real barangay passes", checkBarangay("Mabiga", "Mabalacat City", "Pampanga").status, "ok");
+  check("case and spacing ignored", checkBarangay("  tumaga ", "zamboanga", "zamboanga del sur").status, "ok");
+  check("a barangay of another town is caught",
+    checkBarangay("Bariis", "Mabalacat City", "Pampanga").status, "unknown");
+  check("and names the town", checkBarangay("Bariis", "Mabalacat City", "Pampanga").city,
+    "Mabalacat City");
+
+  // The reported screenshot: a subdivision and a street in the barangay box,
+  // with the real barangay sitting in the city box.
+  const b = checkBarangay("San Rafael village kaimito st.", "mabiga mabalacat", "pampanga");
+  check("the barangay hiding in the city box is offered", b.suggestion, "Mabiga");
+  check("as a suggestion, not a silent pass", b.status, "suggest");
+
+  // Without a city there is nothing to check against, and the city warning is
+  // the one to act on first.
+  check("no city, no barangay verdict", checkBarangay("Anything", "", "").status, "ok");
+  check("an empty barangay is not an error", checkBarangay("", "Matnog", "Sorsogon").status, "ok");
+
+  const issues = placeIssues([
+    { group: "delivery", cityLabel: "Delivery city", provinceLabel: "Delivery province",
+      barangayLabel: "Delivery barangay",
+      city: "mabiga mabalacat", province: "pampanga",
+      barangay: "San Rafael village kaimito st." },
+  ]);
+  check("both halves are reported", issues.length, 2);
+  check("the barangay fix patches the barangay",
+    issues[1].fixes?.[0].patch.barangay, "Mabiga");
+  // Correcting the city on its own would throw away the only evidence of what
+  // the barangay was, so the city fix carries it too.
+  check("the city fix carries the barangay along",
+    JSON.stringify(issues[0].fixes?.[0].patch),
+    '{"city":"Mabalacat City","barangay":"Mabiga"}');
+  check("and says why", issues[0].message.includes("is its barangay"), true);
+  // A complete, correct address must stay silent.
+  check("a good address raises nothing", placeIssues([
+    { group: "delivery", cityLabel: "c", provinceLabel: "p", barangayLabel: "b",
+      city: "Mabalacat City", province: "Pampanga", barangay: "Mabiga" },
+  ]).length, 0);
 }
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

@@ -28,7 +28,9 @@ export const publicOrderSchema = z.object({
   phone: z.string().trim().min(7, "Please enter your mobile number"),
   messenger_name: z.string().trim().max(120).optional().default(""),
   address_line: z.string().trim().min(3, "Please enter your street address").max(200),
-  barangay: z.string().trim().max(120).optional().default(""),
+  // Couriers sort on the barangay — an address without one is a returned
+  // parcel, so it is as required as the city.
+  barangay: z.string().trim().min(2, "Please enter your barangay").max(120),
   city: z.string().trim().min(2, "Please enter your city or municipality").max(120),
   province: z.string().trim().min(2, "Please enter your province").max(120),
   zip: z.string().trim().max(10).optional().default(""),
@@ -78,7 +80,7 @@ export async function submitPublicOrder(
       phone,
       messenger_name: input.messenger_name || null,
       address_line: input.address_line,
-      barangay: input.barangay || null,
+      barangay: input.barangay,
       city: input.city,
       province: input.province,
       zip: input.zip || null,

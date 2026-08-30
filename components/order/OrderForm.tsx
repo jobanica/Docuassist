@@ -83,6 +83,7 @@ export function OrderForm({ config }: { config: Config }) {
     if (!/^(\+?63|0)?9\d{9}$/.test(delivery.phone.replace(/[^\d+]/g, "")))
       return "Please enter a valid PH mobile number (09XXXXXXXXX).";
     if (delivery.address_line.trim().length < 3) return "Please enter your street address.";
+    if (delivery.barangay.trim().length < 2) return "Please enter your barangay.";
     if (delivery.city.trim().length < 2) return "Please enter your city or municipality.";
     if (delivery.province.trim().length < 2) return "Please enter your province.";
     return null;
@@ -250,7 +251,7 @@ export function OrderForm({ config }: { config: Config }) {
                    onChange={(v) => setDelivery({ ...delivery, phone: v })} />
             <Field label="Facebook / Messenger name" value={delivery.messenger_name} onChange={(v) => setDelivery({ ...delivery, messenger_name: v })} />
             <Field label="House no. & street *" value={delivery.address_line} onChange={(v) => setDelivery({ ...delivery, address_line: v })} />
-            <Field label="Barangay" value={delivery.barangay} onChange={(v) => setDelivery({ ...delivery, barangay: v })} />
+            <Field label="Barangay *" value={delivery.barangay} onChange={(v) => setDelivery({ ...delivery, barangay: v })} />
             <div className="grid grid-cols-2 gap-3">
               <Field label="City / Municipality *" value={delivery.city} onChange={(v) => setDelivery({ ...delivery, city: v })} />
               <Field label="Province *" value={delivery.province} onChange={(v) => setDelivery({ ...delivery, province: v })} />

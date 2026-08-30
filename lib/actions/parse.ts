@@ -162,8 +162,10 @@ export async function parsePastedText(
         group: "delivery" as const,
         cityLabel: "Delivery city",
         provinceLabel: "Delivery province",
+        barangayLabel: "Delivery barangay",
         city: customer.city,
         province: customer.province,
+        barangay: customer.barangay,
       },
     ]);
 

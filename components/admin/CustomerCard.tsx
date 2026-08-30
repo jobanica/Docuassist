@@ -76,8 +76,10 @@ export function CustomerCard({
         group: "delivery" as const,
         cityLabel: "Delivery city",
         provinceLabel: "Delivery province",
+        barangayLabel: "Delivery barangay",
         city: next.city,
         province: next.province,
+        barangay: next.barangay,
       },
     ])
       .then((res) => {
@@ -196,6 +198,10 @@ export function CustomerCard({
               next.province = patch.province;
               touched.push("province");
             }
+            if (patch.barangay !== undefined) {
+              next.barangay = patch.barangay;
+              touched.push("barangay");
+            }
             if (touched.length === 0) return;
             setV(next);
             setAuto((a) => a.filter((k) => !touched.includes(k)));
@@ -230,7 +236,13 @@ export function CustomerCard({
                       const next = { ...v, [f.key]: e.target.value };
                       setV(next);
                       setAuto((a) => a.filter((k) => k !== f.key));
-                      if (f.key === "city" || f.key === "province") recheck(next);
+                      if (
+                        f.key === "city" ||
+                        f.key === "province" ||
+                        f.key === "barangay"
+                      ) {
+                        recheck(next);
+                      }
                     }}
                   />
                 </div>

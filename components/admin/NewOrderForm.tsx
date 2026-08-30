@@ -32,7 +32,8 @@ import {
 import { DuplicateWarning } from "./DuplicateWarning";
 import { PlaceWarnings } from "./PlaceWarnings";
 import { checkPlaces } from "@/lib/actions/places";
-import { documentPlacePair, type PlaceIssue } from "@/lib/parse/places";
+import { documentPlacePair } from "@/lib/parse/place-fields";
+import type { PlaceIssue } from "@/lib/parse/places";
 import { SurnameWarnings } from "./SurnameWarnings";
 import { surnameIssues } from "@/lib/parse/surname";
 import { createOrder } from "@/lib/actions/orders";
@@ -232,8 +233,10 @@ export function NewOrderForm({
         group: "delivery" as const,
         cityLabel: "Delivery city",
         provinceLabel: "Delivery province",
+        barangayLabel: "Delivery barangay",
         city: cust.city,
         province: cust.province,
+        barangay: cust.barangay,
       },
     ])
       .then((res) => {
@@ -243,6 +246,27 @@ export function NewOrderForm({
         /* a check that cannot run must not block intake */
       });
   }
+
+  /**
+   * Edit a delivery field and re-check it. Barangay is in there with city and
+   * province now: couriers sort on the barangay, so a wrong one is a returned
+   * parcel just as surely as a wrong city.
+   */
+  function setCust(key: keyof typeof newCustomer, value: string) {
+    const next = { ...newCustomer, [key]: value };
+    setNewCustomer(next);
+    if (key === "city" || key === "province" || key === "barangay") {
+      recheckPlaces(chosen[0] ? selected[chosen[0].id].form_details : {}, next);
+    }
+  }
+
+  /** The four parts of an address a parcel cannot be delivered without. */
+  const REQUIRED_DELIVERY: [keyof typeof newCustomer, string][] = [
+    ["address_line", "house no. / street / purok"],
+    ["barangay", "barangay"],
+    ["city", "city or municipality"],
+    ["province", "province"],
+  ];
 
   function setField(svcId: string, key: string, value: string) {
     setSelected((prev) => ({
@@ -399,6 +423,25 @@ export function NewOrderForm({
     if (mode === "pick" && !picked) {
       setError("Pick an existing customer or enter a new one.");
       return;
+    }
+
+    // A parcel needs all four parts of an address. A stub raised before the
+    // customer has replied is the one case where they cannot exist yet, so
+    // that path is left alone — the details are demanded when they arrive.
+    if (initialStatus === "details_received") {
+      const from = mode === "new" ? newCustomer : picked;
+      const missing = REQUIRED_DELIVERY.filter(
+        ([k]) => !String((from as any)?.[k] ?? "").trim()
+      ).map(([, label]) => label);
+      if (missing.length > 0) {
+        setShowAddress(true);
+        setError(
+          `The delivery address needs the ${missing.join(", ")}. Ask the customer for ${
+            missing.length === 1 ? "it" : "them"
+          } before creating the order, or save this as a new inquiry for now.`
+        );
+        return;
+      }
     }
 
     // Warn once, then let them through. Checked here rather than on the server
@@ -659,45 +702,28 @@ export function NewOrderForm({
                       }
                     />
                   </Field>
-                  <Field label="Address line" className="sm:col-span-2">
+                  <Field label="Address line *" className="sm:col-span-2">
                     <Input
                       value={newCustomer.address_line}
-                      onChange={(e) =>
-                        setNewCustomer({
-                          ...newCustomer,
-                          address_line: e.target.value,
-                        })
-                      }
+                      onChange={(e) => setCust("address_line", e.target.value)}
                     />
                   </Field>
-                  <Field label="Barangay">
+                  <Field label="Barangay *">
                     <Input
                       value={newCustomer.barangay}
-                      onChange={(e) =>
-                        setNewCustomer({
-                          ...newCustomer,
-                          barangay: e.target.value,
-                        })
-                      }
+                      onChange={(e) => setCust("barangay", e.target.value)}
                     />
                   </Field>
-                  <Field label="City / Municipality">
+                  <Field label="City / Municipality *">
                     <Input
                       value={newCustomer.city}
-                      onChange={(e) =>
-                        setNewCustomer({ ...newCustomer, city: e.target.value })
-                      }
+                      onChange={(e) => setCust("city", e.target.value)}
                     />
                   </Field>
-                  <Field label="Province">
+                  <Field label="Province *">
                     <Input
                       value={newCustomer.province}
-                      onChange={(e) =>
-                        setNewCustomer({
-                          ...newCustomer,
-                          province: e.target.value,
-                        })
-                      }
+                      onChange={(e) => setCust("province", e.target.value)}
                     />
                   </Field>
                   <Field label="ZIP">
@@ -980,6 +1006,7 @@ export function NewOrderForm({
                 const next = { ...newCustomer };
                 if (patch.city !== undefined) next.city = patch.city;
                 if (patch.province !== undefined) next.province = patch.province;
+                if (patch.barangay !== undefined) next.barangay = patch.barangay;
                 setNewCustomer(next);
                 setShowAddress(true);
                 recheckPlaces(

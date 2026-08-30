@@ -1,5 +1,8 @@
 import { CITIES, PROVINCES } from "@/lib/data/psgc";
 import { levenshtein } from "./labels";
+import { barangaysOfCity } from "@/lib/data/psgc-barangays";
+
+export { documentPlacePair, type PlacePair } from "./place-fields";
 
 /**
  * Check a city/municipality and province against the PSA's own PSGC list.
@@ -56,46 +59,7 @@ export interface PlaceIssue {
 export interface PlaceFix {
   /** What the button says, e.g. `Roseller Lim, Zamboanga Sibugay`. */
   label: string;
-  patch: { city?: string; province?: string };
-}
-
-/**
- * The city/province pair a document's place-of-event lives in.
- *
- * Every template names these differently — birth_city on a birth certificate
- * and CENOMAR, marriage_city on a marriage certificate, death_city on a death
- * certificate — so the check found the pair by hardcoding the birth keys and
- * silently did nothing on the other two. Deriving it from the form schema means
- * a template added later is covered without anyone remembering to come back
- * here.
- *
- * Delivery keys are excluded: those are the customer's address, checked as
- * their own pair.
- */
-export interface PlacePair {
-  cityKey: string;
-  provinceKey: string;
-  cityLabel: string;
-  provinceLabel: string;
-}
-
-export function documentPlacePair(
-  fields: { key: string; label?: string }[]
-): PlacePair | null {
-  for (const f of fields) {
-    const m = /^(.+)_city$/.exec(f.key);
-    if (!m || m[1] === "delivery") continue;
-    const provinceKey = `${m[1]}_province`;
-    const prov = fields.find((x) => x.key === provinceKey);
-    if (!prov) continue;
-    return {
-      cityKey: f.key,
-      provinceKey,
-      cityLabel: f.label || "Place — city",
-      provinceLabel: prov.label || "Place — province",
-    };
-  }
-  return null;
+  patch: { city?: string; province?: string; barangay?: string };
 }
 
 /** "a, b or c" — for listing every province a shared city name belongs to. */
@@ -120,6 +84,8 @@ function norm(v: string): string {
 interface CityEntry {
   name: string;
   province: string;
+  /** Index into CITIES, which is how the barangay list is keyed. */
+  index: number;
 }
 
 const cityByAlias = new Map<string, CityEntry[]>();
@@ -132,7 +98,7 @@ function addAlias(alias: string, entry: CityEntry) {
   if (!k) return;
   const list = cityByAlias.get(k);
   if (list) {
-    if (!list.some((e) => e.name === entry.name && e.province === entry.province)) {
+    if (!list.some((e) => e.index === entry.index)) {
       list.push(entry);
     }
   } else {
@@ -141,8 +107,8 @@ function addAlias(alias: string, entry: CityEntry) {
   cityKeys.push({ key: k, entry });
 }
 
-for (const [name, provIdx] of CITIES) {
-  const entry: CityEntry = { name, province: PROVINCES[provIdx] };
+CITIES.forEach(([name, provIdx], index) => {
+  const entry: CityEntry = { name, province: PROVINCES[provIdx], index };
   addAlias(name, entry);
   // PSGC writes "City of Batac"; customers write "Batac City" or "Batac".
   const cityOf = name.match(/^City of (.+)$/i);
@@ -152,7 +118,7 @@ for (const [name, provIdx] of CITIES) {
   }
   const trailing = name.match(/^(.+) City$/i);
   if (trailing) addAlias(trailing[1], entry);
-}
+});
 
 const provinceByAlias = new Map<string, string>();
 for (const p of PROVINCES) provinceByAlias.set(norm(p), p);
@@ -364,6 +330,105 @@ export function checkCity(input: string, province?: string): PlaceCheck {
   return { input: raw, status: "unknown" };
 }
 
+/**
+ * Resolve what a customer wrote in the city box to an actual city, using the
+ * same passes the warning does. Used by the barangay check, which is only
+ * meaningful once the city is known.
+ */
+function resolveCity(city?: string, province?: string): CityEntry | null {
+  const raw = (city ?? "").trim();
+  if (!raw) return null;
+  const prov = province?.trim()
+    ? provinceByAlias.get(norm(province)) ?? undefined
+    : undefined;
+
+  const exact = cityByAlias.get(norm(raw));
+  if (exact) {
+    return (prov && exact.find((e) => e.province === prov)) || exact[0];
+  }
+  const compound = resolveCompound(raw, province);
+  if (compound) {
+    const list = cityByAlias.get(norm(compound.city));
+    const hit = list?.find((e) => e.province === compound.province);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/**
+ * Is the barangay one of that city's?
+ *
+ * A barangay is where a parcel actually goes — couriers sort on it — and it is
+ * the field customers most often fill with a subdivision or a street. The
+ * check only runs once the city is known, because "San Rafael" exists in
+ * hundreds of towns and means nothing on its own.
+ */
+export function checkBarangay(
+  barangay: string,
+  city?: string,
+  province?: string
+): {
+  status: "ok" | "suggest" | "unknown";
+  suggestion?: string;
+  city?: string;
+  /** The suggestion came out of the city box, not the barangay box. */
+  fromCityBox?: boolean;
+} {
+  const raw = barangay.trim();
+  if (!raw) return { status: "ok" };
+  const entry = resolveCity(city, province);
+  // No city, no verdict: the city warning is the one to act on first.
+  if (!entry) return { status: "ok" };
+
+  const list = barangaysOfCity(entry.index);
+  if (list.length === 0) return { status: "ok" };
+
+  const a = norm(raw);
+  const keyed = list.map((n) => ({ key: norm(n), value: n }));
+
+  for (const b of keyed) if (b.key === a) return { status: "ok", suggestion: b.value };
+
+  // "San Rafael Village Kaimito St." — the barangay is in there, wrapped in a
+  // subdivision and a street. Longest whole-word match wins.
+  let contained: string | undefined;
+  let containedLen = 0;
+  for (const b of keyed) {
+    if (b.key.length < 4) continue;
+    const re = new RegExp(
+      `(^|\\s)${b.key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|\\s)`
+    );
+    if (re.test(a) && b.key.length > containedLen) {
+      contained = b.value;
+      containedLen = b.key.length;
+    }
+  }
+  if (contained) return { status: "suggest", suggestion: contained, city: entry.name };
+
+  const near = closest(raw, keyed);
+  if (near) return { status: "suggest", suggestion: near, city: entry.name };
+
+  // Nothing in the barangay box is a barangay — but the city box often holds
+  // one, because the customer wrote "mabiga mabalacat" there and put their
+  // subdivision in the barangay field. If the leftovers name a real barangay
+  // of this city, that is almost certainly the one they meant.
+  const spare = norm(city ?? "").split(" ").filter(Boolean);
+  if (spare.length > 1) {
+    for (const b of keyed) {
+      if (b.key.length < 4) continue;
+      if (spare.includes(b.key)) {
+        return {
+          status: "suggest",
+          suggestion: b.value,
+          city: entry.name,
+          fromCityBox: true,
+        };
+      }
+    }
+  }
+
+  return { status: "unknown", city: entry.name };
+}
+
 /** Turn a city/province pair into the warnings staff should act on. */
 export function placeIssues(
   pairs: {
@@ -371,6 +436,9 @@ export function placeIssues(
     provinceLabel: string;
     city?: string;
     province?: string;
+    /** Only the delivery pair has one; a PSA form asks for city and province. */
+    barangayLabel?: string;
+    barangay?: string;
     group: "birth" | "delivery";
   }[]
 ): PlaceIssue[] {
@@ -402,6 +470,16 @@ export function placeIssues(
       }
     }
 
+    // Worked out before the city warning is written, because when the answer
+    // came out of the city box the city fix has to carry it: correcting the
+    // city on its own throws away the only evidence of what the barangay was.
+    const bar =
+      p.barangay?.trim() && p.barangayLabel
+        ? checkBarangay(p.barangay, p.city, p.province)
+        : null;
+    const barangayFromCityBox =
+      bar?.fromCityBox && bar.suggestion ? bar.suggestion : null;
+
     if (p.city?.trim()) {
       const r = checkCity(p.city, p.province);
 
@@ -422,17 +500,32 @@ export function placeIssues(
           group: p.group,
           fixes: [
             {
-              label: provinceChanges
-                ? `${compound.city}, ${compound.province}`
-                : compound.city,
-              patch: provinceChanges
-                ? { city: compound.city, province: compound.province }
-                : { city: compound.city },
+              label: [
+                compound.city,
+                provinceChanges ? compound.province : null,
+                barangayFromCityBox,
+              ]
+                .filter(Boolean)
+                .join(", "),
+              patch: {
+                city: compound.city,
+                ...(provinceChanges ? { province: compound.province } : {}),
+                ...(barangayFromCityBox
+                  ? { barangay: barangayFromCityBox }
+                  : {}),
+              },
             },
           ],
-          message: provinceChanges
-            ? `"${r.input}" reads as ${compound.city} in ${compound.province} — the province was written in the city box.`
-            : `"${r.input}" isn't a city or municipality — did they mean ${compound.city}?`,
+          message: [
+            provinceChanges
+              ? `"${r.input}" reads as ${compound.city} in ${compound.province} — the province was written in the city box.`
+              : `"${r.input}" isn't a city or municipality — did they mean ${compound.city}?`,
+            barangayFromCityBox
+              ? `"${barangayFromCityBox}" in there is its barangay, which is what the barangay box should hold.`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" "),
         });
       } else if (r.wrongProvince) {
         const provinces = r.provinces ?? [r.wrongProvince];
@@ -460,8 +553,22 @@ export function placeIssues(
           kind: "spelling",
           suggestion: r.suggestion,
           group: p.group,
-          fixes: [{ label: r.suggestion!, patch: { city: r.suggestion! } }],
-          message: `"${r.input}" isn't a city or municipality — did they mean ${r.suggestion}?`,
+          fixes: [
+            {
+              label: [r.suggestion!, barangayFromCityBox]
+                .filter(Boolean)
+                .join(", "),
+              patch: {
+                city: r.suggestion!,
+                ...(barangayFromCityBox
+                  ? { barangay: barangayFromCityBox }
+                  : {}),
+              },
+            },
+          ],
+          message: barangayFromCityBox
+            ? `"${r.input}" reads as ${r.suggestion} — and "${barangayFromCityBox}" in there is its barangay, which is what the barangay box should hold.`
+            : `"${r.input}" isn't a city or municipality — did they mean ${r.suggestion}?`,
         });
       } else if (r.status === "unknown") {
         out.push({
@@ -470,6 +577,30 @@ export function placeIssues(
           kind: "unknown",
           group: p.group,
           message: `"${r.input}" is not a Philippine city or municipality.`,
+        });
+      }
+    }
+
+    if (bar && p.barangayLabel) {
+      const b = bar;
+      const written = (p.barangay ?? "").trim();
+      if (b.status === "suggest") {
+        out.push({
+          label: p.barangayLabel,
+          input: written,
+          kind: "spelling",
+          suggestion: b.suggestion,
+          group: p.group,
+          fixes: [{ label: b.suggestion!, patch: { barangay: b.suggestion! } }],
+          message: `"${written}" isn't a barangay of ${b.city} — did they mean ${b.suggestion}?`,
+        });
+      } else if (b.status === "unknown") {
+        out.push({
+          label: p.barangayLabel,
+          input: written,
+          kind: "unknown",
+          group: p.group,
+          message: `${b.city} has no barangay called "${written}". Couriers sort on the barangay, so a wrong one is a returned parcel.`,
         });
       }
     }
