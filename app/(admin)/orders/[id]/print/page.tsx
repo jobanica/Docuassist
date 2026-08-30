@@ -136,7 +136,10 @@ export default async function PrintFormsPage({
             {/* The printable sheet. Scrolls horizontally on small screens
                 rather than squashing the fixed-width form. */}
             <div className="overflow-x-auto print:overflow-visible">
-              <div id={domId} className="psa-sheet">
+              <div
+                id={domId}
+                className={i === 0 ? "psa-sheet psa-first" : "psa-sheet"}
+              >
                 <PsaForm
                   serviceCode={code}
                   serviceName={item.services?.name ?? "Document"}

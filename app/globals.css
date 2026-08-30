@@ -41,8 +41,11 @@
    are forced so the black header bars and box rules actually print.        */
 @media print {
   @page {
-    size: A4 portrait;
-    margin: 10mm;
+    /* 8.5 x 11". The form is a fixed 760px = 201mm wide, so the side margins
+       are set to what is left over — anything wider and the browser shrinks
+       the sheet, which shrinks the character boxes off the printed grid. */
+    size: letter portrait;
+    margin: 7mm 6mm;
   }
   body {
     background: #fff !important;
@@ -56,15 +59,20 @@
   main {
     padding: 0 !important;
   }
+  /* One document per sheet. The break goes BEFORE each form rather than
+     after, so there is no blank trailing page; the first form is exempted by
+     the .psa-first class React puts on it. `:first-of-type` cannot do this —
+     every sheet sits alone inside its own wrapper, so each one is both the
+     first and the last of its type and the rule matched all of them. */
   .psa-sheet {
     break-inside: avoid;
     page-break-inside: avoid;
-    break-after: page;
-    page-break-after: always;
+    break-before: page;
+    page-break-before: always;
   }
-  .psa-sheet:last-of-type {
-    break-after: auto;
-    page-break-after: auto;
+  .psa-sheet.psa-first {
+    break-before: auto;
+    page-break-before: auto;
   }
   * {
     -webkit-print-color-adjust: exact !important;

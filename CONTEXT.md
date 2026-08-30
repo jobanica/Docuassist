@@ -170,6 +170,15 @@ A staff member can be limited to specific documents — e.g. the VA who only han
 - Reads are scoped but inserts stay open to any staff, because intake creates a customer and an order one statement before the first item exists. Both helpers therefore treat a row with no children as visible; it stops being visible the moment its first item lands.
 - Admins are exempt (`is_admin()` short-circuits every helper), and an admin cannot limit their own account — that would blind the owner to their own business.
 - Screens follow the same scope so nothing is offered that the database would refuse: the New Order picker lists only their documents, the Orders board's service filter is narrowed, and both say plainly which documents the account covers so missing orders don't read as a bug.
+## 12b. Batch Printing
+Staff file a stack at the PSA counter in one trip, so printing one order at a time is a browser dialog per order.
+- The Orders board has a checkbox per row plus a select-all that covers **whatever the current filter shows** — filter to Details Received, tick the header box, press **Print forms**.
+- `/orders/print?ids=...` renders every selected order's documents, **one document per 8.5x11" sheet**. `@page` is `letter portrait` with `7mm 6mm` margins: the form is a fixed 760px = 7.92in wide, so the side margins are exactly what is left over. Anything wider and the browser shrinks the sheet, which shrinks the character boxes off the printed grid — hence the on-screen reminder to print at 100%, not "fit to page".
+- The page break sits **before** each sheet (`.psa-sheet`, with `.psa-first` exempting the first) so there is no blank trailing page. `:first-of-type`/`:last-of-type` cannot express this: each sheet sits alone inside its own wrapper, so every one matched and no break fired at all — caught by rendering to PDF and counting pages, not by reading the CSS.
+- Documents with no PSA application form (TIN ID, PhilHealth ID) are left out rather than printing a near-empty page each, and the ones skipped are named on screen.
+- Forms that would print blank, and values too long for their boxes, are listed before the print button.
+- The ids arrive in the URL, so RLS is what protects them: an account limited to certain documents gets zero sheets back for orders it cannot see, verified live.
+
 ## 10. Notifications (Semaphore SMS)
 - Provider: **Semaphore** (semaphore.co) — PH SMS gateway, API-key based, ~₱0.50/SMS.
 - Env: `SEMAPHORE_API_KEY`, `SEMAPHORE_SENDER_NAME`.

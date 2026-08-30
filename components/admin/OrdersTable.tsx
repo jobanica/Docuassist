@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, PhoneCall } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Search, PhoneCall, Printer, X } from "lucide-react";
 import { StatusBadge } from "./StatusBadge";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -63,6 +64,10 @@ export function OrdersTable({
   const [service, setService] = useState<string>("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const router = useRouter();
+  // Orders ticked for a batch print. Kept as ids so a filter change doesn't
+  // silently drop a selection the staff member already made.
+  const [picked, setPicked] = useState<Set<string>>(new Set());
 
   const callList = useMemo(() => orders.filter(needsCall), [orders]);
 
@@ -97,6 +102,27 @@ export function OrdersTable({
   }, [orders, q, status, service, from, to]);
 
   const onCallList = status === FAILED_ATTEMPTS;
+
+  const shown = filtered.map((o) => o.id);
+  const allShownPicked =
+    shown.length > 0 && shown.every((id) => picked.has(id));
+
+  function toggle(id: string) {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAllShown() {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (allShownPicked) shown.forEach((id) => next.delete(id));
+      else shown.forEach((id) => next.add(id));
+      return next;
+    });
+  }
 
   return (
     <div className="space-y-4">
@@ -176,6 +202,34 @@ export function OrdersTable({
         </div>
       </div>
 
+      {picked.size > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-[#eda100]/40 bg-[#eda100]/10 px-4 py-3">
+          <Printer className="h-4 w-4 shrink-0 text-[#8a6100]" />
+          <span className="flex-1 text-sm text-[#5c4300]">
+            <strong>
+              {picked.size} order{picked.size === 1 ? "" : "s"} selected
+            </strong>{" "}
+            — print every PSA form for them in one go, one document per sheet.
+          </span>
+          <button
+            type="button"
+            onClick={() => setPicked(new Set())}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[#5c4300] hover:bg-[#eda100]/20"
+          >
+            <X className="h-3.5 w-3.5" /> Clear
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              router.push(`/orders/print?ids=${Array.from(picked).join(",")}`)
+            }
+            className="inline-flex h-9 items-center gap-2 rounded-md bg-[#eda100] px-3 text-sm font-semibold text-[#3d2f00] shadow-sm hover:bg-[#d99400]"
+          >
+            <Printer className="h-4 w-4" /> Print forms
+          </button>
+        </div>
+      )}
+
       <p className="text-xs text-muted-foreground">
         {onCallList
           ? `${filtered.length} order${filtered.length === 1 ? "" : "s"} to call, most urgent first`
@@ -186,6 +240,16 @@ export function OrdersTable({
         <table className="w-full text-sm">
           <thead className="border-b bg-muted/50 text-left text-xs uppercase text-muted-foreground">
             <tr>
+              <th className="w-10 px-3 py-3">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 cursor-pointer align-middle"
+                  aria-label="Select all shown"
+                  title="Select every order in this filter"
+                  checked={allShownPicked}
+                  onChange={toggleAllShown}
+                />
+              </th>
               <th className="px-4 py-3 font-medium">Customer</th>
               <th className="px-4 py-3 font-medium">
                 {onCallList ? "Why it failed" : "Services"}
@@ -213,6 +277,15 @@ export function OrdersTable({
                   key={o.id}
                   className={cn("border-b last:border-0 hover:bg-accent/40", tone)}
                 >
+                  <td className="px-3 py-3">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 cursor-pointer align-middle"
+                      aria-label={`Select ${o.customer_name}`}
+                      checked={picked.has(o.id)}
+                      onChange={() => toggle(o.id)}
+                    />
+                  </td>
                   <td className="px-4 py-3">
                     <Link href={`/orders/${o.id}`} className="font-medium hover:underline">
                       {o.customer_name}
@@ -268,7 +341,7 @@ export function OrdersTable({
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
+                <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
                   {onCallList
                   ? "No failed deliveries right now — nothing to chase."
                   : "No orders match your filters."}
