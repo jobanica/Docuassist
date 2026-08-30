@@ -672,15 +672,14 @@ export function NewOrderForm({
                 <div className="mt-3 space-y-2">
                   <Button
                     type="button"
-                    size="sm"
-                    variant="outline"
+                    className="bg-[#eda100] font-semibold text-[#3d2f00] shadow-sm hover:bg-[#d99400] disabled:bg-slate-100 disabled:text-slate-400"
                     disabled={
                       parsing === s.id ||
                       !selected[s.id].pasted_details.trim()
                     }
                     onClick={() => autoFill(s.id)}
                   >
-                    <Wand2 className="h-3.5 w-3.5" />
+                    <Wand2 className="h-4 w-4" />
                     {parsing === s.id
                       ? "Reading…"
                       : "Auto-fill the PSA form from this paste"}

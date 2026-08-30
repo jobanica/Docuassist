@@ -236,7 +236,7 @@ export function ItemDetails({
                 <div className="space-y-2">
                   <Button
                     size="sm"
-                    variant="outline"
+                    className="bg-[#eda100] font-semibold text-[#3d2f00] shadow-sm hover:bg-[#d99400] disabled:bg-slate-100 disabled:text-slate-400"
                     disabled={parsing || pending}
                     onClick={autoFill}
                   >
