@@ -10,11 +10,17 @@ export const dynamic = "force-dynamic";
 
 export default async function NewOrderPage() {
   const supabase = createClient();
-  const [staff, { data: services }, pages] = await Promise.all([
-    getStaff(),
-    supabase.from("services").select("*").eq("active", true).order("name"),
-    listMessengerPages(),
-  ]);
+  const [staff, { data: services }, pages, { data: parsingSetting }] =
+    await Promise.all([
+      getStaff(),
+      supabase.from("services").select("*").eq("active", true).order("name"),
+      listMessengerPages(),
+      supabase
+        .from("app_settings")
+        .select("value")
+        .eq("key", "parsing_enabled")
+        .maybeSingle(),
+    ]);
 
   // Offer only what RLS would let them insert, so the order can't fail at the
   // last step with a policy error.
@@ -47,6 +53,7 @@ export default async function NewOrderPage() {
       <NewOrderForm
         services={allowed}
         messengerPages={pages.filter((p) => p.active)}
+        parsingEnabled={(parsingSetting?.value ?? "true") !== "false"}
         defaultPageId={
           staff?.default_messenger_page_id ??
           pages.find((p) => p.is_default)?.id ??

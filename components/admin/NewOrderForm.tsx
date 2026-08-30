@@ -9,6 +9,8 @@ import {
   X,
   ChevronDown,
   MessageCircle,
+  Wand2,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { unwrap } from "@/lib/action-result";
@@ -29,12 +31,24 @@ import {
 } from "@/lib/actions/duplicates";
 import { DuplicateWarning } from "./DuplicateWarning";
 import { createOrder } from "@/lib/actions/orders";
-import type { Customer, MessengerPage, Service } from "@/lib/types";
+import { parsePastedText } from "@/lib/actions/parse";
+import type {
+  Customer,
+  FormFieldDef,
+  MessengerPage,
+  Service,
+} from "@/lib/types";
 
 type SelectedService = {
   quantity: number;
   /** The customer's filled-out form, pasted from Messenger exactly as sent. */
   pasted_details: string;
+  /** PSA form boxes. Filled by auto-fill or by hand; always staff-reviewed. */
+  form_details: Record<string, string>;
+  /** Keys auto-fill just filled — highlighted until edited. */
+  autoFilled: string[];
+  /** Whether the field grid is open for this document. */
+  fieldsOpen: boolean;
 };
 
 const emptyNewCustomer = {
@@ -62,11 +76,14 @@ export function NewOrderForm({
   services,
   messengerPages,
   defaultPageId,
+  parsingEnabled,
 }: {
   services: Service[];
   messengerPages: MessengerPage[];
   /** This staff member's own page, so the VA's orders default to hers. */
   defaultPageId: string | null;
+  /** Admin switch (Settings → Auto-fill). Off hides the button entirely. */
+  parsingEnabled: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -90,6 +107,10 @@ export function NewOrderForm({
 
   // --- Which Facebook page the tracking link points at ---
   const [pageId, setPageId] = useState<string | null>(defaultPageId);
+
+  // --- Auto-fill ---
+  const [parsing, setParsing] = useState<string | null>(null);
+  const [parseNote, setParseNote] = useState<Record<string, string>>({});
 
   // --- Duplicate check ---
   // Held until the staff member has seen it; `acknowledged` is what lets the
@@ -155,7 +176,14 @@ export function NewOrderForm({
     setSelected((prev) => {
       const next = { ...prev };
       if (next[svc.id]) delete next[svc.id];
-      else next[svc.id] = { quantity: 1, pasted_details: "" };
+      else
+        next[svc.id] = {
+          quantity: 1,
+          pasted_details: "",
+          form_details: {},
+          autoFilled: [],
+          fieldsOpen: false,
+        };
       return next;
     });
   }
@@ -165,6 +193,63 @@ export function NewOrderForm({
       ...prev,
       [svcId]: { ...prev[svcId], pasted_details: value },
     }));
+  }
+
+  function setField(svcId: string, key: string, value: string) {
+    setSelected((prev) => ({
+      ...prev,
+      [svcId]: {
+        ...prev[svcId],
+        form_details: { ...prev[svcId].form_details, [key]: value },
+        // Staff has reviewed this box — drop the auto-filled highlight.
+        autoFilled: prev[svcId].autoFilled.filter((k) => k !== key),
+      },
+    }));
+  }
+
+  async function autoFill(svcId: string) {
+    setError(null);
+    setParseNote((n) => ({ ...n, [svcId]: "" }));
+    setParsing(svcId);
+    try {
+      const r = unwrap(
+        await parsePastedText(selected[svcId].pasted_details ?? "", svcId)
+      );
+      setSelected((prev) => {
+        const cur = prev[svcId];
+        const details = { ...cur.form_details };
+        const filled: string[] = [];
+        for (const [k, v] of Object.entries(r.values)) {
+          // Never overwrite something a person already typed.
+          if (details[k]?.trim()) continue;
+          details[k] = v;
+          filled.push(k);
+        }
+        return {
+          ...prev,
+          [svcId]: {
+            ...cur,
+            form_details: details,
+            autoFilled: filled,
+            fieldsOpen: true,
+          },
+        };
+      });
+      const n = Object.keys(r.values).length;
+      setParseNote((prev) => ({
+        ...prev,
+        [svcId]:
+          n === 0
+            ? "Nothing could be read from that reply — fill the boxes by hand."
+            : `Filled ${n} box${n === 1 ? "" : "es"}${
+                r.tier === 2 ? " (AI helped)" : ""
+              }. Check them before you create the order.`,
+      }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not read that reply.");
+    } finally {
+      setParsing(null);
+    }
   }
 
   function setQty(svcId: string, qty: number) {
@@ -244,6 +329,7 @@ export function NewOrderForm({
               quantity: selected[s.id].quantity,
               price_at_order: Number(s.price),
               pasted_details: selected[s.id].pasted_details,
+              form_details: selected[s.id].form_details,
             })),
           })
         );
@@ -564,6 +650,131 @@ export function NewOrderForm({
                   }
                 />
               </Field>
+
+              {/* Auto-fill reads the paste into the PSA form boxes. It only
+                  proposes — the boxes below are what gets saved, so staff can
+                  correct anything before the order exists. */}
+              {parsingEnabled && (s.form_fields ?? []).length > 0 && (
+                <div className="mt-3 space-y-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={
+                      parsing === s.id ||
+                      !selected[s.id].pasted_details.trim()
+                    }
+                    onClick={() => autoFill(s.id)}
+                  >
+                    <Wand2 className="h-3.5 w-3.5" />
+                    {parsing === s.id
+                      ? "Reading…"
+                      : "Auto-fill the PSA form from this paste"}
+                  </Button>
+                  {!selected[s.id].pasted_details.trim() && (
+                    <p className="text-xs text-muted-foreground">
+                      Paste the customer&apos;s reply above first.
+                    </p>
+                  )}
+                  {parseNote[s.id] && (
+                    <p className="flex items-start gap-1.5 rounded-md bg-amber-50 p-2 text-xs text-amber-900">
+                      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      {parseNote[s.id]}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* The PSA form boxes. Collapsed by default so intake stays a
+                  paste-and-go; auto-fill opens them for review. */}
+              {(s.form_fields ?? []).length > 0 && (
+                <div className="mt-3 rounded-md border">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelected((prev) => ({
+                        ...prev,
+                        [s.id]: {
+                          ...prev[s.id],
+                          fieldsOpen: !prev[s.id].fieldsOpen,
+                        },
+                      }))
+                    }
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs hover:bg-accent/40"
+                  >
+                    <span className="flex items-center gap-1.5 font-medium">
+                      <ChevronDown
+                        className={`h-3.5 w-3.5 transition-transform ${
+                          selected[s.id].fieldsOpen ? "" : "-rotate-90"
+                        }`}
+                      />
+                      PSA form fields
+                    </span>
+                    <span className="text-muted-foreground">
+                      {countFilled(selected[s.id].form_details)} of{" "}
+                      {(s.form_fields ?? []).length} filled
+                      {countFilled(selected[s.id].form_details) === 0 &&
+                        " — optional now, needed to print"}
+                    </span>
+                  </button>
+
+                  {selected[s.id].fieldsOpen && (
+                    <div className="grid gap-3 border-t p-3 sm:grid-cols-2">
+                      {(s.form_fields ?? []).map((f: FormFieldDef) => {
+                        const auto = selected[s.id].autoFilled.includes(f.key);
+                        return (
+                          <div
+                            key={f.key}
+                            className={`space-y-1 ${
+                              f.type === "textarea" ? "sm:col-span-2" : ""
+                            }`}
+                          >
+                            <div className="flex items-baseline justify-between gap-2">
+                              <Label className="text-xs">
+                                {f.required ? `${f.label} *` : f.label}
+                              </Label>
+                              {auto && (
+                                <span className="text-[11px] text-amber-700">
+                                  auto-filled — check
+                                </span>
+                              )}
+                            </div>
+                            {f.type === "textarea" ? (
+                              <Textarea
+                                rows={2}
+                                className={
+                                  auto ? "border-amber-400 bg-amber-50" : ""
+                                }
+                                value={selected[s.id].form_details[f.key] ?? ""}
+                                onChange={(e) =>
+                                  setField(s.id, f.key, e.target.value)
+                                }
+                              />
+                            ) : (
+                              <Input
+                                className={`h-9 ${
+                                  auto ? "border-amber-400 bg-amber-50" : ""
+                                }`}
+                                type={
+                                  f.type === "number"
+                                    ? "number"
+                                    : f.type === "date"
+                                      ? "date"
+                                      : "text"
+                                }
+                                value={selected[s.id].form_details[f.key] ?? ""}
+                                onChange={(e) =>
+                                  setField(s.id, f.key, e.target.value)
+                                }
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))}
 
@@ -663,6 +874,10 @@ export function NewOrderForm({
       </Card>
     </div>
   );
+}
+
+function countFilled(details: Record<string, string>): number {
+  return Object.values(details).filter((v) => v?.trim()).length;
 }
 
 function Field({
