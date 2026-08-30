@@ -235,6 +235,18 @@ export function NewOrderForm({
           },
         };
       });
+      // The applicant's name is in the reply too — save staff typing it twice.
+      // Only when the field is still empty, never over what they typed.
+      const owner = [r.values.first_name, r.values.middle_name, r.values.last_name]
+        .filter((x) => x && x.trim())
+        .join(" ")
+        .trim();
+      let nameFilled = false;
+      if (owner && mode === "new" && !newCustomer.full_name.trim()) {
+        setNewCustomer((c) => ({ ...c, full_name: owner }));
+        nameFilled = true;
+      }
+
       const n = Object.keys(r.values).length;
       setParseNote((prev) => ({
         ...prev,
@@ -242,6 +254,8 @@ export function NewOrderForm({
           n === 0
             ? "Nothing could be read from that reply — fill the boxes by hand."
             : `Filled ${n} box${n === 1 ? "" : "es"}${
+                nameFilled ? " and the customer's name" : ""
+              }${
                 r.tier === 2 ? " (AI helped)" : ""
               }. Check them before you create the order.`,
       }));

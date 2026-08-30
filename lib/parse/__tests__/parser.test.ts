@@ -129,5 +129,63 @@ console.log("\n[9] Name groups expand into the form's boxes");
   check("explicit first kept", v2.first_name, "Juan Miguel");
 }
 
+console.log("\n[10] Repeated labels under person headings (the real template)");
+{
+  const psa = [
+    { key: "last_name", label: "Last Name", type: "text", required: true, synonyms: ["apelyido","surname"] },
+    { key: "first_name", label: "First Name", type: "text", required: true, synonyms: ["first name"] },
+    { key: "middle_name", label: "Middle Name", type: "text", required: false, synonyms: ["middle name"] },
+    { key: "sex", label: "Sex", type: "text", required: false, synonyms: ["sex"] },
+    { key: "date_of_event", label: "Date of Birth", type: "date", required: true, synonyms: ["date of birth"] },
+    { key: "birth_city", label: "Place of Birth — City", type: "text", required: true, synonyms: ["place of birth","city"] },
+    { key: "birth_province", label: "Place of Birth — Province", type: "text", required: false, synonyms: ["province"] },
+    { key: "father_last", label: "Father — Last Name", type: "text", required: false, synonyms: ["father last name"] },
+    { key: "father_first", label: "Father — First Name", type: "text", required: false, synonyms: ["pangalan ng ama","father"] },
+    { key: "father_middle", label: "Father — Middle Name", type: "text", required: false, synonyms: ["father middle name"] },
+    { key: "mother_last", label: "Mother — Maiden Last Name", type: "text", required: false, synonyms: ["mother last name"] },
+    { key: "mother_first", label: "Mother — First Name", type: "text", required: false, synonyms: ["pangalan ng ina","mother"] },
+    { key: "mother_middle", label: "Mother — Middle Name", type: "text", required: false, synonyms: ["mother middle name"] },
+  ] as any;
+
+  const r = parseTier1(`APILYEDO: Nasari
+FIRST NAME: Evin khan
+MIDDLE NAME: Tan
+
+SEX: Male
+DATE OF BIRTH: 11/25/2000
+
+PLACE OF BIRTH
+Mampang Zamboanga City
+Province: Zamboanga del sur
+
+NAME OF FATHER
+APILYEDO: Tan
+FIRST NAME: Pedro
+MIDDLE NAME: Cruz
+
+NAME OF MOTHER
+APILYEDO: Lim
+FIRST NAME: Candice
+MIDDLE NAME: Reyes`, psa);
+
+  check("applicant surname not stolen by a parent", r.values.last_name, "Nasari");
+  check("applicant first name", r.values.first_name, "Evin khan");
+  check("applicant middle name", r.values.middle_name, "Tan");
+  check("father last", r.values.father_last, "Tan");
+  check("father first", r.values.father_first, "Pedro");
+  check("father middle", r.values.father_middle, "Cruz");
+  check("mother last", r.values.mother_last, "Lim");
+  check("mother first", r.values.mother_first, "Candice");
+  check("mother middle", r.values.mother_middle, "Reyes");
+  check("bare label, value on next line", r.values.birth_city, "Mampang Zamboanga City");
+  check("typo APILYEDO still matched", r.values.last_name, "Nasari");
+  check("nothing required missing", r.missingRequired, []);
+
+  // A bare name line straight after a person heading.
+  const r2 = parseTier1(`NAME OF FATHER
+Pedro Reyes Dela Cruz`, psa);
+  check("bare name under a heading", r2.values.father_first, "Pedro Reyes Dela Cruz");
+}
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

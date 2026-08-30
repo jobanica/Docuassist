@@ -1,5 +1,10 @@
 import type { FormFieldDef } from "@/lib/types";
-import { labelScore, MATCH_THRESHOLD, splitLabelValue } from "./labels";
+import {
+  labelScore,
+  MATCH_THRESHOLD,
+  normalizeLabel,
+  splitLabelValue,
+} from "./labels";
 
 export interface ParseOutcome {
   /** field key -> extracted value (only fields we actually filled) */
@@ -64,20 +69,97 @@ function coerce(field: FormFieldDef, raw: string): string {
 }
 
 /**
- * Tier 1 — deterministic, free, instant (§9). Splits the pasted reply into
- * "Label: value" lines and maps each label to a form field via fuzzy matching
- * against the field's label and its configured Taglish synonyms.
+ * Section headings customers put above a block of repeated labels.
  *
- * Multi-line values are supported: a line with no separator is appended to the
- * previous field's value (customers often wrap addresses across lines).
+ * Their form template reads:
+ *     APILYEDO: Nasari          <- the applicant
+ *     FIRST NAME: Evin Khan
+ *     NAME OF FATHER
+ *     APILYEDO: Tan             <- the father, same labels again
+ *     FIRST NAME: Pedro
+ *
+ * Without tracking which block a line belongs to, every "FIRST NAME" maps to
+ * the applicant and the last one wins — the parents' details land in the
+ * applicant's boxes and the parents' boxes stay empty.
+ */
+const SECTIONS: { test: RegExp; prefix: string }[] = [
+  { test: /\b(father|ama|tatay|papa|daddy)\b/, prefix: "father_" },
+  { test: /\b(mother|ina|nanay|mama|mommy|maiden)\b/, prefix: "mother_" },
+  // Anything that puts us back on the person the document is for.
+  { test: /\b(owner|applicant|document owner|child|bata|sarili|personal information|requester)\b/, prefix: "" },
+];
+
+/** Owner name keys and their per-parent equivalents. */
+const NAME_PART: Record<string, string> = {
+  last_name: "last",
+  first_name: "first",
+  middle_name: "middle",
+};
+
+function sectionFor(line: string): string | null {
+  const n = normalizeLabel(line);
+  if (!n) return null;
+  for (const s of SECTIONS) if (s.test.test(n)) return s.prefix;
+  return null;
+}
+
+/** Re-point an owner name field at whichever person the current block is about. */
+function scoped(key: string, prefix: string, has: Set<string>): string {
+  if (!prefix) return key;
+  const part = NAME_PART[key];
+  if (!part) return key;
+  const scopedKey = prefix + part;
+  return has.has(scopedKey) ? scopedKey : key;
+}
+
+/**
+ * Tier 1 — deterministic, free, instant (§9).
+ *
+ * Splits the pasted reply into "Label: value" lines and maps each label to a
+ * form field by fuzzy matching against the field's label and its configured
+ * Taglish synonyms. Three shapes customers actually send are handled:
+ *
+ *   - `Label: value` on one line.
+ *   - A bare label line with its value on the next line ("PLACE OF BIRTH"
+ *     then "Mampang Zamboanga City").
+ *   - Repeated labels under a person heading (see SECTIONS above).
+ *
+ * First value wins. In these templates the applicant's block comes first, so
+ * an overwrite is nearly always a later block bleeding into an earlier one.
  */
 export function parseTier1(
   text: string,
   fields: FormFieldDef[]
 ): ParseOutcome {
   const values: Record<string, string> = {};
+  const has = new Set(fields.map((f) => f.key));
   const lines = text.split(/\r?\n/);
+
+  let section = "";
   let lastKey: string | null = null;
+  /** A label seen on its own line, waiting for the value on a later line. */
+  let pendingKey: string | null = null;
+
+  const put = (key: string, field: FormFieldDef, raw: string) => {
+    const coerced = coerce(field, raw);
+    if (coerced && !values[key]) values[key] = coerced;
+  };
+
+  const bestField = (label: string): { field: FormFieldDef; score: number } | null => {
+    let field: FormFieldDef | null = null;
+    let best = 0;
+    for (const f of fields) {
+      const score = Math.max(
+        labelScore(label, f.label),
+        ...(f.synonyms ?? []).map((syn) => labelScore(label, syn))
+      );
+      if (score > best) {
+        best = score;
+        field = f;
+      }
+    }
+    return field && best >= MATCH_THRESHOLD ? { field, score: best } : null;
+  };
 
   for (const line of lines) {
     if (!line.trim()) {
@@ -86,35 +168,66 @@ export function parseTier1(
     }
 
     const split = splitLabelValue(line);
-    if (split) {
-      // Score every field (label + synonyms) and take the best — labels
-      // overlap, so first-match-wins would mis-assign "Pangalan ng ina".
-      let field: FormFieldDef | null = null;
-      let best = 0;
-      for (const f of fields) {
-        const score = Math.max(
-          labelScore(split.label, f.label),
-          ...(f.synonyms ?? []).map((syn) => labelScore(split.label, syn))
-        );
-        if (score > best) {
-          best = score;
-          field = f;
-        }
-      }
-      if (field && best >= MATCH_THRESHOLD) {
-        const coerced = coerce(field, split.value);
-        if (coerced) values[field.key] = coerced;
-        // Track even when empty so a wrapped value can still attach.
-        lastKey = field.type === "text" || field.type === "textarea"
-          ? field.key
-          : null;
+
+    // --- "Label: value" on one line ---
+    if (split && split.value) {
+      const hit = bestField(split.label);
+      if (hit) {
+        const key = scoped(hit.field.key, section, has);
+        put(key, hit.field, split.value);
+        pendingKey = null;
+        lastKey =
+          hit.field.type === "text" || hit.field.type === "textarea" ? key : null;
         continue;
       }
     }
 
-    // Continuation of the previous text field (wrapped address, etc.)
-    if (lastKey && !split && values[lastKey]) {
-      values[lastKey] = `${values[lastKey]} ${line.trim()}`.replace(/\s+/g, " ");
+    // A label with nothing after it ("PLACE OF BIRTH:") reads like a heading.
+    const bare = split && !split.value ? split.label : split ? null : line;
+    if (bare !== null) {
+      // A person heading switches which block we are in. Checked before the
+      // label match, because "NAME OF FATHER" is both.
+      const sec = sectionFor(bare);
+      if (sec !== null) {
+        section = sec;
+        // "NAME OF FATHER" followed by a bare "Pedro Reyes Cruz" — take that
+        // line as the whole name, which expandNameGroups then splits.
+        const firstKey = section ? `${section}first` : "first_name";
+        pendingKey = has.has(firstKey) ? firstKey : null;
+        lastKey = null;
+        continue;
+      }
+
+      const hit = bestField(bare);
+
+      // A plain line under a label still waiting for its value. A value can
+      // look like a label by accident — "Mampang Zamboanga City" contains
+      // "city" — so only an exact label match outranks the waiting field.
+      if (pendingKey && !values[pendingKey] && !(hit && hit.score >= 100)) {
+        const key = pendingKey;
+        // Parent name fields share the owner field's type, so fall back to it.
+        const target =
+          fields.find((x) => x.key === key) ??
+          fields.find((x) => x.key === key.replace(/^(father|mother)_/, ""));
+        if (target) {
+          put(key, target, line.trim());
+          lastKey =
+            target.type === "text" || target.type === "textarea" ? key : null;
+          pendingKey = null;
+          continue;
+        }
+      }
+
+      if (hit) {
+        pendingKey = scoped(hit.field.key, section, has);
+        lastKey = null;
+        continue;
+      }
+
+      // Otherwise it is a wrapped continuation of the previous text field.
+      if (lastKey && values[lastKey]) {
+        values[lastKey] = `${values[lastKey]} ${line.trim()}`.replace(/\s+/g, " ");
+      }
     }
   }
 

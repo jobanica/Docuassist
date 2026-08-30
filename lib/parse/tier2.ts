@@ -56,6 +56,12 @@ function systemPrompt(fields: FormFieldDef[]): string {
     "",
     "Rules:",
     '- Return "" for any field the message does not clearly state. Never guess or invent a value.',
+    "- The message often repeats the same labels under a heading for each person" +
+      " (the applicant, then NAME OF FATHER, then NAME OF MOTHER). Keep them apart:" +
+      " a name under a father heading belongs only to the father's fields, never" +
+      " the applicant's. Labels before any heading belong to the applicant.",
+    "- Names may arrive whole on one line. Split them as First / Middle / Last," +
+      " keeping surname particles together (Dela Cruz, De los Santos).",
     "- Copy names, places, and numbers exactly as written; do not translate or reformat them.",
     "- For date fields, return YYYY-MM-DD. If the year is missing or ambiguous, return \"\".",
     "- For number fields, return digits only.",
