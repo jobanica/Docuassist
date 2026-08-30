@@ -22,6 +22,8 @@ import { parsePastedText } from "@/lib/actions/parse";
 import { PlaceWarnings } from "./PlaceWarnings";
 import { checkPlaces } from "@/lib/actions/places";
 import type { PlaceIssue } from "@/lib/parse/places";
+import { SurnameWarnings } from "./SurnameWarnings";
+import { surnameIssues } from "@/lib/parse/surname";
 import type { FormFieldDef } from "@/lib/types";
 
 /**
@@ -37,6 +39,7 @@ export function ItemDetails({
   itemId,
   orderId,
   serviceId,
+  serviceCode,
   fields,
   formDetails,
   pastedDetails,
@@ -45,6 +48,8 @@ export function ItemDetails({
   itemId: string;
   orderId: string;
   serviceId: string;
+  /** Only birth and CENOMAR carry the parent-surname rule. */
+  serviceCode: string;
   fields: FormFieldDef[];
   formDetails: Record<string, string>;
   pastedDetails: string | null;
@@ -316,6 +321,9 @@ export function ItemDetails({
                   </div>
                 ))}
               </div>
+              {/* Checked live off the edited values, so a fix clears it as
+                  soon as the field is corrected. */}
+              <SurnameWarnings issues={surnameIssues(serviceCode, values)} />
               <PlaceWarnings
                 issues={places}
                 overridden={placesOk}

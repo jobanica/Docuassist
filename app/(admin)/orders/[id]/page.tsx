@@ -284,6 +284,7 @@ export default async function OrderDetailPage({
                       itemId={it.id}
                       orderId={o.id}
                       serviceId={it.service_id}
+                      serviceCode={it.services?.code ?? ""}
                       parsingEnabled={parsingEnabled}
                       fields={fields}
                       formDetails={(it.form_details ?? {}) as Record<string, string>}

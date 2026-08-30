@@ -3,6 +3,7 @@
  *   npm run test:parser
  */
 import { checkCity, checkProvince, placeIssues } from "@/lib/parse/places";
+import { surnameIssues } from "@/lib/parse/surname";
 import { DELIVERY_FIELDS, DELIVERY_ONLY_IN_BLOCK, NEVER_IN_DELIVERY_BLOCK } from "@/lib/parse/delivery";
 import {
   parseTier1,
@@ -336,6 +337,45 @@ for (const [input, want] of [
   const v: Record<string, string> = input ? { sex: input } : {};
   normalizeSex(v);
   check(`"${input}" -> ${want ?? "dropped"}`, v.sex, want);
+}
+
+
+console.log("\n[16] The Philippine naming rule");
+{
+  const both = {
+    last_name: "Garilao", middle_name: "Gatona",
+    father_last: "Garilao", father_first: "Mario",
+    mother_last: "Gatona", mother_first: "Judy",
+  };
+  check("correct names raise nothing", surnameIssues("psa_birth", both).length, 0);
+  check("case and spacing are not a mismatch",
+    surnameIssues("psa_birth", { ...both, last_name: " garilao ", middle_name: "GATONA" }).length, 0);
+
+  const wrongLast = surnameIssues("psa_birth", { ...both, last_name: "Santos" });
+  check("wrong last name caught", wrongLast[0].field, "last_name");
+  check("names the father's surname", wrongLast[0].expected, "Garilao");
+
+  const wrongMiddle = surnameIssues("psa_birth", { ...both, middle_name: "Garilao" });
+  check("married surname in the middle caught", wrongMiddle[0].field, "middle_name");
+
+  check("a blank middle name is a gap once a father is on record",
+    surnameIssues("psa_birth", { ...both, middle_name: "" })[0].field, "middle_name");
+
+  // The exemption: no father on record, so the mother's surname is the child's.
+  const single = {
+    last_name: "Gatona", middle_name: "",
+    father_last: "", father_first: "", mother_last: "Gatona", mother_first: "Judy",
+  };
+  check("single mother, mother's surname, no middle name — nothing raised",
+    surnameIssues("psa_birth", single).length, 0);
+  check("a father's surname with no father recorded is still questioned",
+    surnameIssues("psa_birth", { ...single, last_name: "Garilao" })[0].field, "last_name");
+
+  check("the rule applies to CENOMAR too",
+    surnameIssues("cenomar", { ...both, last_name: "Santos" }).length, 1);
+  check("but not to a marriage certificate",
+    surnameIssues("psa_marriage", { ...both, last_name: "Santos" }).length, 0);
+  check("an empty form is not a wrong one", surnameIssues("psa_birth", {}).length, 0);
 }
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

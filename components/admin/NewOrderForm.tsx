@@ -33,6 +33,8 @@ import { DuplicateWarning } from "./DuplicateWarning";
 import { PlaceWarnings } from "./PlaceWarnings";
 import { checkPlaces } from "@/lib/actions/places";
 import type { PlaceIssue } from "@/lib/parse/places";
+import { SurnameWarnings } from "./SurnameWarnings";
+import { surnameIssues } from "@/lib/parse/surname";
 import { createOrder } from "@/lib/actions/orders";
 import { parsePastedText } from "@/lib/actions/parse";
 import type {
@@ -936,6 +938,17 @@ export function NewOrderForm({
               )}
             </div>
           )}
+
+          {/* One warning per chosen document that carries the rule. */}
+          {chosen.map((svc) => (
+            <SurnameWarnings
+              key={svc.id}
+              issues={surnameIssues(
+                svc.code,
+                selected[svc.id]?.form_details ?? {}
+              )}
+            />
+          ))}
 
           <PlaceWarnings
             issues={places}

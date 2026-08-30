@@ -9,15 +9,15 @@ import {
   User,
 } from "lucide-react";
 import { getStaff } from "@/lib/auth";
+import { SideNav } from "@/components/admin/SideNav";
+import { MAIN_NAV } from "@/lib/nav";
 
-// adminOnly entries are hidden from staff. Hiding is cosmetic — the real
-// enforcement is the role check in each page plus the DB-level guards.
-const nav = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, adminOnly: true },
-  { href: "/orders", label: "Orders", icon: Package, adminOnly: false },
-  { href: "/customers", label: "Customers", icon: Users, adminOnly: false },
-  { href: "/settings/services", label: "Settings", icon: Settings, adminOnly: false },
-];
+const MOBILE_ICONS = {
+  LayoutDashboard,
+  Package,
+  Users,
+  Settings,
+} as const;
 
 export default async function AdminLayout({
   children,
@@ -28,7 +28,7 @@ export default async function AdminLayout({
   const staff = await getStaff();
   if (!staff) redirect("/login");
 
-  const items = nav.filter((i) => !i.adminOnly || staff.role === "admin");
+  const items = MAIN_NAV.filter((i) => !i.adminOnly || staff.role === "admin");
 
   return (
     <div className="flex min-h-screen bg-[#eef1f6]">
@@ -50,18 +50,7 @@ export default async function AdminLayout({
           </span>
         </div>
 
-        <nav className="mt-2 flex-1 space-y-1 px-4">
-          {items.map(({ href, label, icon: Icon }) => (
-            <Link
-              key={href}
-              href={href}
-              className="flex items-center gap-4 rounded-lg px-4 py-3 text-sm text-white/75 transition-colors hover:bg-white/10 hover:text-white"
-            >
-              <Icon className="h-[18px] w-[18px]" />
-              {label}
-            </Link>
-          ))}
-        </nav>
+        <SideNav role={staff.role} />
 
         <div className="px-4 pb-6">
           <form action="/auth/sign-out" method="post">
@@ -90,15 +79,19 @@ export default async function AdminLayout({
 
         {/* Mobile nav strip */}
         <nav className="sticky top-[52px] z-20 flex gap-1 overflow-x-auto bg-[#17304f] px-2 py-2 md:hidden">
-          {items.map(({ href, label, icon: Icon }) => (
-            <Link
-              key={href}
-              href={href}
-              className="flex shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-xs text-white/75 hover:bg-white/10"
-            >
-              <Icon className="h-3.5 w-3.5" /> {label}
-            </Link>
-          ))}
+          {items.map(({ href, label, icon }) => {
+            const Icon =
+              MOBILE_ICONS[icon as keyof typeof MOBILE_ICONS] ?? Settings;
+            return (
+              <Link
+                key={label}
+                href={href}
+                className="flex shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-xs text-white/75 hover:bg-white/10"
+              >
+                <Icon className="h-3.5 w-3.5" /> {label}
+              </Link>
+            );
+          })}
         </nav>
 
         <main className="min-w-0 flex-1 p-4 md:p-8">{children}</main>
