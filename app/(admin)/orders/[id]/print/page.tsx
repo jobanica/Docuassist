@@ -138,7 +138,10 @@ export default async function PrintFormsPage({
             <div className="overflow-x-auto print:overflow-visible">
               <div
                 id={domId}
-                className={i === 0 ? "psa-sheet psa-first" : "psa-sheet"}
+                // w-fit so the box hugs the 760px form. As a plain block it
+                // stretched to the container, and "Copy image" captured that
+                // width — sending the customer a form with blank space beside it.
+                className={`psa-sheet w-fit${i === 0 ? " psa-first" : ""}`}
               >
                 <PsaForm
                   serviceCode={code}

@@ -3,7 +3,7 @@
 import { run, type ActionResult } from "@/lib/action-result";
 import { createClient } from "@/lib/supabase/server";
 import { requireStaff } from "@/lib/auth";
-import { expandNameGroups, parseTier1 } from "@/lib/parse/tier1";
+import { expandNameGroups, normalizeSex, parseTier1 } from "@/lib/parse/tier1";
 import { placeIssues, type PlaceIssue } from "@/lib/parse/places";
 import {
   DELIVERY_FIELDS,
@@ -126,6 +126,7 @@ export async function parsePastedText(
     // "Full Name: Juan Dela Cruz" arrives as one line but the PSA form has
     // three boxes. Spread it before deciding what's still missing.
     filledKeys = filledKeys.concat(expandNameGroups(values, fields));
+    normalizeSex(values);
 
     // Split the delivery details back out — they belong to the customer, not
     // the document, and are saved to a different table.

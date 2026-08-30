@@ -173,7 +173,7 @@ export default async function BatchPrintPage({
             )}
 
             <div className="overflow-x-auto print:overflow-visible">
-              <div className={i === 0 ? "psa-sheet psa-first" : "psa-sheet"}>
+              <div className={`psa-sheet w-fit${i === 0 ? " psa-first" : ""}`}>
                 <PsaForm
                   serviceCode={code}
                   serviceName={s.item.services?.name ?? "Document"}

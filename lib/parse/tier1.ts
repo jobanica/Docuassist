@@ -365,3 +365,17 @@ export function expandNameGroups(
   }
   return added;
 }
+
+/**
+ * "Sex" has two answers. On an unlabelled paste the AI has to guess which line
+ * is which, and it once put the birthdate here — which prints on the PSA form
+ * as a stray note beside the Male/Female boxes. Anything that isn't one of the
+ * two answers is dropped, so the box is honestly empty instead of wrong.
+ */
+export function normalizeSex(values: Record<string, string>): void {
+  const raw = values.sex?.trim().toLowerCase();
+  if (!raw) return;
+  if (/^(m|male|lalaki|lalake|boy|man)$/.test(raw)) values.sex = "Male";
+  else if (/^(f|fem|female|babae|girl|woman)$/.test(raw)) values.sex = "Female";
+  else delete values.sex;
+}

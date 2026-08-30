@@ -9,6 +9,7 @@ import {
   normalizeDate,
   splitFullName,
   expandNameGroups,
+  normalizeSex,
 } from "@/lib/parse/tier1";
 import { stripCodeFences } from "@/lib/parse/tier2";
 import type { FormFieldDef } from "@/lib/types";
@@ -306,6 +307,17 @@ NEED LANDMARK;`, f, opts);
     { group: "delivery", cityLabel: "Delivery city", provinceLabel: "Delivery province",
       city: "Tulunan", province: "Davao del Sur" },
   ])[0].message, "Tulunan is in Cotabato, not Davao del Sur.");
+}
+
+console.log("\n[15] Sex is one of two answers, or nothing");
+for (const [input, want] of [
+  ["Female", "Female"], ["female", "Female"], ["F", "Female"], ["babae", "Female"],
+  ["Male", "Male"], ["lalaki", "Male"], ["M", "Male"],
+  ["September 8 2014", undefined], ["", undefined], ["yes", undefined],
+] as const) {
+  const v: Record<string, string> = input ? { sex: input } : {};
+  normalizeSex(v);
+  check(`"${input}" -> ${want ?? "dropped"}`, v.sex, want);
 }
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
