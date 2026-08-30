@@ -171,6 +171,61 @@ export async function resetStaffPassword(
   });
 }
 
+/**
+ * Delete a staff account outright.
+ *
+ * Deactivating is the right move for someone who has left — their name stays
+ * on the orders they worked. Deleting is for the account created by mistake,
+ * or one that should never have existed. The auth user goes with it, so the
+ * login stops working immediately; the staff row and their document scope
+ * cascade from it, and history entries keep their record and simply stop
+ * naming anyone (migration 0025).
+ *
+ * The same two lockout guards as everywhere else: not yourself, and not the
+ * last admin.
+ */
+export async function deleteStaffAccount(
+  id: string
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    const me = await requireAdmin();
+    if (id === me.id) {
+      throw new Error(
+        "You can't delete your own account. Ask another admin to do it."
+      );
+    }
+    if ((await otherActiveAdmins(id)) === 0) {
+      const db = createAdminClient();
+      const { data } = await db
+        .from("staff_users")
+        .select("role, active")
+        .eq("id", id)
+        .maybeSingle();
+      if (data?.role === "admin" && data.active) {
+        throw new Error("This is the last admin — promote someone else first.");
+      }
+    }
+
+    const db = createAdminClient();
+    // Deleting the auth user cascades to staff_users and staff_services.
+    const { error } = await db.auth.admin.deleteUser(id);
+    if (error) {
+      // A row with no auth user behind it can still be cleared up.
+      if (/not found/i.test(error.message)) {
+        const { error: rowErr } = await db
+          .from("staff_users")
+          .delete()
+          .eq("id", id);
+        if (rowErr) throw new Error(rowErr.message);
+      } else {
+        throw new Error(error.message);
+      }
+    }
+
+    revalidatePath("/settings/staff");
+  });
+}
+
 export async function setStaffMessengerPage(
   id: string,
   pageId: string | null

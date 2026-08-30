@@ -13,6 +13,7 @@ import {
   MessageCircle,
   Lock,
   Save,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toMessage, type ActionResult, unwrap } from "@/lib/action-result";
@@ -22,6 +23,7 @@ import {
   createStaffAccount,
   resetStaffPassword,
   setStaffActive,
+  deleteStaffAccount,
   setStaffMessengerPage,
   setStaffServices,
   setStaffRole,
@@ -64,6 +66,7 @@ export function StaffSettings({
     password: string;
   } | null>(null);
   const [resetFor, setResetFor] = useState<StaffRow | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -197,18 +200,21 @@ export function StaffSettings({
       </form>
 
       {/* List */}
-      <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_3px_rgba(16,24,40,0.06)]">
+      {/* overflow-x-auto, not overflow-hidden: this table is wider than the
+          card on a laptop, and hidden meant the Actions column was simply
+          unreachable — no scrollbar, no way to drag to it. */}
+      <div className="overflow-x-auto rounded-2xl bg-white shadow-[0_1px_3px_rgba(16,24,40,0.06)]">
         <table className="w-full text-sm">
           <thead className="border-b bg-slate-50 text-left text-xs uppercase text-slate-500">
             <tr>
-              <th className="px-4 py-3 font-medium">Name</th>
-              <th className="px-4 py-3 font-medium">Role</th>
-              <th className="px-4 py-3 font-medium">Documents</th>
+              <th className="px-3 py-3 font-medium">Name</th>
+              <th className="px-3 py-3 font-medium">Role</th>
+              <th className="px-3 py-3 font-medium">Documents</th>
               {messengerPages.length > 1 && (
-                <th className="px-4 py-3 font-medium">Facebook page</th>
+                <th className="px-3 py-3 font-medium">Facebook page</th>
               )}
-              <th className="px-4 py-3 font-medium">Added</th>
-              <th className="px-4 py-3 font-medium text-right">Actions</th>
+              <th className="px-3 py-3 font-medium">Added</th>
+              <th className="px-3 py-3 font-medium text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -216,7 +222,7 @@ export function StaffSettings({
               const isMe = s.id === meId;
               return (
                 <tr key={s.id} className="border-b last:border-0">
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-slate-900">
                         {s.name}
@@ -234,7 +240,7 @@ export function StaffSettings({
                     </div>
                     <div className="text-xs text-slate-500">{s.email ?? "—"}</div>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3">
                     <select
                       className="h-9 rounded-md border border-input bg-background px-2 text-sm disabled:opacity-60"
                       value={s.role}
@@ -255,7 +261,7 @@ export function StaffSettings({
                       <option value="admin">Admin</option>
                     </select>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3">
                     <ScopeCell
                       staff={s}
                       services={services}
@@ -265,7 +271,7 @@ export function StaffSettings({
                     />
                   </td>
                   {messengerPages.length > 1 && (
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3">
                       <select
                         className="h-9 max-w-[190px] rounded-md border border-input bg-background px-2 text-sm disabled:opacity-60"
                         value={s.default_messenger_page_id ?? ""}
@@ -285,10 +291,10 @@ export function StaffSettings({
                       </select>
                     </td>
                   )}
-                  <td className="px-4 py-3 text-slate-500">
+                  <td className="px-3 py-3 text-slate-500">
                     {fmtDate(s.created_at)}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3">
                     <div className="flex flex-wrap justify-end gap-2">
                       <Button
                         size="sm"
@@ -296,7 +302,7 @@ export function StaffSettings({
                         disabled={pending}
                         onClick={() => setResetFor(s)}
                       >
-                        <KeyRound className="h-3.5 w-3.5" /> Reset password
+                        <KeyRound className="h-3.5 w-3.5" /> Reset
                       </Button>
                       {!isMe && (
                         <Button
@@ -308,6 +314,41 @@ export function StaffSettings({
                           {s.active ? "Deactivate" : "Reactivate"}
                         </Button>
                       )}
+                      {!isMe &&
+                        (confirmDelete === s.id ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={pending}
+                              onClick={() => setConfirmDelete(null)}
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="bg-red-600 text-white hover:bg-red-700"
+                              disabled={pending}
+                              onClick={() =>
+                                run(() => deleteStaffAccount(s.id), () =>
+                                  setConfirmDelete(null)
+                                )
+                              }
+                            >
+                              Delete {s.name}?
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-slate-500 hover:bg-red-50 hover:text-red-700"
+                            disabled={pending}
+                            onClick={() => setConfirmDelete(s.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" /> Delete
+                          </Button>
+                        ))}
                     </div>
                   </td>
                 </tr>

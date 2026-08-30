@@ -35,8 +35,10 @@ export default async function SettingsLayout({
     (t) => !t.adminOnly || staff?.role === "admin"
   );
 
+  // max-w-5xl, not 4xl: the staff table has six columns and a row of actions
+  // on the end, and at 4xl the actions were pushed off the card entirely.
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       <h1 className="text-2xl font-semibold text-slate-900">Settings</h1>
       {/* On desktop these live in the sidebar under Settings; the strip is
           only for mobile, where there is no sidebar to hang them off. */}
