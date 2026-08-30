@@ -42,6 +42,8 @@ export interface OrderRow {
   customer_phone: string | null;
   /** Batch tags on this order's customer. */
   tag_ids: string[];
+  /** Staff who encoded it. Null for a customer's own online submission. */
+  created_by_name: string | null;
   service_codes: string[];
   service_names: string[];
   /** Reason logged on the most recent failed delivery attempt, if any. */
@@ -594,6 +596,17 @@ export function OrdersTable({
                     {onCallList
                       ? fmtDateTime(o.last_attempt_at ?? o.status_since)
                       : fmtDate(o.created_at)}
+                    {/* Who took it — the first thing asked when a customer
+                        follows up or an order looks wrong. */}
+                    {!onCallList && (
+                      <div className="text-xs text-muted-foreground/80">
+                        {o.created_by_name
+                          ? `by ${o.created_by_name}`
+                          : o.source === "public"
+                            ? "online form"
+                            : "—"}
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs">{o.tracking_code}</td>
                 </tr>

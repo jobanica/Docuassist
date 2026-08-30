@@ -23,6 +23,7 @@ export default async function OrdersPage() {
           `id, tracking_code, status, total_amount, created_at, status_since,
            delivery_attempts, source,
            customers ( id, full_name, phone, customer_tags ( tag_id ) ),
+           staff_users ( name ),
            order_items ( services ( code, name ) )`
         )
         .order("created_at", { ascending: false }),
@@ -68,6 +69,7 @@ export default async function OrdersPage() {
       customer_name: o.customers?.full_name ?? "—",
       customer_phone: o.customers?.phone ?? null,
       tag_ids: (o.customers?.customer_tags ?? []).map((t: any) => t.tag_id),
+      created_by_name: o.staff_users?.name ?? null,
       service_codes: svcCodes,
       service_names: svcNames,
       last_attempt_note: lastAttempt.get(o.id)?.note ?? null,

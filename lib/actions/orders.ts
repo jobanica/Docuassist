@@ -74,6 +74,9 @@ export async function createOrder(
       .insert({
         customer_id: parsed.customer_id,
         status: parsed.initial_status,
+        // Who took this one. The board shows it, so a follow-up goes to the
+        // person who actually spoke to the customer.
+        created_by: staff.id,
         // Falls back to whichever page this staff member answers on, so the VA
         // running a separate page doesn't have to remember to switch it.
         messenger_page_id:

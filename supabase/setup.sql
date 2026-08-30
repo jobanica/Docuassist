@@ -1,6 +1,6 @@
 -- =============================================================================
 -- DocuAssist PH — full schema setup for a fresh Supabase project.
--- Migrations 0001–0024 concatenated in order. Run once on a fresh project.
+-- Migrations 0001–0026 concatenated in order. Run once on a fresh project.
 -- =============================================================================
 
 
@@ -1991,3 +1991,59 @@ update services
      where sort_order = 100
   ) ranked
  where services.id = ranked.id;
+
+-- >>> 0025_staff_delete.sql <<<
+-- =============================================================================
+-- 0025_staff_delete.sql — let a staff account be removed without losing history.
+--
+-- order_status_history.changed_by pointed at staff_users with no delete rule,
+-- so Postgres refused to remove anyone who had ever moved an order — which is
+-- everyone who has done any work. Deactivating is right for someone who has
+-- left; deleting is for the account created by mistake, and it needs to be
+-- possible.
+--
+-- SET NULL rather than CASCADE: the history entry is a record of what happened
+-- to the order and must survive the person. It simply stops naming them.
+-- =============================================================================
+
+alter table order_status_history
+  drop constraint if exists order_status_history_changed_by_fkey;
+
+alter table order_status_history
+  add constraint order_status_history_changed_by_fkey
+  foreign key (changed_by) references staff_users(id) on delete set null;
+
+-- >>> 0026_order_created_by.sql <<<
+-- =============================================================================
+-- 0026_order_created_by.sql — who encoded this order.
+--
+-- With several people on the board, "who took this one?" was unanswerable
+-- without opening the order and reading its history. It is the first question
+-- asked when a customer follows up, or when an order looks wrong.
+--
+-- SET NULL, like every other reference to staff: the order outlives the
+-- account, and a deleted staff member must not take orders with them. A null
+-- reads as the customer's own submission through the order link, which is
+-- exactly what `source = 'public'` already means.
+-- =============================================================================
+
+alter table orders
+  add column if not exists created_by uuid
+    references staff_users(id) on delete set null;
+
+-- Backfill from the first thing that happened to each order. Every staff-made
+-- order writes a status_change as it is created, so this recovers the encoder
+-- for the whole history; customer-submitted orders have no staff behind them
+-- and correctly stay null.
+update orders o
+   set created_by = first_event.changed_by
+  from (
+    select distinct on (order_id) order_id, changed_by
+      from order_status_history
+     where changed_by is not null
+     order by order_id, created_at
+  ) first_event
+ where o.id = first_event.order_id
+   and o.created_by is null;
+
+create index if not exists orders_created_by_idx on orders (created_by);
