@@ -429,6 +429,27 @@ export function checkBarangay(
   return { status: "unknown", city: entry.name };
 }
 
+/**
+ * Every province a city name belongs to, for when the province box is the
+ * broken half.
+ *
+ * "tawi" is not a province, but Simunul is — and it is in exactly one, so the
+ * answer is sitting in the next field. Guessing from 82 province names alone
+ * gets nowhere: "tawi" is five letters short of "Tawi-Tawi", well past any
+ * sane edit distance, and loosening that would start matching real provinces
+ * to each other.
+ */
+function provincesForCity(city?: string): string[] {
+  const raw = (city ?? "").trim();
+  if (!raw) return [];
+  const exact = cityByAlias.get(norm(raw));
+  if (exact) {
+    return Array.from(new Set(exact.map((e) => e.province))).sort();
+  }
+  const compound = resolveCompound(raw);
+  return compound ? [compound.province] : [];
+}
+
 /** Turn a city/province pair into the warnings staff should act on. */
 export function placeIssues(
   pairs: {
@@ -445,9 +466,40 @@ export function placeIssues(
   const out: PlaceIssue[] = [];
 
   for (const p of pairs) {
+    // What the city says the province is. Checked first, because when the
+    // province box is wrong the city next to it usually already has the answer.
+    const fromCity = provincesForCity(p.city);
+
     if (p.province?.trim()) {
       const r = checkProvince(p.province);
-      if (r.status === "suggest") {
+      // A partial or misspelt province with a city that names one is not a
+      // guess — narrow to the ones the written text could plausibly be, and
+      // fall back to all of that city's provinces.
+      const written = norm(p.province);
+      const narrowed = fromCity.filter(
+        (v) => norm(v).startsWith(written) || norm(v).includes(written)
+      );
+      const cityCandidates = narrowed.length > 0 ? narrowed : fromCity;
+
+      if (r.status !== "ok" && cityCandidates.length > 0) {
+        out.push({
+          label: p.provinceLabel,
+          input: r.input,
+          kind: "spelling",
+          suggestion: cityCandidates[0],
+          group: p.group,
+          fixes: cityCandidates.map((v) => ({
+            label: v,
+            patch: { province: v },
+          })),
+          message:
+            cityCandidates.length === 1
+              ? `"${r.input}" isn't a province — ${p.city!.trim()} is in ${cityCandidates[0]}.`
+              : `"${r.input}" isn't a province, and ${p.city!.trim()} is in ${joinOr(
+                  cityCandidates
+                )}.`,
+        });
+      } else if (r.status === "suggest") {
         out.push({
           label: p.provinceLabel,
           input: r.input,

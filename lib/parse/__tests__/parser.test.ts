@@ -525,5 +525,36 @@ console.log("\n[20] The barangay has to be in that city");
   ]).length, 0);
 }
 
+console.log("\n[21] A half-written province, when the city already knows it");
+{
+  const one = (city: string, province: string) =>
+    placeIssues([{ group: "birth", cityLabel: "Place of Birth — City",
+      provinceLabel: "Place of Birth — Province", city, province }]);
+
+  // The reported case. "tawi" is five letters short of "Tawi-Tawi" — far past
+  // any edit distance that would not also confuse real provinces with each
+  // other — but Simunul is in exactly one province.
+  const t = one("Simunul", "tawi")[0];
+  check("the city supplies the province", t.message,
+    '"tawi" isn\'t a province — Simunul is in Tawi-Tawi.');
+  check("and offers it as the fix", t.fixes?.[0].patch.province, "Tawi-Tawi");
+
+  check("a truncated province resolves too", one("Matnog", "sorso")[0].fixes?.[0].label, "Sorsogon");
+  check("so does a bare region word", one("Zamboanga", "zamboanga")[0].fixes?.[0].label,
+    "Zamboanga Del Sur");
+  // A shared city name narrows to the province the text could be.
+  check("the written text narrows a shared name", one("Carmen", "dav")[0].fixes?.[0].label,
+    "Davao Del Norte");
+
+  check("a correct pair is still silent", one("Simunul", "tawi-tawi").length, 0);
+  check("no province typed is not an error", one("Simunul", "").length, 0);
+  // A real province that is simply the wrong one keeps the mismatch wording.
+  check("a wrong but real province is a mismatch", one("Simunul", "Sulu")[0].message,
+    "Simunul is in Tawi-Tawi, not Sulu.");
+  // With no usable city there is nothing to borrow from.
+  check("an unknown province with no city help stays unknown",
+    one("", "tawi")[0].message, '"tawi" is not a Philippine province.');
+}
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
