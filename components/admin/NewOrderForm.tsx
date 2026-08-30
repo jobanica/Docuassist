@@ -32,7 +32,7 @@ import {
 import { DuplicateWarning } from "./DuplicateWarning";
 import { PlaceWarnings } from "./PlaceWarnings";
 import { checkPlaces } from "@/lib/actions/places";
-import type { PlaceIssue } from "@/lib/parse/places";
+import { documentPlacePair, type PlaceIssue } from "@/lib/parse/places";
 import { SurnameWarnings } from "./SurnameWarnings";
 import { surnameIssues } from "@/lib/parse/surname";
 import { createOrder } from "@/lib/actions/orders";
@@ -202,19 +202,32 @@ export function NewOrderForm({
     }));
   }
 
-  /** Re-check the places after a manual edit, so a correction clears the flag. */
+  /**
+   * Re-check the places after a manual edit, so a correction clears the flag.
+   *
+   * The document's own pair is read off its schema — birth_*, marriage_* or
+   * death_* — rather than assumed to be the birth keys, which is why a marriage
+   * certificate's city and province used to pass unchecked.
+   */
   function recheckPlaces(
     doc: Record<string, string>,
-    cust: typeof newCustomer
+    cust: typeof newCustomer,
+    svcId?: string
   ) {
+    const svc = svcId ? services.find((s) => s.id === svcId) : chosen[0];
+    const pair = documentPlacePair(svc?.form_fields ?? []);
     checkPlaces([
-      {
-        group: "birth" as const,
-        cityLabel: "Place of birth — city",
-        provinceLabel: "Place of birth — province",
-        city: doc.birth_city,
-        province: doc.birth_province,
-      },
+      ...(pair
+        ? [
+            {
+              group: "birth" as const,
+              cityLabel: pair.cityLabel,
+              provinceLabel: pair.provinceLabel,
+              city: doc[pair.cityKey],
+              province: doc[pair.provinceKey],
+            },
+          ]
+        : []),
       {
         group: "delivery" as const,
         cityLabel: "Delivery city",
@@ -241,9 +254,12 @@ export function NewOrderForm({
         autoFilled: prev[svcId].autoFilled.filter((k) => k !== key),
       },
     }));
-    if (key === "birth_city" || key === "birth_province") {
+    const pair = documentPlacePair(
+      services.find((s) => s.id === svcId)?.form_fields ?? []
+    );
+    if (pair && (key === pair.cityKey || key === pair.provinceKey)) {
       const doc = { ...selected[svcId].form_details, [key]: value };
-      recheckPlaces(doc, newCustomer);
+      recheckPlaces(doc, newCustomer, svcId);
     }
   }
 
@@ -282,16 +298,21 @@ export function NewOrderForm({
       // Computed before calling setState rather than counted inside an updater:
       // React runs updaters at render time, so anything counted in there is
       // still zero on the next line.
+      // Who to bill and deliver to. The receiver named in the reply wins: on a
+      // marriage or death certificate the document is not about the person
+      // ordering it, and those templates have no applicant name to fall back
+      // on at all — which is why nothing was filled there before.
       const owner = [r.values.first_name, r.values.middle_name, r.values.last_name]
         .filter((x) => x && x.trim())
         .join(" ")
         .trim();
+      const customerName = (r.customer.full_name ?? "").trim() || owner;
       let nameFilled = false;
       let deliveryFilled = 0;
       if (mode === "new") {
         const next = { ...newCustomer };
-        if (owner && !next.full_name.trim()) {
-          next.full_name = owner;
+        if (customerName && !next.full_name.trim()) {
+          next.full_name = customerName;
           nameFilled = true;
         }
         for (const [k, val] of Object.entries(r.customer)) {
@@ -965,11 +986,15 @@ export function NewOrderForm({
                   next
                 );
               } else {
-                const key =
-                  i.fix.field === "city" ? "birth_city" : "birth_province";
                 const svc = chosen[0];
                 if (!svc) return;
-                setField(svc.id, key, value);
+                const pair = documentPlacePair(svc.form_fields ?? []);
+                if (!pair) return;
+                setField(
+                  svc.id,
+                  i.fix.field === "city" ? pair.cityKey : pair.provinceKey,
+                  value
+                );
               }
             }}
           />

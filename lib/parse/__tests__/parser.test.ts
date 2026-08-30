@@ -2,9 +2,19 @@
  * Tier-1 parser tests (§9). No test runner dependency — run with:
  *   npm run test:parser
  */
-import { checkCity, checkProvince, placeIssues } from "@/lib/parse/places";
+import {
+  checkCity,
+  checkProvince,
+  placeIssues,
+  documentPlacePair,
+} from "@/lib/parse/places";
 import { surnameIssues } from "@/lib/parse/surname";
-import { DELIVERY_FIELDS, DELIVERY_ONLY_IN_BLOCK, NEVER_IN_DELIVERY_BLOCK } from "@/lib/parse/delivery";
+import {
+  DELIVERY_FIELDS,
+  DELIVERY_ONLY_IN_BLOCK,
+  NEVER_IN_DELIVERY_BLOCK,
+  DELIVERY_TO_CUSTOMER,
+} from "@/lib/parse/delivery";
 import {
   parseTier1,
   normalizeDate,
@@ -376,6 +386,64 @@ console.log("\n[16] The Philippine naming rule");
   check("but not to a marriage certificate",
     surnameIssues("psa_marriage", { ...both, last_name: "Santos" }).length, 0);
   check("an empty form is not a wrong one", surnameIssues("psa_birth", {}).length, 0);
+}
+
+console.log("\n[17] Every template's own place fields are checked");
+{
+  const birth = [
+    { key: "birth_city", label: "Place of Birth — City / Municipality" },
+    { key: "birth_province", label: "Place of Birth — Province" },
+  ];
+  const marriage = [
+    { key: "marriage_city", label: "Place of Marriage — City / Municipality" },
+    { key: "marriage_province", label: "Place of Marriage — Province" },
+  ];
+  const death = [
+    { key: "death_city", label: "Place of Death — City / Municipality" },
+    { key: "death_province", label: "Place of Death — Province" },
+  ];
+  check("birth pair found", documentPlacePair(birth)?.cityKey, "birth_city");
+  check("marriage pair found", documentPlacePair(marriage)?.cityKey, "marriage_city");
+  check("marriage province too", documentPlacePair(marriage)?.provinceKey, "marriage_province");
+  check("death pair found", documentPlacePair(death)?.cityKey, "death_city");
+  check("label comes from the schema", documentPlacePair(marriage)?.cityLabel,
+    "Place of Marriage — City / Municipality");
+  // A delivery address is the customer's, checked as its own pair.
+  check("delivery keys are not a document pair",
+    documentPlacePair([{ key: "delivery_city", label: "City" }, { key: "delivery_province", label: "Province" }]), null);
+  check("a template with no place has no pair",
+    documentPlacePair([{ key: "last_name", label: "Last Name" }]), null);
+
+  // The reported case: a marriage certificate with a bad city and province.
+  const pair = documentPlacePair(marriage)!;
+  const issues = placeIssues([
+    { group: "birth", cityLabel: pair.cityLabel, provinceLabel: pair.provinceLabel,
+      city: "casacon roseller Rt lim Zamboanga sibugay", province: "pampanga" },
+  ]);
+  check("a wrong marriage place is now caught", issues.length > 0, true);
+  check("it names the marriage field", issues[0].label, "Place of Marriage — City / Municipality");
+}
+
+console.log("\n[18] The receiver's name fills the customer");
+{
+  const f = [...DELIVERY_FIELDS] as any;
+  const opts = { deliveryOnly: DELIVERY_ONLY_IN_BLOCK, documentOnly: NEVER_IN_DELIVERY_BLOCK };
+  const r = parseTier1(`DELIVERY DETAILS
+RECEIVER NAME:alwajir s. Nur
+PHONE NUMBER 1:09628399428
+BARANGAY:tumaga`, f, opts);
+  check("receiver name parsed", r.values.delivery_name, "alwajir s. Nur");
+  check("it maps to the customer's full name", DELIVERY_TO_CUSTOMER.delivery_name, "full_name");
+
+  // "LAST NAME" outside a delivery block must never become the receiver.
+  const owner = [
+    { key: "last_name", label: "Last Name", type: "text", required: false, synonyms: [] },
+    ...DELIVERY_FIELDS,
+  ] as any;
+  const r2 = parseTier1(`LAST NAME: Nur
+FIRST NAME: Alwajir`, owner, opts);
+  check("an owner's name is not a receiver", r2.values.delivery_name, undefined);
+  check("the owner's own field still fills", r2.values.last_name, "Nur");
 }
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

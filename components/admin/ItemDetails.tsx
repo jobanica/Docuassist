@@ -21,7 +21,7 @@ import { updateOrderItemDetails } from "@/lib/actions/orders";
 import { parsePastedText } from "@/lib/actions/parse";
 import { PlaceWarnings } from "./PlaceWarnings";
 import { checkPlaces } from "@/lib/actions/places";
-import type { PlaceIssue } from "@/lib/parse/places";
+import { documentPlacePair, type PlaceIssue } from "@/lib/parse/places";
 import { SurnameWarnings } from "./SurnameWarnings";
 import { surnameIssues } from "@/lib/parse/surname";
 import type { FormFieldDef } from "@/lib/types";
@@ -35,6 +35,23 @@ import type { FormFieldDef } from "@/lib/types";
  * structured fields start empty and are filled here, when there is a PSA form
  * to print.
  */
+/** Build the one place-pair check this document needs, from its own schema. */
+function pairCheck(
+  pair: ReturnType<typeof documentPlacePair>,
+  values: Record<string, string>
+) {
+  if (!pair) return [];
+  return [
+    {
+      group: "birth" as const,
+      cityLabel: pair.cityLabel,
+      provinceLabel: pair.provinceLabel,
+      city: values[pair.cityKey],
+      province: values[pair.provinceKey],
+    },
+  ];
+}
+
 export function ItemDetails({
   itemId,
   orderId,
@@ -58,6 +75,9 @@ export function ItemDetails({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  // Which keys hold this document's place of event — birth_*, marriage_* or
+  // death_* depending on the template.
+  const placePair = documentPlacePair(fields);
   const [error, setError] = useState<string | null>(null);
 
   const [editingPaste, setEditingPaste] = useState(false);
@@ -96,7 +116,11 @@ export function ItemDetails({
       }
       setValues(next);
       setAutoFilled(filled);
-      setPlaces(r.places.filter((i) => i.label.startsWith("Place of birth")));
+      // Keep only this document's own place warnings; the delivery pair
+      // belongs to the customer card, not the form fields.
+      setPlaces(
+        r.places.filter((i) => i.group === "birth")
+      );
       setOpenFields(true);
       setParseNote(
         filled.length === 0
@@ -302,16 +326,12 @@ export function ItemDetails({
                           const next = { ...values, [f.key]: e.target.value };
                           setValues(next);
                           setAutoFilled((a) => a.filter((k) => k !== f.key));
-                          if (f.key === "birth_city" || f.key === "birth_province") {
-                            checkPlaces([
-                              {
-                                group: "birth" as const,
-                                cityLabel: "Place of birth — city",
-                                provinceLabel: "Place of birth — province",
-                                city: next.birth_city,
-                                province: next.birth_province,
-                              },
-                            ])
+                          if (
+                            placePair &&
+                            (f.key === placePair.cityKey ||
+                              f.key === placePair.provinceKey)
+                          ) {
+                            checkPlaces(pairCheck(placePair, next))
                               .then((res) => res.ok && setPlaces(res.value))
                               .catch(() => {});
                           }
@@ -329,21 +349,15 @@ export function ItemDetails({
                 overridden={placesOk}
                 onOverride={setPlacesOk}
                 onFix={(i, value) => {
-                  if (!i.fix) return;
+                  if (!i.fix || !placePair) return;
                   const key =
-                    i.fix.field === "city" ? "birth_city" : "birth_province";
+                    i.fix.field === "city"
+                      ? placePair.cityKey
+                      : placePair.provinceKey;
                   const next = { ...values, [key]: value };
                   setValues(next);
                   setAutoFilled((a) => a.filter((k) => k !== key));
-                  checkPlaces([
-                    {
-                      group: "birth" as const,
-                      cityLabel: "Place of birth — city",
-                      provinceLabel: "Place of birth — province",
-                      city: next.birth_city,
-                      province: next.birth_province,
-                    },
-                  ])
+                  checkPlaces(pairCheck(placePair, next))
                     .then((res) => res.ok && setPlaces(res.value))
                     .catch(() => {});
                 }}

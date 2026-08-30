@@ -14,6 +14,20 @@ export const DELIVERY_PREFIX = "delivery_";
 
 export const DELIVERY_FIELDS: FormFieldDef[] = [
   {
+    key: "delivery_name",
+    label: "Receiver name",
+    type: "text",
+    required: false,
+    synonyms: [
+      "receiver name", "receiver", "name of receiver", "recipient",
+      "recipient name", "consignee", "pangalan ng tatanggap", "tatanggap",
+      // Generic inside a delivery block, where they can only mean the
+      // receiver. Gated by DELIVERY_ONLY_IN_BLOCK so "LAST NAME" in the
+      // owner's section is never mistaken for one.
+      "name", "full name", "complete name", "pangalan", "buong pangalan",
+    ],
+  },
+  {
     key: "delivery_phone",
     label: "Mobile number",
     type: "text",
@@ -81,6 +95,9 @@ export const DELIVERY_FIELDS: FormFieldDef[] = [
 export const DELIVERY_ONLY_IN_BLOCK = new Set([
   "delivery_city",
   "delivery_province",
+  // "Name:" on its own is the applicant's on a PSA form and the receiver's in
+  // an address; only the block it sits in decides which.
+  "delivery_name",
 ]);
 
 /** The reverse: a birth place is never a delivery address. */
@@ -92,6 +109,7 @@ export const NEVER_IN_DELIVERY_BLOCK = new Set([
 
 /** Parsed delivery keys → the columns they are stored in on `customers`. */
 export const DELIVERY_TO_CUSTOMER: Record<string, string> = {
+  delivery_name: "full_name",
   delivery_phone: "phone",
   delivery_address_line: "address_line",
   delivery_barangay: "barangay",

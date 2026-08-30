@@ -4,7 +4,11 @@ import { run, type ActionResult } from "@/lib/action-result";
 import { createClient } from "@/lib/supabase/server";
 import { requireStaff } from "@/lib/auth";
 import { expandNameGroups, normalizeSex, parseTier1 } from "@/lib/parse/tier1";
-import { placeIssues, type PlaceIssue } from "@/lib/parse/places";
+import {
+  placeIssues,
+  documentPlacePair,
+  type PlaceIssue,
+} from "@/lib/parse/places";
 import {
   DELIVERY_FIELDS,
   DELIVERY_ONLY_IN_BLOCK,
@@ -139,14 +143,21 @@ export async function parsePastedText(
     filledKeys = filledKeys.filter((k) => !(k in DELIVERY_TO_CUSTOMER));
 
     // Check the places against the PSA's own list before staff act on them.
+    // The document's own pair is read off its schema, so a marriage or death
+    // certificate is checked on its own keys rather than being skipped.
+    const pair = documentPlacePair(docFields);
     const places = placeIssues([
-      {
-        group: "birth" as const,
-        cityLabel: "Place of birth — city",
-        provinceLabel: "Place of birth — province",
-        city: values.birth_city,
-        province: values.birth_province,
-      },
+      ...(pair
+        ? [
+            {
+              group: "birth" as const,
+              cityLabel: pair.cityLabel,
+              provinceLabel: pair.provinceLabel,
+              city: values[pair.cityKey],
+              province: values[pair.provinceKey],
+            },
+          ]
+        : []),
       {
         group: "delivery" as const,
         cityLabel: "Delivery city",
