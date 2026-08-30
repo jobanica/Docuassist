@@ -36,16 +36,15 @@
 }
 
 /* --- Printing the PSA application forms -----------------------------------
-   Only the .psa-sheet blocks reach the paper: the admin chrome (sidebar, nav,
-   buttons, notes) is hidden, each sheet starts on its own page, and colours
+   Only the .psa-pair blocks reach the paper: the admin chrome (sidebar, nav,
+   buttons, notes) is hidden, each sheet carries two forms, and colours
    are forced so the black header bars and box rules actually print.        */
 @media print {
   @page {
-    /* 8.5 x 11". The form is a fixed 760px = 201mm wide, so the side margins
-       are set to what is left over — anything wider and the browser shrinks
-       the sheet, which shrinks the character boxes off the printed grid. */
-    size: letter portrait;
-    margin: 7mm 6mm;
+    /* Landscape 8.5 x 11". Two application forms sit side by side on one
+       sheet, cut down the middle — the way PSA hands them out. */
+    size: letter landscape;
+    margin: 5mm;
   }
   body {
     background: #fff !important;
@@ -59,20 +58,49 @@
   main {
     padding: 0 !important;
   }
-  /* One document per sheet. The break goes BEFORE each form rather than
-     after, so there is no blank trailing page; the first form is exempted by
+  /* Two documents per sheet. The break goes BEFORE each pair rather than
+     after, so there is no blank trailing page; the first pair is exempted by
      the .psa-first class React puts on it. `:first-of-type` cannot do this —
-     every sheet sits alone inside its own wrapper, so each one is both the
+     each pair sits alone inside its own wrapper, so every one is both the
      first and the last of its type and the rule matched all of them. */
-  .psa-sheet {
-    break-inside: avoid;
-    page-break-inside: avoid;
+  .psa-pair {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
     break-before: page;
     page-break-before: always;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin-top: 0 !important;
   }
-  .psa-sheet.psa-first {
+  .psa-pair.psa-first {
     break-before: auto;
     page-break-before: auto;
+  }
+  /* The screen preview stacks the forms with a heading above each; those are
+     hidden on paper but still count for Tailwind's `space-y` sibling rule, so
+     the leftover margins have to go. */
+  .psa-pair > *,
+  .psa-half > * {
+    margin-top: 0 !important;
+  }
+  /* Half of the printable width (1018px at 96dpi), and its full height, so a
+     cut sheet yields two forms of identical size whichever documents they are. */
+  .psa-half {
+    width: 494px;
+    height: 767px;
+    overflow: hidden;
+  }
+  .psa-scale {
+    width: 760px;
+    transform: scale(0.65);
+    transform-origin: top left;
+  }
+  /* 767 / 0.65 — every form fills its half, so all four print the same size.
+     The tallest template is well under this; findOverflows guards the values
+     that could otherwise push a form past it. */
+  .psa-form {
+    min-height: 1180px;
   }
   * {
     -webkit-print-color-adjust: exact !important;

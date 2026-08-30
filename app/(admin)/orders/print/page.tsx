@@ -75,6 +75,10 @@ export default async function BatchPrintPage({
   const blank = sheets.filter(
     (s) => !Object.values(s.details).some((v) => String(v ?? "").trim())
   );
+  // Two document requests print side by side on one landscape sheet, which is
+  // how PSA hands the forms out — one sheet, cut down the middle.
+  const pairs: (typeof sheets)[] = [];
+  for (let i = 0; i < sheets.length; i += 2) pairs.push(sheets.slice(i, i + 2));
 
   return (
     <div className="space-y-5">
@@ -91,7 +95,8 @@ export default async function BatchPrintPage({
               Print {sheets.length} form{sheets.length === 1 ? "" : "s"}
             </h1>
             <p className="text-sm text-slate-500">
-              {rows.length} order{rows.length === 1 ? "" : "s"} · one document
+              {rows.length} order{rows.length === 1 ? "" : "s"} ·{" "}
+              {pairs.length} sheet{pairs.length === 1 ? "" : "s"}, two documents
               per sheet, 8.5&quot; × 11&quot;
             </p>
           </div>
@@ -103,10 +108,14 @@ export default async function BatchPrintPage({
         <p className="flex items-start gap-2">
           <Info className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            <strong>Set paper to Letter (8.5 × 11) and scale to 100%.</strong>{" "}
+            <strong>
+              Set paper to Letter (8.5 × 11), layout Landscape, and scale to
+              100%.
+            </strong>{" "}
             &ldquo;Fit to page&rdquo; shrinks the character boxes off the grid.
-            PSA prints each form on its own colour of paper — birth on white,
-            CENOMAR green, marriage pink, death yellow.
+            Two forms print per sheet — cut down the middle. PSA prints each
+            form on its own colour of paper: birth white, CENOMAR green,
+            marriage pink, death yellow.
           </span>
         </p>
       </div>
@@ -140,52 +149,62 @@ export default async function BatchPrintPage({
         </p>
       )}
 
-      {sheets.map((s, i) => {
-        const code = s.code;
-        const name = s.order.customers?.full_name ?? "—";
-        const overflows = findOverflows(code, s.details);
-        return (
-          <section key={s.item.id} className="space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
-              <p className="text-sm text-slate-600">
-                <span className="font-medium text-slate-900">{name}</span> ·{" "}
-                {s.item.services?.name} ·{" "}
-                <span className="font-mono text-xs">
-                  {s.order.tracking_code}
-                </span>
-                {PSA_FORMS[code] && (
-                  <span className="text-slate-400">
-                    {" "}
-                    · {PSA_FORMS[code].paper} paper
+      {pairs.map((pair, pi) => (
+        <div
+          key={pi}
+          className={`psa-pair space-y-5${pi === 0 ? " psa-first" : ""}`}
+        >
+          {pair.map((s, hi) => {
+            const i = pi * 2 + hi;
+            const code = s.code;
+            const name = s.order.customers?.full_name ?? "—";
+            const overflows = findOverflows(code, s.details);
+            return (
+              <section key={s.item.id} className="psa-half space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
+                  <p className="text-sm text-slate-600">
+                    <span className="font-medium text-slate-900">{name}</span> ·{" "}
+                    {s.item.services?.name} ·{" "}
+                    <span className="font-mono text-xs">
+                      {s.order.tracking_code}
+                    </span>
+                    {PSA_FORMS[code] && (
+                      <span className="text-slate-400">
+                        {" "}
+                        · {PSA_FORMS[code].paper} paper
+                      </span>
+                    )}
+                  </p>
+                  <span className="text-xs text-slate-400">
+                    form {i + 1} of {sheets.length} · sheet {pi + 1}
                   </span>
+                </div>
+
+                {overflows.length > 0 && (
+                  <p className="rounded-lg bg-red-50 p-2 text-xs text-red-800 print:hidden">
+                    Too long for the boxes and will be cut off:{" "}
+                    {overflows
+                      .map((v) => `${v.label} (${v.value.length}/${v.boxes})`)
+                      .join(", ")}
+                  </p>
                 )}
-              </p>
-              <span className="text-xs text-slate-400">
-                sheet {i + 1} of {sheets.length}
-              </span>
-            </div>
 
-            {overflows.length > 0 && (
-              <p className="rounded-lg bg-red-50 p-2 text-xs text-red-800 print:hidden">
-                Too long for the boxes and will be cut off:{" "}
-                {overflows.map((v) => `${v.label} (${v.value.length}/${v.boxes})`).join(", ")}
-              </p>
-            )}
-
-            <div className="overflow-x-auto print:overflow-visible">
-              <div className={`psa-sheet w-fit${i === 0 ? " psa-first" : ""}`}>
-                <PsaForm
-                  serviceCode={code}
-                  serviceName={s.item.services?.name ?? "Document"}
-                  details={s.details}
-                  trackingCode={s.order.tracking_code}
-                  customerName={name}
-                />
-              </div>
-            </div>
-          </section>
-        );
-      })}
+                <div className="overflow-x-auto print:overflow-visible">
+                  <div className="psa-scale w-fit">
+                    <PsaForm
+                      serviceCode={code}
+                      serviceName={s.item.services?.name ?? "Document"}
+                      details={s.details}
+                      trackingCode={s.order.tracking_code}
+                      customerName={name}
+                    />
+                  </div>
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      ))}
 
       {sheets.length === 0 && (
         <p className="rounded-xl bg-white p-6 text-center text-sm text-slate-500">

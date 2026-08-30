@@ -55,22 +55,26 @@ function nameBlock(heading: string, prefix: string, lastLabel = "Last Name"): Fo
   };
 }
 
+/**
+ * "Request for" row. The document the customer ordered is ticked by default,
+ * and the options differ per form — a CENOMAR sheet listing "BIRTH
+ * CERTIFICATE" would be wrong. CENOMAR has no such row on the real sheet.
+ */
+function requestRow(options: string[], checked: string): FormRow {
+  return { label: "Request for", kind: "checkbox", options, defaultChecked: checked };
+}
+
 const OWNER_HEADING = "OWNER'S PERSONAL INFORMATION (FOR MARRIED FEMALE, PLEASE USE MAIDEN NAME)";
 
 const birthLike = (title: string, paper: string, dateLabel: string, placeLabel: string,
                    cityKey: string, provKey: string, countryKey: string,
-                   requestOptions: string[], requestDefault: string): PsaFormTemplate => ({
+                   request: FormRow | null): PsaFormTemplate => ({
   title,
   paper,
   sections: [
     {
       rows: [
-        {
-          label: "Request for",
-          kind: "checkbox",
-          options: requestOptions,
-          defaultChecked: requestDefault,
-        },
+        ...(request ? [request] : []),
         { label: "Number of copies", key: "copies", kind: "boxes", boxes: 3 },
         { label: "Birth Reference No. (BReN, if known)", key: "bren", kind: "boxes", boxes: 18 },
         { label: "Sex", key: "sex", kind: "checkbox", options: ["Male", "Female"] },
@@ -99,23 +103,27 @@ export const PSA_FORMS: Record<string, PsaFormTemplate> = {
     "APPLICATION FORM - BIRTH CERTIFICATE", "White",
     "Date of Birth", "Place of Birth",
     "birth_city", "birth_province", "birth_country",
-    ["BIRTH CERTIFICATE", "AUTHENTICATION", "CDLI"], "BIRTH CERTIFICATE"
+    requestRow(["BIRTH CERTIFICATE", "AUTHENTICATION", "CDLI"], "BIRTH CERTIFICATE")
   ),
 
   cenomar: birthLike(
     "APPLICATION FORM - CERTIFICATE OF NO RECORD OF MARRIAGE (CENOMAR)", "Green",
     "Date of Birth", "Place of Birth",
     "birth_city", "birth_province", "birth_country",
-    // CENOMAR is its own request type — the birth form's options would be wrong
-    // on this sheet.
-    ["CENOMAR", "ADVISORY ON MARRIAGES", "AUTHENTICATION"], "CENOMAR"
+    // The real CENOMAR sheet carries no "Request for" row.
+    null
   ),
 
   psa_marriage: {
     title: "APPLICATION FORM - MARRIAGE CERTIFICATE",
     paper: "Pink",
     sections: [
-      { rows: [{ label: "Number of copies", key: "copies", kind: "boxes", boxes: 3 }] },
+      {
+        rows: [
+          requestRow(["MARRIAGE CERTIFICATE", "AUTHENTICATION", "CDLI"], "MARRIAGE CERTIFICATE"),
+          { label: "Number of copies", key: "copies", kind: "boxes", boxes: 3 },
+        ],
+      },
       nameBlock("NAME OF HUSBAND", "husband_"),
       nameBlock("MAIDEN NAME OF WIFE", "wife_"),
       {
@@ -136,6 +144,7 @@ export const PSA_FORMS: Record<string, PsaFormTemplate> = {
     sections: [
       {
         rows: [
+          requestRow(["DEATH CERTIFICATE", "AUTHENTICATION", "CDLI"], "DEATH CERTIFICATE"),
           { label: "Number of copies", key: "copies", kind: "boxes", boxes: 3 },
           { label: "Birth Reference No. (BReN, if known)", key: "bren", kind: "boxes", boxes: 18 },
           { label: "Sex", key: "sex", kind: "checkbox", options: ["Male", "Female"] },
