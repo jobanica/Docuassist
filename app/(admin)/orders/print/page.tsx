@@ -195,8 +195,6 @@ export default async function BatchPrintPage({
                       serviceCode={code}
                       serviceName={s.item.services?.name ?? "Document"}
                       details={s.details}
-                      trackingCode={s.order.tracking_code}
-                      customerName={name}
                     />
                   </div>
                 </div>

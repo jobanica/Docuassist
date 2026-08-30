@@ -40,9 +40,14 @@
    buttons, notes) is hidden, each sheet carries two forms, and colours
    are forced so the black header bars and box rules actually print.        */
 @media print {
+  /* Two named page boxes. The batch sheet is landscape 8.5 x 11" carrying two
+     forms side by side, cut down the middle — the way PSA hands them out — and
+     a single order's form keeps a portrait sheet to itself. */
   @page {
-    /* Landscape 8.5 x 11". Two application forms sit side by side on one
-       sheet, cut down the middle — the way PSA hands them out. */
+    size: letter portrait;
+    margin: 7mm 6mm;
+  }
+  @page two-up {
     size: letter landscape;
     margin: 5mm;
   }
@@ -64,6 +69,7 @@
      each pair sits alone inside its own wrapper, so every one is both the
      first and the last of its type and the rule matched all of them. */
   .psa-pair {
+    page: two-up;
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
@@ -81,7 +87,8 @@
      hidden on paper but still count for Tailwind's `space-y` sibling rule, so
      the leftover margins have to go. */
   .psa-pair > *,
-  .psa-half > * {
+  .psa-half > *,
+  .psa-sheet > * {
     margin-top: 0 !important;
   }
   /* Half of the printable width (1018px at 96dpi), and its full height, so a
@@ -96,11 +103,28 @@
     transform: scale(0.65);
     transform-origin: top left;
   }
-  /* 767 / 0.65 — every form fills its half, so all four print the same size.
-     The tallest template is well under this; findOverflows guards the values
+  /* One form per portrait sheet, on a single order's print page. */
+  .psa-sheet {
+    margin-top: 0 !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    break-before: page;
+    page-break-before: always;
+  }
+  .psa-sheet.psa-first {
+    break-before: auto;
+    page-break-before: auto;
+  }
+  /* Stretch the form to fill its sheet rather than leaving a band of white
+     below it — 767 / 0.65 for a two-up half, and the printable height of a
+     portrait sheet for a single one. Every template ends up the same size.
+     The tallest is well under either figure; findOverflows guards the values
      that could otherwise push a form past it. */
-  .psa-form {
+  .psa-half .psa-form {
     min-height: 1180px;
+  }
+  .psa-sheet .psa-form {
+    min-height: 990px;
   }
   * {
     -webkit-print-color-adjust: exact !important;

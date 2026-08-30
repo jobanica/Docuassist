@@ -73,7 +73,10 @@ export default async function PrintFormsPage({
         const hasDetails = Object.values(details).some((v) => v?.trim());
         const overflows = findOverflows(code, details);
         return (
-          <section key={item.id} className="space-y-3">
+          <section
+            key={item.id}
+            className={`psa-sheet space-y-3${i === 0 ? " psa-first" : ""}`}
+          >
             <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
               <div>
                 <h2 className="font-semibold text-slate-900">
@@ -141,14 +144,12 @@ export default async function PrintFormsPage({
                 // w-fit so the box hugs the 760px form. As a plain block it
                 // stretched to the container, and "Copy image" captured that
                 // width — sending the customer a form with blank space beside it.
-                className={`psa-sheet w-fit${i === 0 ? " psa-first" : ""}`}
+                className="w-fit"
               >
                 <PsaForm
                   serviceCode={code}
                   serviceName={item.services?.name ?? "Document"}
                   details={details}
-                  trackingCode={o.tracking_code}
-                  customerName={customerName}
                 />
               </div>
             </div>

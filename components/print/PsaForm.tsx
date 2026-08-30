@@ -129,14 +129,10 @@ export function PsaForm({
   serviceCode,
   serviceName,
   details,
-  trackingCode,
-  customerName,
 }: {
   serviceCode: string;
   serviceName: string;
   details: Record<string, string>;
-  trackingCode: string;
-  customerName: string;
 }) {
   const tpl = PSA_FORMS[serviceCode];
 
@@ -163,7 +159,7 @@ export function PsaForm({
   return (
     <div
       id="psa-form"
-      className="psa-form w-[760px] bg-white p-5 font-sans text-black"
+      className="psa-form flex w-[760px] flex-col bg-white p-5 font-sans text-black"
       style={{ border: "2px solid #000" }}
     >
       {/* Header */}
@@ -208,16 +204,24 @@ export function PsaForm({
         </p>
       </div>
 
-      {/* Sections */}
-      <div className="mt-2 border border-black">
+      {/* Sections. On paper the form is stretched to fill the sheet (see the
+          .psa-form min-height in globals.css), and the slack goes here rather
+          than leaving a band of white below the form. Each section takes a
+          share proportional to how many rows it holds, so a three-row name
+          block doesn't end up as tall as the seven-row owner block. */}
+      <div className="mt-2 flex flex-1 flex-col border border-black">
         {tpl.sections.map((section, si) => (
-          <div key={si} className={si > 0 ? "border-t border-black" : ""}>
+          <div
+            key={si}
+            className={`flex flex-col${si > 0 ? " border-t border-black" : ""}`}
+            style={{ flexGrow: section.rows.length }}
+          >
             {section.heading && (
               <p className="border-b border-black bg-gray-100 px-2 py-[2px] text-[9px] font-bold">
                 {section.heading}
               </p>
             )}
-            <div className="px-2 py-1">
+            <div className="flex flex-1 flex-col justify-evenly px-2 py-1">
               {section.rows.map((row, ri) => (
                 <Row key={ri} row={row} details={details} />
               ))}
@@ -240,12 +244,6 @@ export function PsaForm({
       </p>
       <div className="mt-1 border border-black py-[2px] text-center text-[13px] font-bold">
         ☐ FOR PAYMENT
-      </div>
-
-      {/* Internal reference — helps staff match the sheet back to the order. */}
-      <div className="mt-2 flex justify-between border-t border-dashed border-gray-400 pt-1 text-[8px] text-gray-600">
-        <span>DocuAssist PH · {customerName}</span>
-        <span className="font-mono">{trackingCode}</span>
       </div>
     </div>
   );
