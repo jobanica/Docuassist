@@ -1,15 +1,23 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search, PhoneCall, Printer, X } from "lucide-react";
+import {
+  Search,
+  PhoneCall,
+  Printer,
+  X,
+  ArrowRight,
+  AlertCircle,
+} from "lucide-react";
+import { bulkAdvanceStatus } from "@/lib/actions/orders";
 import { StatusBadge } from "./StatusBadge";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { peso } from "@/lib/money";
 import { fmtDate, fmtDateTime } from "@/lib/dates";
-import { aging, attemptBadgeClasses } from "@/lib/status";
+import { aging, attemptBadgeClasses, nextStatus } from "@/lib/status";
 import type { OrderStatus, Service, StatusCode } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -68,6 +76,9 @@ export function OrdersTable({
   // Orders ticked for a batch print. Kept as ids so a filter change doesn't
   // silently drop a selection the staff member already made.
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [confirmMove, setConfirmMove] = useState(false);
+  const [moveError, setMoveError] = useState<string | null>(null);
+  const [moving, startMove] = useTransition();
 
   const callList = useMemo(() => orders.filter(needsCall), [orders]);
 
@@ -102,6 +113,62 @@ export function OrdersTable({
   }, [orders, q, status, service, from, to]);
 
   const onCallList = status === FAILED_ATTEMPTS;
+
+  /**
+   * What a bulk status change would do to the current selection.
+   *
+   * Orders only move together when they start together: a selection holding
+   * two different stages has no single "next", so the move is refused here and
+   * again on the server rather than guessed at.
+   */
+  const bulk = useMemo(() => {
+    const rows = orders.filter((o) => picked.has(o.id));
+    if (rows.length === 0) return null;
+    const present = Array.from(new Set(rows.map((o) => o.status)));
+    const labelOf = (code: string) =>
+      statuses.find((s) => s.code === code)?.label ?? code;
+
+    if (present.length > 1) {
+      return {
+        blocked: `Those orders are at different stages (${present
+          .map(labelOf)
+          .join(", ")}). Select orders that share one status to change them together.`,
+      } as const;
+    }
+    const current = present[0] as StatusCode;
+    const target = nextStatus(current);
+    if (!target) {
+      return { blocked: `${labelOf(current)} has no next stage.` } as const;
+    }
+    if (target === "shipped") {
+      return {
+        blocked:
+          "Shipping needs a courier and tracking number per order — open each one and use “Mark as Shipped”.",
+      } as const;
+    }
+    if (target === "delivered") {
+      return {
+        blocked:
+          "Marking delivered records the COD collection per order — open each one and use “Mark as Delivered”.",
+      } as const;
+    }
+    return { target, targetLabel: labelOf(target), from: labelOf(current) } as const;
+  }, [orders, picked, statuses]);
+
+  function runBulkMove() {
+    setMoveError(null);
+    startMove(async () => {
+      const res = await bulkAdvanceStatus(Array.from(picked));
+      if (!res.ok) {
+        setMoveError(res.error);
+        setConfirmMove(false);
+        return;
+      }
+      setPicked(new Set());
+      setConfirmMove(false);
+      router.refresh();
+    });
+  }
 
   const shown = filtered.map((o) => o.id);
   const allShownPicked =
@@ -203,30 +270,93 @@ export function OrdersTable({
       </div>
 
       {picked.size > 0 && (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-[#eda100]/40 bg-[#eda100]/10 px-4 py-3">
-          <Printer className="h-4 w-4 shrink-0 text-[#8a6100]" />
-          <span className="flex-1 text-sm text-[#5c4300]">
-            <strong>
-              {picked.size} order{picked.size === 1 ? "" : "s"} selected
-            </strong>{" "}
-            — print every PSA form for them in one go, one document per sheet.
-          </span>
-          <button
-            type="button"
-            onClick={() => setPicked(new Set())}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[#5c4300] hover:bg-[#eda100]/20"
-          >
-            <X className="h-3.5 w-3.5" /> Clear
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              router.push(`/orders/print?ids=${Array.from(picked).join(",")}`)
-            }
-            className="inline-flex h-9 items-center gap-2 rounded-md bg-[#eda100] px-3 text-sm font-semibold text-[#3d2f00] shadow-sm hover:bg-[#d99400]"
-          >
-            <Printer className="h-4 w-4" /> Print forms
-          </button>
+        <div className="space-y-2 rounded-lg border border-[#eda100]/40 bg-[#eda100]/10 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <Printer className="h-4 w-4 shrink-0 text-[#8a6100]" />
+            <span className="flex-1 text-sm text-[#5c4300]">
+              <strong>
+                {picked.size} order{picked.size === 1 ? "" : "s"} selected
+              </strong>{" "}
+              — print their PSA forms, or move them all to the next stage.
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setPicked(new Set());
+                setConfirmMove(false);
+                setMoveError(null);
+              }}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[#5c4300] hover:bg-[#eda100]/20"
+            >
+              <X className="h-3.5 w-3.5" /> Clear
+            </button>
+            {bulk && !("blocked" in bulk) && !confirmMove && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMoveError(null);
+                  setConfirmMove(true);
+                }}
+                className="inline-flex h-9 items-center gap-2 rounded-md bg-[#1e3a5f] px-3 text-sm font-semibold text-white shadow-sm hover:bg-[#16304f]"
+              >
+                <ArrowRight className="h-4 w-4" /> Move to {bulk.targetLabel}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() =>
+                router.push(`/orders/print?ids=${Array.from(picked).join(",")}`)
+              }
+              className="inline-flex h-9 items-center gap-2 rounded-md bg-[#eda100] px-3 text-sm font-semibold text-[#3d2f00] shadow-sm hover:bg-[#d99400]"
+            >
+              <Printer className="h-4 w-4" /> Print forms
+            </button>
+          </div>
+
+          {/* Why the move isn't on offer — staff shouldn't have to guess which
+              of the ticked rows is the odd one out. */}
+          {bulk && "blocked" in bulk && (
+            <p className="flex items-start gap-2 text-xs text-[#5c4300]">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              {bulk.blocked}
+            </p>
+          )}
+
+          {bulk && !("blocked" in bulk) && confirmMove && (
+            <div className="flex flex-wrap items-center gap-3 rounded-md bg-white/70 px-3 py-2">
+              <span className="flex-1 text-sm text-[#5c4300]">
+                Move {picked.size} order{picked.size === 1 ? "" : "s"} from{" "}
+                <strong>{bulk.from}</strong> to{" "}
+                <strong>{bulk.targetLabel}</strong>?
+                {bulk.target === "details_received" &&
+                  " Each customer gets the details-received SMS."}
+              </span>
+              <button
+                type="button"
+                onClick={() => setConfirmMove(false)}
+                disabled={moving}
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[#5c4300] hover:bg-[#eda100]/20 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={runBulkMove}
+                disabled={moving}
+                className="inline-flex h-9 items-center gap-2 rounded-md bg-[#1e3a5f] px-3 text-sm font-semibold text-white shadow-sm hover:bg-[#16304f] disabled:opacity-60"
+              >
+                <ArrowRight className="h-4 w-4" />
+                {moving ? "Moving…" : `Yes, move to ${bulk.targetLabel}`}
+              </button>
+            </div>
+          )}
+
+          {moveError && (
+            <p className="flex items-start gap-2 text-xs text-red-700">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              {moveError}
+            </p>
+          )}
         </div>
       )}
 

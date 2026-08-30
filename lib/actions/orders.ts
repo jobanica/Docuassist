@@ -176,6 +176,123 @@ export async function advanceStatus(
   });
 }
 
+/**
+ * Advance several orders one stage in one go — the morning routine is a batch
+ * of orders sitting at the same stage, not one order at a time.
+ *
+ * Every selected order must already be at the SAME status. Mixing them is
+ * refused rather than guessed at: "move these to processing" means something
+ * different for an order still at new inquiry, and silently skipping or
+ * dragging it forward would both be wrong. The board hides the button when the
+ * selection is mixed; this is the check that actually enforces it.
+ */
+export async function bulkAdvanceStatus(
+  orderIds: string[]
+): Promise<ActionResult<{ status: StatusCode; count: number }>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    const ids = Array.from(new Set(orderIds.filter(Boolean)));
+    if (ids.length === 0) throw new Error("Select at least one order first.");
+
+    const supabase = createClient();
+    const [{ data: rows, error }, { data: statusRows }] = await Promise.all([
+      supabase.from("orders").select("id, status").in("id", ids),
+      supabase.from("order_statuses").select("code, label"),
+    ]);
+    if (error) throw new Error(error.message);
+
+    const label = (code: string) =>
+      (statusRows ?? []).find((s) => s.code === code)?.label ?? code;
+
+    // A scoped account may not be allowed to see every id the browser sent,
+    // and an order can be cancelled from another tab in the meantime.
+    if (!rows || rows.length !== ids.length) {
+      throw new Error(
+        "Some of those orders are no longer available — refresh the board and select again. Nothing was changed."
+      );
+    }
+
+    const present = Array.from(new Set(rows.map((r) => r.status)));
+    if (present.length > 1) {
+      throw new Error(
+        `Those orders are at different stages (${present
+          .map(label)
+          .join(", ")}). Select orders that share one status, then change them together.`
+      );
+    }
+
+    const current = present[0] as StatusCode;
+    const target = nextStatus(current);
+    if (!target) {
+      throw new Error(
+        `Those orders are at ${label(current)}, which has no next stage.`
+      );
+    }
+    if (target === "shipped") {
+      throw new Error(
+        "Shipping needs a courier and tracking number for each order, so it can't be done in bulk. Open each order and use “Mark as Shipped”."
+      );
+    }
+    if (target === "delivered") {
+      throw new Error(
+        "Marking delivered records the COD collection per order. Open each one and use “Mark as Delivered”."
+      );
+    }
+
+    // `processing` stamps expected dates computed from that order's own
+    // services, so those rows are written one at a time; the rest is one query.
+    const done: string[] = [];
+    let failure: string | null = null;
+    if (target === "processing") {
+      for (const id of ids) {
+        const { error: upErr } = await supabase
+          .from("orders")
+          .update({ status: target, ...(await computeExpectedDates(id)) })
+          .eq("id", id);
+        if (upErr) {
+          failure = upErr.message;
+          break;
+        }
+        done.push(id);
+      }
+    } else {
+      const { error: upErr } = await supabase
+        .from("orders")
+        .update({ status: target })
+        .in("id", ids);
+      if (upErr) throw new Error(upErr.message);
+      done.push(...ids);
+    }
+
+    if (done.length > 0) {
+      await supabase.from("order_status_history").insert(
+        done.map((id) => ({
+          order_id: id,
+          status: target,
+          event_type: "status_change",
+          note: done.length > 1 ? `Bulk update of ${done.length} orders` : null,
+          changed_by: staff.id,
+        }))
+      );
+      if (target === "details_received") {
+        await Promise.all(done.map((id) => notifyOrder("details_received", id)));
+      }
+      revalidatePath("/orders");
+      for (const id of done) revalidatePath(`/orders/${id}`);
+    }
+
+    // Report the partial truth rather than a clean success: the orders that
+    // did move stay moved, and staff need to know which count is real.
+    if (failure) {
+      throw new Error(
+        `Moved ${done.length} of ${ids.length} to ${label(target)} before this failed: ${failure}`
+      );
+    }
+
+    return { status: target, count: done.length };
+  });
+}
+
 /** Admin correction: move an order backward to an earlier stage with a reason. §4 */
 export async function correctStatusBackward(
   orderId: string,
