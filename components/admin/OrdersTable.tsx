@@ -10,8 +10,13 @@ import {
   X,
   ArrowRight,
   AlertCircle,
+  Tags,
 } from "lucide-react";
 import { bulkAdvanceStatus } from "@/lib/actions/orders";
+import { tagCustomers } from "@/lib/actions/tags";
+import type { Tag } from "@/lib/tags";
+import { TagChip } from "./TagChip";
+import { TagPicker } from "./TagPicker";
 import { StatusBadge } from "./StatusBadge";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -32,8 +37,11 @@ export interface OrderRow {
   delivery_attempts: number;
   /** 'public' = the customer submitted it themselves through the order link. */
   source: string;
+  customer_id: string | null;
   customer_name: string;
   customer_phone: string | null;
+  /** Batch tags on this order's customer. */
+  tag_ids: string[];
   service_codes: string[];
   service_names: string[];
   /** Reason logged on the most recent failed delivery attempt, if any. */
@@ -62,10 +70,12 @@ export function OrdersTable({
   orders,
   statuses,
   services,
+  tags: initialTags,
 }: {
   orders: OrderRow[];
   statuses: OrderStatus[];
   services: Service[];
+  tags: Tag[];
 }) {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<string>("all");
@@ -76,6 +86,12 @@ export function OrdersTable({
   // Orders ticked for a batch print. Kept as ids so a filter change doesn't
   // silently drop a selection the staff member already made.
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [tagFilter, setTagFilter] = useState<string>("all");
+  const [tags, setTags] = useState<Tag[]>(initialTags);
+  const [applying, setApplying] = useState<string[]>([]);
+  const [tagNote, setTagNote] = useState<string | null>(null);
+  const [tagError, setTagError] = useState<string | null>(null);
+  const [tagging, startTagging] = useTransition();
   const [confirmMove, setConfirmMove] = useState(false);
   const [moveError, setMoveError] = useState<string | null>(null);
   const [moving, startMove] = useTransition();
@@ -89,6 +105,9 @@ export function OrdersTable({
         if (!needsCall(o)) return false;
       } else if (status !== "all" && o.status !== status) return false;
       if (service !== "all" && !o.service_codes.includes(service)) return false;
+      if (tagFilter === "untagged" && o.tag_ids.length > 0) return false;
+      if (tagFilter !== "all" && tagFilter !== "untagged" &&
+          !o.tag_ids.includes(tagFilter)) return false;
       if (from && o.created_at.slice(0, 10) < from) return false;
       if (to && o.created_at.slice(0, 10) > to) return false;
       if (needle) {
@@ -110,7 +129,7 @@ export function OrdersTable({
       );
     }
     return rows;
-  }, [orders, q, status, service, from, to]);
+  }, [orders, q, status, service, from, to, tagFilter]);
 
   const onCallList = status === FAILED_ATTEMPTS;
 
@@ -154,6 +173,49 @@ export function OrdersTable({
     }
     return { target, targetLabel: labelOf(target), from: labelOf(current) } as const;
   }, [orders, picked, statuses]);
+
+  const tagById = useMemo(() => new Map(tags.map((t) => [t.id, t])), [tags]);
+
+  /**
+   * Tag the customers behind the selected orders.
+   *
+   * A batch is assembled from orders — this stack goes to the counter today —
+   * but the tag belongs to the customer, so the same person keeps their batch
+   * however many documents they ordered.
+   */
+  function applyTag(mode: "add" | "remove") {
+    const tagId = applying[0];
+    if (!tagId) return;
+    const customerIds = Array.from(
+      new Set(
+        orders
+          .filter((o) => picked.has(o.id))
+          .map((o) => o.customer_id)
+          .filter((v): v is string => Boolean(v))
+      )
+    );
+    setTagError(null);
+    setTagNote(null);
+    startTagging(async () => {
+      const res = await tagCustomers(customerIds, tagId, mode);
+      if (!res.ok) {
+        setTagError(res.error);
+        return;
+      }
+      const name = tagById.get(tagId)?.name ?? "tag";
+      setTagNote(
+        mode === "add"
+          ? `Tagged ${res.value.changed} customer${res.value.changed === 1 ? "" : "s"} “${name}”.` +
+            (res.value.skipped > 0
+              ? ` ${res.value.skipped} weren't yours to tag and were left alone.`
+              : "")
+          : `Removed “${name}” from ${res.value.changed} customer${res.value.changed === 1 ? "" : "s"}.`
+      );
+      setPicked(new Set());
+      setApplying([]);
+      router.refresh();
+    });
+  }
 
   function runBulkMove() {
     setMoveError(null);
@@ -250,6 +312,20 @@ export function OrdersTable({
             </option>
           ))}
         </select>
+        <select
+          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+          value={tagFilter}
+          onChange={(e) => setTagFilter(e.target.value)}
+          aria-label="Filter by batch tag"
+        >
+          <option value="all">All batches</option>
+          <option value="untagged">Untagged</option>
+          {tags.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name} ({t.customer_count})
+            </option>
+          ))}
+        </select>
         <div className="flex items-center gap-2 text-sm">
           <Input
             type="date"
@@ -312,6 +388,50 @@ export function OrdersTable({
               <Printer className="h-4 w-4" /> Print forms
             </button>
           </div>
+
+          {/* Tag the customers behind these orders. A batch is assembled from
+              orders, but named on the customer, so it survives their next one. */}
+          <div className="flex flex-wrap items-center gap-3 rounded-md bg-white/70 px-3 py-2">
+            <Tags className="h-4 w-4 shrink-0 text-[#8a6100]" />
+            <span className="text-sm text-[#5c4300]">Batch tag:</span>
+            <TagPicker
+              tags={tags}
+              selected={applying}
+              onChange={setApplying}
+              onCreated={(t) =>
+                setTags((prev) =>
+                  [...prev, t].sort((a, b) => a.name.localeCompare(b.name))
+                )
+              }
+              single
+              placeholder="Search or type a batch name…"
+            />
+            <span className="flex-1" />
+            <button
+              type="button"
+              disabled={applying.length === 0 || tagging}
+              onClick={() => applyTag("remove")}
+              className="inline-flex h-8 items-center rounded-md border border-[#8a6100]/30 bg-white px-3 text-xs font-medium text-[#5c4300] hover:bg-[#eda100]/20 disabled:opacity-50"
+            >
+              Remove
+            </button>
+            <button
+              type="button"
+              disabled={applying.length === 0 || tagging}
+              onClick={() => applyTag("add")}
+              className="inline-flex h-8 items-center rounded-md bg-[#8a6100] px-3 text-xs font-semibold text-white hover:bg-[#6f4e00] disabled:opacity-60"
+            >
+              {tagging ? "Tagging…" : "Tag customers"}
+            </button>
+          </div>
+
+          {tagNote && <p className="text-xs text-emerald-800">{tagNote}</p>}
+          {tagError && (
+            <p className="flex items-start gap-2 text-xs text-red-700">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              {tagError}
+            </p>
+          )}
 
           {/* Why the move isn't on offer — staff shouldn't have to guess which
               of the ticked rows is the odd one out. */}
@@ -431,6 +551,16 @@ export function OrdersTable({
                       </a>
                     ) : (
                       <div className="text-xs text-red-600">no phone on file</div>
+                    )}
+                    {o.tag_ids.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {o.tag_ids.map((id) => {
+                          const t = tagById.get(id);
+                          return t ? (
+                            <TagChip key={id} name={t.name} color={t.color} />
+                          ) : null;
+                        })}
+                      </div>
                     )}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">

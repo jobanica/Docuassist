@@ -12,6 +12,8 @@ import { StatusBadge } from "@/components/admin/StatusBadge";
 import { peso } from "@/lib/money";
 import { fmtDate } from "@/lib/dates";
 import type { OrderStatus } from "@/lib/types";
+import { CustomerTags } from "@/components/admin/CustomerTags";
+import { listTags } from "@/lib/actions/tags";
 
 export const dynamic = "force-dynamic";
 
@@ -22,15 +24,17 @@ export default async function CustomerDetailPage({
 }) {
   const supabase = createClient();
 
-  const [{ data: customer }, { data: statuses }] = await Promise.all([
+  const [{ data: customer }, { data: statuses }, tags] = await Promise.all([
     supabase
       .from("customers")
       .select(
-        `*, orders ( id, tracking_code, status, total_amount, created_at )`
+        `*, orders ( id, tracking_code, status, total_amount, created_at ),
+         customer_tags ( tag_id )`
       )
       .eq("id", params.id)
       .maybeSingle(),
     supabase.from("order_statuses").select("*").order("sort_order"),
+    listTags(),
   ]);
 
   if (!customer) notFound();
@@ -53,6 +57,15 @@ export default async function CustomerDetailPage({
           <ArrowLeft className="h-4 w-4" /> Back to customers
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">{c.full_name}</h1>
+        {/* Which batches this customer is in — the thing staff come back for
+            days later, when the stack returns from the PSA counter. */}
+        <div className="mt-2">
+          <CustomerTags
+            customerId={c.id}
+            tags={tags}
+            selected={(c.customer_tags ?? []).map((t: any) => t.tag_id)}
+          />
+        </div>
       </div>
 
       <Card>

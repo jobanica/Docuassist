@@ -5,13 +5,14 @@ import { createClient } from "@/lib/supabase/server";
 import { buttonVariants } from "@/components/ui/button";
 import { OrdersTable, type OrderRow } from "@/components/admin/OrdersTable";
 import type { OrderStatus, Service } from "@/lib/types";
+import { listTags } from "@/lib/actions/tags";
 
 export const dynamic = "force-dynamic";
 
 export default async function OrdersPage() {
   const supabase = createClient();
 
-  const [staff, { data: statuses }, { data: services }, { data: orders }, { data: attempts }] =
+  const [staff, { data: statuses }, { data: services }, { data: orders }, { data: attempts }, tags] =
     await Promise.all([
       getStaff(),
       supabase.from("order_statuses").select("*").order("sort_order"),
@@ -21,7 +22,7 @@ export default async function OrdersPage() {
         .select(
           `id, tracking_code, status, total_amount, created_at, status_since,
            delivery_attempts, source,
-           customers ( full_name, phone ),
+           customers ( id, full_name, phone, customer_tags ( tag_id ) ),
            order_items ( services ( code, name ) )`
         )
         .order("created_at", { ascending: false }),
@@ -32,6 +33,7 @@ export default async function OrdersPage() {
         .select("order_id, note, attempt_number, created_at")
         .eq("event_type", "failed_attempt")
         .order("created_at", { ascending: true }),
+      listTags(),
     ]);
 
   const statusLabel = new Map(
@@ -62,8 +64,10 @@ export default async function OrdersPage() {
       status_since: o.status_since,
       delivery_attempts: o.delivery_attempts,
       source: o.source ?? "staff",
+      customer_id: o.customers?.id ?? null,
       customer_name: o.customers?.full_name ?? "—",
       customer_phone: o.customers?.phone ?? null,
+      tag_ids: (o.customers?.customer_tags ?? []).map((t: any) => t.tag_id),
       service_codes: svcCodes,
       service_names: svcNames,
       last_attempt_note: lastAttempt.get(o.id)?.note ?? null,
@@ -97,6 +101,7 @@ export default async function OrdersPage() {
       </div>
 
       <OrdersTable
+        tags={tags}
         orders={rows}
         statuses={(statuses ?? []) as OrderStatus[]}
         services={

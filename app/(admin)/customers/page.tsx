@@ -1,14 +1,20 @@
 import { createClient } from "@/lib/supabase/server";
 import { CustomersList, type CustomerRow } from "@/components/admin/CustomersList";
+import { listTags } from "@/lib/actions/tags";
 
 export const dynamic = "force-dynamic";
 
 export default async function CustomersPage() {
   const supabase = createClient();
-  const { data: customers } = await supabase
-    .from("customers")
-    .select("id, full_name, phone, city, province, created_at, orders ( id )")
-    .order("created_at", { ascending: false });
+  const [{ data: customers }, tags] = await Promise.all([
+    supabase
+      .from("customers")
+      .select(
+        "id, full_name, phone, city, province, created_at, orders ( id ), customer_tags ( tag_id )"
+      )
+      .order("created_at", { ascending: false }),
+    listTags(),
+  ]);
 
   const rows: CustomerRow[] = (customers ?? []).map((c: any) => ({
     id: c.id,
@@ -18,6 +24,7 @@ export default async function CustomersPage() {
     province: c.province,
     order_count: c.orders?.length ?? 0,
     created_at: c.created_at,
+    tag_ids: (c.customer_tags ?? []).map((t: any) => t.tag_id),
   }));
 
   return (
@@ -29,7 +36,7 @@ export default async function CustomersPage() {
           are common — pick them again on the new-order screen.
         </p>
       </div>
-      <CustomersList customers={rows} />
+      <CustomersList customers={rows} tags={tags} />
     </div>
   );
 }
