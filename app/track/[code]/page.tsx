@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import {
   AlertTriangle,
   Ban,
+  FileText,
   MessageCircle,
   PackageX,
   ShieldCheck,
@@ -139,11 +140,55 @@ export default async function TrackPage({
         <p className="text-slate-900">
           Hi <span className="font-semibold">{info.first_name ?? "there"}</span>!
           Here&apos;s the status of your{" "}
-          <span className="font-semibold">
-            {info.service_names.join(", ") || "order"}
-          </span>{" "}
-          order.
+          {info.documents.length === 1 ? (
+            <>
+              {/* The document bold, the person after it in plain weight — a
+                  whole sentence in bold stops emphasising anything. */}
+              <span className="font-semibold">
+                {info.documents[0].service_name}
+              </span>
+              {info.documents[0].owner_name
+                ? ` for ${info.documents[0].owner_name}.`
+                : "."}
+            </>
+          ) : info.documents.length > 1 ? (
+            <>
+              <span className="font-semibold">
+                {info.documents.length} documents
+              </span>
+              , sent together in one parcel.
+            </>
+          ) : (
+            <span className="font-semibold">order.</span>
+          )}
         </p>
+
+        {/* Named one per line once there is more than one: on an order for two
+            birth certificates the person is the only thing telling them
+            apart, and a sentence listing both reads as a run-on. */}
+        {info.documents.length > 1 && (
+          <ul className="mx-auto mt-3 max-w-sm space-y-1.5 text-left">
+            {info.documents.map((d, n) => (
+              <li
+                key={n}
+                className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700"
+              >
+                <FileText className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                <span>
+                  <span className="font-medium text-slate-900">
+                    {d.service_name}
+                  </span>
+                  {d.owner_name && (
+                    <>
+                      <br />
+                      for {d.owner_name}
+                    </>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
         {/* Coloured by stage rather than always blue, so the badge agrees with
             the stepper below and the arrival card above. */}
         <p

@@ -6,6 +6,14 @@ export interface TrackingInfo {
   tracking_code: string;
   first_name: string | null;
   service_names: string[];
+  /** Each document with the person named on it — the only thing that tells
+   *  two birth certificates on one order apart. */
+  documents: {
+    service_name: string;
+    quantity: number;
+    /** "" when the form has not been filled in yet. */
+    owner_name: string | null;
+  }[];
   status: StatusCode;
   status_label: string;
   status_sort_order: number;
