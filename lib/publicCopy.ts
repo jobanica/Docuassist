@@ -87,3 +87,22 @@ export function statusPillClasses(code: string): string {
       return "bg-sky-50 text-sky-700 ring-sky-100";
   }
 }
+
+/**
+ * The cancellation policy, shown to the customer on their tracking page.
+ *
+ * A PSA request is paid for and filed the moment it is encoded — the fee is
+ * gone whether or not the parcel is accepted — so a cancellation is a straight
+ * loss, and the business does not take one. Saying so on the page the customer
+ * actually opens is worth more than saying it once in a chat they will scroll
+ * past.
+ *
+ * Kept here rather than inline so the wording is in one findable place; the
+ * page decides when it is appropriate to show it.
+ */
+export const NO_CANCELLATION = {
+  heading: "Strictly no cancellation",
+  body:
+    "Once your request is filed with the PSA it can no longer be cancelled. " +
+    "Customers who cancel will not be accommodated for future document requests.",
+};

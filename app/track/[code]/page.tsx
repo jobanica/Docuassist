@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { AlertTriangle, MessageCircle, PackageX, ShieldCheck } from "lucide-react";
+import {
+  AlertTriangle,
+  Ban,
+  MessageCircle,
+  PackageX,
+  ShieldCheck,
+} from "lucide-react";
 import {
   lookupTracking,
   getBusinessInfo,
@@ -10,7 +16,12 @@ import {
 import { PublicStepper } from "@/components/track/PublicStepper";
 import { ArrivalHero } from "@/components/track/ArrivalHero";
 import { CourierTracking } from "@/components/track/CourierTracking";
-import { statusHelper, attemptNotice, statusPillClasses } from "@/lib/publicCopy";
+import {
+  statusHelper,
+  attemptNotice,
+  statusPillClasses,
+  NO_CANCELLATION,
+} from "@/lib/publicCopy";
 import { peso } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
@@ -187,6 +198,22 @@ export default async function TrackPage({
       <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm">
         <PublicStepper pipeline={pipeline} info={info} />
       </section>
+
+      {/* The cancellation policy, while it can still be acted on. An order
+          already delivered, returned or cancelled is past the point where
+          telling someone they may not cancel means anything — on a cancelled
+          one it would be pointed. */}
+      {!info.is_terminal && (
+        <section className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4">
+          <p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-red-800">
+            <Ban className="h-4 w-4 shrink-0" />
+            {NO_CANCELLATION.heading}
+          </p>
+          <p className="mt-1.5 text-sm leading-relaxed text-red-900">
+            {NO_CANCELLATION.body}
+          </p>
+        </section>
+      )}
 
       {/* Footer — the page named on this order, not one global link, so the
           customer reaches the staff who actually handle their document. */}
