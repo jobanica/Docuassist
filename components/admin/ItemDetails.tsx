@@ -27,6 +27,7 @@ import { SurnameWarnings } from "./SurnameWarnings";
 import { surnameIssues } from "@/lib/parse/surname";
 import { PSA_FORMS } from "@/lib/psa-forms";
 import { DocumentPhotoScan } from "./DocumentPhotoScan";
+import { PsaFormImage } from "./PsaFormImage";
 import type { FormFieldDef } from "@/lib/types";
 
 /**
@@ -60,6 +61,8 @@ export function ItemDetails({
   orderId,
   serviceId,
   serviceCode,
+  serviceName,
+  customerName,
   fields,
   formDetails,
   pastedDetails,
@@ -70,6 +73,10 @@ export function ItemDetails({
   serviceId: string;
   /** Only birth and CENOMAR carry the parent-surname rule. */
   serviceCode: string;
+  /** Printed as the form's heading, and used in the image's filename. */
+  serviceName: string;
+  /** Only for naming the downloaded image file. */
+  customerName: string;
   fields: FormFieldDef[];
   formDetails: Record<string, string>;
   pastedDetails: string | null;
@@ -256,6 +263,16 @@ export function ItemDetails({
             </pre>
           )}
         </div>
+      )}
+
+      {/* --- The form as a picture, for sending to the customer --- */}
+      {hasPsaForm && (
+        <PsaFormImage
+          serviceCode={serviceCode}
+          serviceName={serviceName}
+          details={values}
+          label={`${customerName} ${serviceName}`}
+        />
       )}
 
       {/* --- Structured fields, used to fill the printable PSA form --- */}

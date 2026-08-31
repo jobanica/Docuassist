@@ -4,6 +4,12 @@ import { useState } from "react";
 import { Printer, Copy, Check, Download, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toMessage } from "@/lib/action-result";
+import {
+  copyPngToClipboard,
+  downloadPng,
+  formImageFilename,
+  nodeToPng,
+} from "@/lib/form-image";
 
 /**
  * Print / copy-as-image / download-as-image for the filled PSA form.
@@ -21,30 +27,14 @@ export function PrintActions({ targetId }: { targetId: string }) {
   async function toPng(): Promise<Blob> {
     const node = document.getElementById(targetId);
     if (!node) throw new Error("Form not found on the page.");
-    // Imported lazily so the library isn't in the initial bundle.
-    const { toBlob } = await import("html-to-image");
-    const blob = await toBlob(node, {
-      pixelRatio: 2, // legible when the customer zooms in on a phone
-      backgroundColor: "#ffffff",
-      cacheBust: true,
-    });
-    if (!blob) throw new Error("Could not render the form as an image.");
-    return blob;
+    return nodeToPng(node);
   }
 
   async function copyImage() {
     setError(null);
     setBusy("copy");
     try {
-      const blob = await toPng();
-      if (!navigator.clipboard || typeof ClipboardItem === "undefined") {
-        throw new Error(
-          "This browser can't copy images. Use “Download image” and attach the file instead."
-        );
-      }
-      await navigator.clipboard.write([
-        new ClipboardItem({ "image/png": blob }),
-      ]);
+      await copyPngToClipboard(await toPng());
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch (e) {
@@ -62,15 +52,7 @@ export function PrintActions({ targetId }: { targetId: string }) {
     setError(null);
     setBusy("download");
     try {
-      const blob = await toPng();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `psa-form-${targetId}-${Date.now()}.png`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      downloadPng(await toPng(), formImageFilename(`psa-form-${targetId}`));
     } catch (e) {
       setError(toMessage(e));
     } finally {
