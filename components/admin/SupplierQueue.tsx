@@ -10,12 +10,16 @@ import {
   Clock,
   Loader2,
   AlertCircle,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toMessage, unwrap } from "@/lib/action-result";
 import { startProcessing, type SupplierQueueRow } from "@/lib/actions/supplier";
 import { fmtDate } from "@/lib/dates";
 import { RequirementFiles } from "./RequirementFiles";
+import { DelayPanel } from "./DelayPanel";
+import { aging, agingPill, ageLabel } from "@/lib/status";
+import type { StatusCode } from "@/lib/types";
 
 /**
  * The supplier's work list.
@@ -112,9 +116,19 @@ function OrderCard({
   }
 
   const docs = row.items.map((i) => i.service_name).join(", ");
+  const age = aging(row.status as StatusCode, row.status_since ?? "");
+  const isDelayed = Boolean(row.delayed_at);
 
   return (
-    <div className="rounded-xl bg-white p-4 shadow-[0_1px_3px_rgba(16,24,40,0.06)]">
+    <div
+      className={`rounded-xl bg-white p-4 shadow-[0_1px_3px_rgba(16,24,40,0.06)] ${
+        age === "alert" || isDelayed
+          ? "border-l-4 border-red-500"
+          : age === "warn"
+            ? "border-l-4 border-amber-400"
+            : ""
+      }`}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-semibold text-slate-900">{row.customer_name}</p>
@@ -122,6 +136,21 @@ function OrderCard({
             {docs} · <span className="font-mono">{row.tracking_code}</span> ·
             received {fmtDate(row.created_at)}
           </p>
+          {!canStart && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${agingPill[age]}`}
+              >
+                {age !== "none" && <AlertTriangle className="h-3 w-3" />}
+                {ageLabel(row.status_since)} with you
+              </span>
+              {age === "alert" && (
+                <span className="text-[11px] font-medium text-red-700">
+                  needs attention
+                </span>
+              )}
+            </div>
+          )}
         </div>
         {canStart ? (
           <Button size="sm" onClick={start} disabled={pending}>
@@ -147,6 +176,17 @@ function OrderCard({
           <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           {error}
         </p>
+      )}
+
+      {!canStart && (
+        <div className="mt-3">
+          <DelayPanel
+            orderId={row.order_id}
+            delayedAt={row.delayed_at}
+            reason={row.delay_reason}
+            files={row.delay_files ?? []}
+          />
+        </div>
       )}
 
       <button

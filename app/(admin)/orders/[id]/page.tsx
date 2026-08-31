@@ -14,6 +14,7 @@ import { OrderActions } from "@/components/admin/OrderActions";
 import { TrackingPanel } from "@/components/admin/TrackingPanel";
 import { PaymentToggle } from "@/components/admin/PaymentToggle";
 import { ItemDetails } from "@/components/admin/ItemDetails";
+import { DelayNotice } from "@/components/admin/DelayNotice";
 import { CustomerCard } from "@/components/admin/CustomerCard";
 import { listMessengerPages } from "@/lib/actions/messenger-pages";
 import { qrDataUrl, trackingUrl } from "@/lib/qr";
@@ -34,6 +35,7 @@ const eventLabel: Record<string, string> = {
   status_change: "",
   failed_attempt: "Failed delivery attempt",
   backward_correction: "Status corrected",
+  note: "Note",
 };
 
 export default async function OrderDetailPage({
@@ -51,7 +53,8 @@ export default async function OrderDetailPage({
        couriers ( id, name, tracking_page_url ),
        order_items ( id, service_id, quantity, price_at_order, form_details,
                      pasted_details, services ( name, code, form_fields ),
-                     order_item_files ( id, file_name, mime_type, size_bytes, created_at ) )`
+                     order_item_files ( id, file_name, mime_type, size_bytes, created_at ) ),
+       order_delay_files ( id, file_name, mime_type, size_bytes, created_at )`
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -253,6 +256,14 @@ export default async function OrderDetailPage({
                 ? { text: withPaste.pasted_details, serviceId: withPaste.service_id }
                 : null;
             })()}
+          />
+
+          {/* A held-up job goes above its own contents: it is the first thing
+              to act on when the customer asks where their ID is. */}
+          <DelayNotice
+            delayedAt={o.delayed_at ?? null}
+            reason={o.delay_reason ?? null}
+            files={o.order_delay_files ?? []}
           />
 
           <Card>

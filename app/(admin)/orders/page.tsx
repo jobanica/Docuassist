@@ -21,7 +21,7 @@ export default async function OrdersPage() {
         .from("orders")
         .select(
           `id, tracking_code, status, total_amount, created_at, status_since,
-           delivery_attempts, source, created_by,
+           delayed_at, delay_reason, delivery_attempts, source, created_by,
            customers ( id, full_name, phone, customer_tags ( tag_id ) ),
            staff_users ( name ),
            order_items ( services ( code, name ) )`
@@ -63,6 +63,8 @@ export default async function OrdersPage() {
       total_amount: Number(o.total_amount),
       created_at: o.created_at,
       status_since: o.status_since,
+      delayed_at: o.delayed_at ?? null,
+      delay_reason: o.delay_reason ?? null,
       delivery_attempts: o.delivery_attempts,
       source: o.source ?? "staff",
       customer_id: o.customers?.id ?? null,

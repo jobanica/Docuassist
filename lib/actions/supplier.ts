@@ -23,6 +23,11 @@ export interface SupplierQueueRow {
   tracking_code: string;
   status: string;
   created_at: string;
+  /** When this order entered its current stage — the ageing clock. */
+  status_since: string | null;
+  delayed_at: string | null;
+  delay_reason: string | null;
+  delay_files: RequirementFile[];
   customer_name: string;
   phone: string | null;
   messenger_name: string | null;
@@ -67,5 +72,32 @@ export async function startProcessing(
     });
     if (error) throw new Error(error.message);
     revalidatePath("/queue");
+  });
+}
+
+/**
+ * Flag a job as held up, and say why.
+ *
+ * The reason is shown to the customer on their tracking page — they are the
+ * one waiting, and the supplier is the only one who knows. An empty reason
+ * lifts the flag, so "moving again" needs no second button.
+ */
+export async function markDelayed(
+  orderId: string,
+  reason: string
+): Promise<ActionResult<string>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    if (staff.role !== "supplier") {
+      throw new Error("This is the supplier's action.");
+    }
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("supplier_mark_delayed", {
+      p_order: orderId,
+      p_reason: reason,
+    });
+    if (error) throw new Error(error.message);
+    revalidatePath("/queue");
+    return (data ?? "") as string;
   });
 }

@@ -47,6 +47,9 @@ export interface OrderRow {
   created_by_name: string | null;
   service_codes: string[];
   service_names: string[];
+  /** Set by the supplier when a job is held up; the customer sees the reason. */
+  delayed_at: string | null;
+  delay_reason: string | null;
   /** Reason logged on the most recent failed delivery attempt, if any. */
   last_attempt_note: string | null;
   last_attempt_at: string | null;
@@ -624,7 +627,18 @@ export function OrdersTable({
                           Attempt {o.delivery_attempts}/3
                         </Badge>
                       )}
-                      {age === "alert" && (
+                      {/* The supplier's own word that something is wrong beats
+                          the clock: an order a week old with a reason on it is
+                          being handled, one without is not. */}
+                      {o.delayed_at && (
+                        <Badge
+                          className="bg-red-100 text-red-700"
+                          title={o.delay_reason ?? "Delayed"}
+                        >
+                          Delayed
+                        </Badge>
+                      )}
+                      {age === "alert" && !o.delayed_at && (
                         <Badge className="bg-red-100 text-red-700">Aging</Badge>
                       )}
                     </div>

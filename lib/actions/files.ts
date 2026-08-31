@@ -66,6 +66,133 @@ async function assertCanUseItem(itemId: string): Promise<void> {
   if (!data) throw new Error("That document is no longer there.");
 }
 
+/** May this caller touch this order? Same shape as the item check above. */
+async function assertCanUseOrder(orderId: string): Promise<void> {
+  const staff = await requireStaff();
+  const supabase = createClient();
+
+  if (staff.role === "supplier") {
+    const { data: ok } = await supabase.rpc("supplier_can_see_order", {
+      p_order: orderId,
+    });
+    if (!ok) throw new Error("That order is not one of yours.");
+    return;
+  }
+  const { data } = await supabase
+    .from("orders")
+    .select("id")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!data) throw new Error("That order is no longer there.");
+}
+
+/**
+ * A photo to go with a delay — the queue slip, the office notice. Optional,
+ * like everything else here; a delay can be a sentence with nothing attached.
+ *
+ * The supplier IS allowed to add these, unlike the requirements: they are the
+ * one who saw whatever went wrong.
+ */
+export async function uploadDelayFile(
+  orderId: string,
+  fileName: string,
+  mimeType: string,
+  data: string
+): Promise<ActionResult<RequirementFile>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    await assertCanUseOrder(orderId);
+
+    if (!ALLOWED.has(mimeType)) {
+      throw new Error(
+        "Attach a photo (JPG, PNG, HEIC or WebP) or a PDF. Other file types are not accepted."
+      );
+    }
+    const bytes = Buffer.from(data, "base64");
+    if (bytes.length === 0) throw new Error("That file came through empty.");
+    if (bytes.length > MAX_BYTES) {
+      throw new Error(
+        "That file is over 10MB. Send a photo of it rather than the original scan."
+      );
+    }
+
+    const admin = createAdminClient();
+    const { count } = await admin
+      .from("order_delay_files")
+      .select("id", { count: "exact", head: true })
+      .eq("order_id", orderId);
+    if ((count ?? 0) >= MAX_PER_ITEM) {
+      throw new Error(
+        `This delay already has ${MAX_PER_ITEM} photos — remove one first.`
+      );
+    }
+
+    const ext = (fileName.match(/\.([a-z0-9]{1,5})$/i)?.[1] ?? "bin").toLowerCase();
+    const path = `${orderId}/delay/${crypto.randomUUID()}.${ext}`;
+
+    const { error: upErr } = await admin.storage
+      .from(BUCKET)
+      .upload(path, bytes, { contentType: mimeType, upsert: false });
+    if (upErr) throw new Error(upErr.message);
+
+    // Written with the service key because a supplier can insert into no
+    // table; the check above is what stands in for the policy.
+    const { data: row, error } = await admin
+      .from("order_delay_files")
+      .insert({
+        order_id: orderId,
+        storage_path: path,
+        file_name: fileName.slice(0, 200),
+        mime_type: mimeType,
+        size_bytes: bytes.length,
+        uploaded_by: staff.id,
+      })
+      .select("id, file_name, mime_type, size_bytes, created_at")
+      .single();
+    if (error) {
+      await admin.storage.from(BUCKET).remove([path]);
+      throw new Error(error.message);
+    }
+
+    revalidatePath("/queue");
+    revalidatePath(`/orders/${orderId}`);
+    return row as RequirementFile;
+  });
+}
+
+/** A short-lived link to a delay photo, for the office or the supplier. */
+export async function delayFileUrl(
+  fileId: string
+): Promise<ActionResult<string>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    const supabase = createClient();
+    const admin = createAdminClient();
+
+    const { data: file } = await admin
+      .from("order_delay_files")
+      .select("storage_path, order_id")
+      .eq("id", fileId)
+      .maybeSingle();
+    if (!file) throw new Error("That photo is no longer there.");
+
+    if (staff.role === "supplier") {
+      const { data: ok } = await supabase.rpc("supplier_can_see_delay_file", {
+        p_file: fileId,
+      });
+      if (!ok) throw new Error("That photo is not one of yours.");
+    } else {
+      await assertCanUseOrder(file.order_id);
+    }
+
+    const { data, error } = await admin.storage
+      .from(BUCKET)
+      .createSignedUrl(file.storage_path, LINK_SECONDS);
+    if (error || !data) throw new Error(error?.message ?? "Could not open that file.");
+    return data.signedUrl;
+  });
+}
+
 /**
  * Attach a requirement — an ID photo, a birth certificate — to one document.
  *

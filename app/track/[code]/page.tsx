@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { MessageCircle, PackageX, ShieldCheck } from "lucide-react";
+import { AlertTriangle, MessageCircle, PackageX, ShieldCheck } from "lucide-react";
 import {
   lookupTracking,
   getBusinessInfo,
@@ -99,6 +99,27 @@ export default async function TrackPage({
     <Shell>
       {/* The answer they came for, before anything else. */}
       <ArrivalHero info={info} />
+
+      {/* A held-up job goes above the status, because it changes what the
+          arrival date means. The reason is the supplier's own words — the
+          person who actually knows — so it is shown rather than paraphrased. */}
+      {info.is_delayed && (
+        <section className="mt-4 rounded-2xl border border-amber-300 bg-amber-50 p-5">
+          <p className="flex items-center gap-2 font-semibold text-amber-900">
+            <AlertTriangle className="h-5 w-5 shrink-0" />
+            There&apos;s a delay on this one
+          </p>
+          {info.delay_reason && (
+            <p className="mt-2 text-sm leading-relaxed text-amber-900">
+              {info.delay_reason}
+            </p>
+          )}
+          <p className="mt-3 text-xs text-amber-800/80">
+            We&apos;re on it — the dates below may move. Message us if you need
+            anything.
+          </p>
+        </section>
+      )}
 
       {/* Summary. Centred so the status badge lands in the middle of the
           card — after the arrival date it is the thing being looked for, and

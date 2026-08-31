@@ -26,11 +26,17 @@ export interface TrackingInfo {
   delivered_at: string | null;
   returned_at: string | null;
   return_reason: string | null;
+  /** Set when the supplier has flagged the job as held up. */
+  is_delayed: boolean;
+  delayed_at: string | null;
+  /** Written by whoever is processing the document, shown here word for word. */
+  delay_reason: string | null;
   /** The Facebook page this order's customer should message. */
   messenger: { name: string; url: string } | null;
   history: {
     status: StatusCode | null;
     label: string | null;
+    /** 'note' is filtered out server-side — the office's trail, not theirs. */
     event_type: "status_change" | "failed_attempt" | "backward_correction";
     attempt_number: number | null;
     note: string | null;
