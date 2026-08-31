@@ -181,6 +181,13 @@ export default async function TrackPage({
           <p className="text-2xl font-bold text-emerald-700">
             {peso(info.total_amount)}
           </p>
+          {/* Someone promised ₱100 off should see the ₱100, not just a
+              smaller number than the one they were quoted. */}
+          {info.discount_amount > 0 && (
+            <p className="mt-0.5 text-xs text-emerald-700">
+              {peso(info.discount_amount)} discount already applied
+            </p>
+          )}
         </section>
       )}
 

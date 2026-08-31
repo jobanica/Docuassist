@@ -3,6 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 export interface SalesSummary {
   booked_amount: number;
   booked_count: number;
+  /** Given away on booked orders in the period, and on how many. */
+  discount_amount: number;
+  discount_count: number;
   collected_amount: number;
   collected_count: number;
   /** Sale price of returned orders — revenue that never arrived. */

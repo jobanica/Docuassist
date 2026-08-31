@@ -21,7 +21,7 @@ export default async function OrdersPage() {
       supabase
         .from("orders")
         .select(
-          `id, tracking_code, status, total_amount, created_at, status_since,
+          `id, tracking_code, status, total_amount, discount_amount, created_at, status_since,
            delayed_at, delay_reason, delivery_attempts, source, created_by,
            customers ( id, full_name, phone, customer_tags ( tag_id ) ),
            staff_users ( name ),
@@ -73,6 +73,7 @@ export default async function OrdersPage() {
       status: o.status,
       status_label: statusLabel.get(o.status) ?? o.status,
       total_amount: Number(o.total_amount),
+      discount_amount: Number(o.discount_amount ?? 0),
       created_at: o.created_at,
       status_since: o.status_since,
       delayed_at: o.delayed_at ?? null,

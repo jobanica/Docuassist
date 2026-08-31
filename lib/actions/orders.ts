@@ -10,6 +10,7 @@ import {
   missingFieldsMessage,
   missingRequiredLabels,
 } from "@/lib/required-fields";
+import { clampDiscount, peso } from "@/lib/money";
 import { nameCheckKey } from "@/lib/parse/surname";
 import { nextStatus, canCancel, PIPELINE } from "@/lib/status";
 import { addDaysISO } from "@/lib/dates";
@@ -32,6 +33,9 @@ const orderItemSchema = z.object({
 
 const createOrderSchema = z.object({
   customer_id: z.string().uuid(),
+  /** Taken off the whole order. Regulars ask; this is where it goes. */
+  discount_amount: z.coerce.number().min(0).default(0),
+  discount_reason: z.string().max(200).default(""),
   initial_status: z.enum(["new_inquiry", "details_received"]),
   /** Facebook page the tracking link points at. Null falls back to the
    *  business default when the page is rendered. */
@@ -133,6 +137,14 @@ export async function createOrder(
       await assertItemsComplete(parsed.items);
     }
 
+    // A discount cannot be larger than the order it comes off — a slipped
+    // keystroke should not turn a sale into a refund.
+    const subtotal = parsed.items.reduce(
+      (sum, it) => sum + it.price_at_order * it.quantity,
+      0
+    );
+    const discount = clampDiscount(parsed.discount_amount, subtotal);
+
     const { data: order, error: orderErr } = await supabase
       .from("orders")
       .insert({
@@ -145,6 +157,9 @@ export async function createOrder(
         // running a separate page doesn't have to remember to switch it.
         messenger_page_id:
           parsed.messenger_page_id ?? staff.default_messenger_page_id,
+        // total_amount follows from the items and this, in the database.
+        discount_amount: discount,
+        discount_reason: parsed.discount_reason.trim() || null,
       })
       .select("id")
       .single();
@@ -916,5 +931,88 @@ export async function undoNameCheck(itemId: string): Promise<ActionResult<void>>
 
     revalidatePath("/orders");
     revalidatePath(`/orders/${item.order_id}`);
+  });
+}
+
+/**
+ * A discount off the whole order.
+ *
+ * Regulars ask, and the answer used to be to edit the price on the document
+ * itself — which rewrites what that document costs and leaves the per-service
+ * report saying a birth certificate earns ₱585 some days and ₱685 others. This
+ * keeps the price of the document and the favour done for the customer as two
+ * separate figures, with the reason beside the second one.
+ *
+ * The total follows in the database, so the tracking page, the COD reminder,
+ * the SMS and the dashboard all move together.
+ */
+export async function setOrderDiscount(
+  orderId: string,
+  amount: number,
+  reason: string
+): Promise<ActionResult<{ discount: number; total: number }>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    const parsed = z
+      .object({
+        amount: z.coerce.number().min(0, "A discount cannot be negative"),
+        reason: z.string().max(200).default(""),
+      })
+      .parse({ amount, reason });
+
+    const supabase = createClient();
+    const { data: order, error: readErr } = await supabase
+      .from("orders")
+      .select("status, discount_amount, order_items ( price_at_order, quantity )")
+      .eq("id", orderId)
+      .single();
+    if (readErr) throw new Error(readErr.message);
+
+    // Money already collected is not ours to rewrite; a returned or cancelled
+    // order has nothing left to discount either.
+    if (["delivered", "returned", "cancelled"].includes(order.status as string)) {
+      throw new Error(
+        "This order is already closed — a discount can only be given while it is still in progress."
+      );
+    }
+
+    const subtotal = (order.order_items ?? []).reduce(
+      (sum: number, it: any) => sum + Number(it.price_at_order) * it.quantity,
+      0
+    );
+    const discount = clampDiscount(parsed.amount, subtotal);
+    const wasGiven = Number(order.discount_amount) > 0;
+
+    const { data: saved, error } = await supabase
+      .from("orders")
+      .update({
+        discount_amount: discount,
+        discount_reason: discount > 0 ? parsed.reason.trim() || null : null,
+      })
+      .eq("id", orderId)
+      .select("total_amount")
+      .single();
+    if (error) throw new Error(error.message);
+
+    // Kept in the order's history: a discount is money, and money that moved
+    // should say who moved it. Notes stay out of the customer's timeline.
+    await supabase.from("order_status_history").insert({
+      order_id: orderId,
+      event_type: "note",
+      note:
+        discount > 0
+          ? `Discount ${peso(discount)}${
+              parsed.reason.trim() ? ` — ${parsed.reason.trim()}` : ""
+            }`
+          : wasGiven
+            ? "Discount removed"
+            : "Discount set to zero",
+      changed_by: staff.id,
+    });
+
+    revalidatePath("/orders");
+    revalidatePath(`/orders/${orderId}`);
+    revalidatePath("/dashboard");
+    return { discount, total: Number(saved.total_amount) };
   });
 }

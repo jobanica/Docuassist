@@ -76,11 +76,21 @@ export default async function DashboardPage({
           icon={<TrendingUp className="h-4 w-4 text-[#2a78d6]" />}
           label="Booked"
           value={peso(s?.booked_amount ?? 0)}
-          sub={
+          sub={[
+            `${s?.booked_count ?? 0} orders encoded`,
             (s?.cancelled_count ?? 0) > 0
-              ? `${s?.booked_count ?? 0} orders · ${s?.cancelled_count} cancelled not counted`
-              : `${s?.booked_count ?? 0} orders encoded`
-          }
+              ? `${s?.cancelled_count} cancelled not counted`
+              : null,
+            // Already out of the figure above — shown so what was given away
+            // to keep the regulars has a number against it.
+            (s?.discount_amount ?? 0) > 0
+              ? `${peso(s?.discount_amount ?? 0)} discounted on ${
+                  s?.discount_count
+                }`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         />
         <Stat
           icon={<PackageX className="h-4 w-4 text-red-500" />}

@@ -12,6 +12,8 @@ export interface TrackingInfo {
   is_terminal: boolean;
   public_helper: string | null;
   total_amount: number;
+  /** Taken off before the total above. Shown so a promised discount is seen. */
+  discount_amount: number;
   payment_method: string;
   payment_status: "unpaid" | "paid";
   courier: {

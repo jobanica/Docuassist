@@ -14,6 +14,7 @@ import { OrderActions } from "@/components/admin/OrderActions";
 import { TrackingPanel } from "@/components/admin/TrackingPanel";
 import { PaymentToggle } from "@/components/admin/PaymentToggle";
 import { ItemDetails } from "@/components/admin/ItemDetails";
+import { DiscountPanel } from "@/components/admin/DiscountPanel";
 import { DelayNotice } from "@/components/admin/DelayNotice";
 import { CustomerCard } from "@/components/admin/CustomerCard";
 import { listMessengerPages } from "@/lib/actions/messenger-pages";
@@ -62,6 +63,14 @@ export default async function OrderDetailPage({
     .maybeSingle();
 
   if (!order) notFound();
+
+  // What the documents come to before any favour is taken off. total_amount is
+  // already net of the discount, so this is the figure the panel counts down
+  // from.
+  const subtotal = (order.order_items ?? []).reduce(
+    (sum: number, it: any) => sum + Number(it.price_at_order) * it.quantity,
+    0
+  );
 
   const [
     { data: statuses },
@@ -319,6 +328,19 @@ export default async function OrderDetailPage({
                   </div>
                 );
               })}
+              {/* The favour done for a regular, kept off the document's own
+                  price so the per-service report stays honest. */}
+              <DiscountPanel
+                orderId={o.id}
+                subtotal={subtotal}
+                discount={Number(o.discount_amount ?? 0)}
+                reason={o.discount_reason ?? null}
+                total={Number(o.total_amount)}
+                editable={
+                  !["delivered", "returned", "cancelled"].includes(o.status)
+                }
+              />
+
               {(o.expected_release_date || o.expected_delivery_date) && (
                 <div className="grid grid-cols-2 gap-4 border-t pt-3 text-xs">
                   <div>

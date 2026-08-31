@@ -84,7 +84,12 @@ export interface Order {
   customer_id: string;
   tracking_code: string;
   status: StatusCode;
+  /** What the customer pays — the items, already less any discount. */
   total_amount: number;
+  /** Taken off the items for this order. Zero on most. */
+  discount_amount: number;
+  /** Why it was given. Office-only; the customer sees the peso figure. */
+  discount_reason: string | null;
   payment_method: string;
   payment_status: "unpaid" | "paid";
   courier_id: string | null;

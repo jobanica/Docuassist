@@ -11,6 +11,7 @@ import {
   MessageCircle,
   Wand2,
   AlertCircle,
+  Tag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toMessage, unwrap } from "@/lib/action-result";
@@ -23,7 +24,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { peso } from "@/lib/money";
+import { clampDiscount, percentOff, peso } from "@/lib/money";
 import { searchCustomers, createCustomer } from "@/lib/actions/customers";
 import {
   findDuplicateOrders,
@@ -109,6 +110,9 @@ export function NewOrderForm({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [discountOpen, setDiscountOpen] = useState(false);
+  const [discountAmount, setDiscountAmount] = useState("");
+  const [discountReason, setDiscountReason] = useState("");
 
   // --- Customer ---
   const [mode, setMode] = useState<"new" | "pick">("new");
@@ -440,10 +444,14 @@ export function NewOrderForm({
 
   const selectedPage = messengerPages.find((p) => p.id === pageId) ?? null;
   const chosen = services.filter((s) => selected[s.id]);
-  const total = chosen.reduce(
+  const subtotal = chosen.reduce(
     (sum, s) => sum + Number(s.price) * (selected[s.id]?.quantity ?? 1),
     0
   );
+  // Regulars ask for one while they are being encoded, so it belongs here
+  // rather than only on the saved order.
+  const discount = clampDiscount(Number(discountAmount), subtotal);
+  const total = subtotal - discount;
 
   async function submit(force = false) {
     setError(null);
@@ -566,6 +574,8 @@ export function NewOrderForm({
             customer_id: customerId,
             initial_status: initialStatus,
             messenger_page_id: pageId,
+            discount_amount: discount,
+            discount_reason: discountReason,
             items: chosen.map((s) => ({
               service_id: s.id,
               quantity: selected[s.id].quantity,
@@ -1156,12 +1166,98 @@ export function NewOrderForm({
             />
           )}
 
+          {/* A favour for a regular, kept off the document's own price so the
+              per-service report still says what a birth certificate earns. */}
+          <div className="border-t pt-4">
+            {!discountOpen && discount === 0 ? (
+              <button
+                type="button"
+                onClick={() => setDiscountOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-accent/40"
+              >
+                <Tag className="h-3.5 w-3.5" /> Give a discount
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm font-semibold">
+                  Discount on {peso(subtotal)}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                      ₱
+                    </span>
+                    <Input
+                      inputMode="decimal"
+                      value={discountAmount}
+                      onChange={(e) =>
+                        setDiscountAmount(e.target.value.replace(/[^\d.]/g, ""))
+                      }
+                      placeholder="0"
+                      className="h-9 w-28 pl-6"
+                    />
+                  </div>
+                  {[5, 10, 15].map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() =>
+                        setDiscountAmount(String(percentOff(subtotal, p)))
+                      }
+                      className="rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-accent/40"
+                    >
+                      {p}%
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDiscountAmount("");
+                      setDiscountReason("");
+                      setDiscountOpen(false);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent/40"
+                  >
+                    <X className="h-3.5 w-3.5" /> Remove
+                  </button>
+                </div>
+                <Input
+                  value={discountReason}
+                  maxLength={200}
+                  onChange={(e) => setDiscountReason(e.target.value)}
+                  placeholder="Why — e.g. suki since 2024, third document this month"
+                  className="h-9 text-sm"
+                />
+                {Number(discountAmount) > subtotal ? (
+                  <p className="flex items-start gap-1.5 text-xs text-destructive">
+                    <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    That is more than the order itself ({peso(subtotal)}). Check
+                    the figure — a discount can take the total to zero, but no
+                    further.
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    The customer sees the lower total on their tracking page and
+                    in the COD reminder. The reason stays on our side.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center justify-between border-t pt-4">
-            <p className="text-lg font-semibold">Total: {peso(total)}</p>
+            <div>
+              {discount > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {peso(subtotal)} less {peso(discount)} discount
+                </p>
+              )}
+              <p className="text-lg font-semibold">Total: {peso(total)}</p>
+            </div>
             <Button
               type="button"
               onClick={() => submit()}
-              disabled={pending || checking}
+              disabled={pending || checking || Number(discountAmount) > subtotal}
             >
               {checking
                 ? "Checking…"

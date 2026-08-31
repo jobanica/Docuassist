@@ -33,6 +33,8 @@ export interface OrderRow {
   status: StatusCode;
   status_label: string;
   total_amount: number;
+  /** Taken off already; shown so a discounted order is visible on the board. */
+  discount_amount: number;
   created_at: string;
   status_since: string;
   delivery_attempts: number;
@@ -691,7 +693,14 @@ export function OrdersTable({
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3">{peso(o.total_amount)}</td>
+                  <td className="px-4 py-3">
+                    {peso(o.total_amount)}
+                    {o.discount_amount > 0 && (
+                      <span className="block text-[11px] text-emerald-700">
+                        less {peso(o.discount_amount)}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {onCallList
                       ? fmtDateTime(o.last_attempt_at ?? o.status_since)
