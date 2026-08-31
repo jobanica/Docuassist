@@ -26,9 +26,9 @@ export default async function QueuePage() {
           Documents to process
         </h1>
         <p className="text-sm text-slate-500">
-          TIN and PhilHealth applications waiting on you. Mark one as started
-          when you begin it; it stays on the list until the finished IDs are
-          received.
+          TIN and PhilHealth applications waiting on you. Move a card to{" "}
+          <strong>In progress</strong> when you begin it — it stays there until
+          the finished IDs are received.
         </p>
       </div>
       <SupplierQueue rows={rows} />
