@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { normalizePhPhone } from "@/lib/sms/phone";
 import { notifyOrder } from "@/lib/sms/notify";
 import type { FormFieldDef } from "@/lib/types";
+import { joinLabels, missingRequiredLabels } from "@/lib/required-fields";
 
 /**
  * Create an order from the public self-service form.
@@ -69,6 +70,43 @@ export async function submitPublicOrder(
     const svc = byId.get(item.service_id);
     if (!svc || !svc.active) {
       return { ok: false, error: "One of the documents is no longer available." };
+    }
+  }
+
+  // --- Required fields, before a single row is written -----------------------
+  // The form marks them with an asterisk, but a browser is not a limit: this
+  // route is a public endpoint and a crafted payload reaches it directly. The
+  // order lands straight in Details Received, so the same rule the office is
+  // held to applies here.
+  {
+    const gaps = input.items.map((item) => {
+      const svc = byId.get(item.service_id)!;
+      const allowed = new Set(
+        ((svc.form_fields ?? []) as FormFieldDef[]).map((f) => f.key)
+      );
+      const details: Record<string, string> = {};
+      for (const [k, v] of Object.entries(item.form_details)) {
+        if (allowed.has(k) && typeof v === "string") details[k] = v;
+      }
+      return {
+        serviceName: svc.name,
+        labels: missingRequiredLabels(
+          (svc.form_fields ?? []) as FormFieldDef[],
+          details
+        ),
+      };
+    });
+    const incomplete = gaps.filter((g) => g.labels.length > 0);
+    if (incomplete.length > 0) {
+      return {
+        ok: false,
+        error:
+          "Please fill in " +
+          incomplete
+            .map((g) => `${g.serviceName}: ${joinLabels(g.labels)}`)
+            .join("; ") +
+          ".",
+      };
     }
   }
 

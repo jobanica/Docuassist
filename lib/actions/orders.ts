@@ -6,6 +6,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireStaff } from "@/lib/auth";
+import {
+  missingFieldsMessage,
+  missingRequiredLabels,
+} from "@/lib/required-fields";
 import { nextStatus, canCancel, PIPELINE } from "@/lib/status";
 import { addDaysISO } from "@/lib/dates";
 import { notifyOrder } from "@/lib/sms/notify";
@@ -32,6 +36,58 @@ const createOrderSchema = z.object({
 });
 
 export type CreateOrderInput = z.input<typeof createOrderSchema>;
+
+
+/**
+ * Stop an order claiming its details are complete when they are not.
+ *
+ * "Details received" is a promise to the customer and an instruction to
+ * whoever works the order next, so the fields the form marks with an asterisk
+ * have to actually be there by the time it is made. Before that — a stub
+ * raised while the customer is still replying — nothing is checked, because
+ * that is exactly what the stub is for.
+ */
+async function assertItemsComplete(
+  items: { service_id: string; form_details: Record<string, string> }[]
+): Promise<void> {
+  const ids = Array.from(new Set(items.map((i) => i.service_id)));
+  if (ids.length === 0) return;
+
+  const supabase = createClient();
+  const { data: services, error } = await supabase
+    .from("services")
+    .select("id, name, form_fields")
+    .in("id", ids);
+  if (error) throw new Error(error.message);
+
+  const byId = new Map((services ?? []).map((s: any) => [s.id, s]));
+  const gaps = items.map((it) => {
+    const svc = byId.get(it.service_id);
+    return {
+      serviceName: svc?.name ?? "Document",
+      labels: missingRequiredLabels(svc?.form_fields ?? [], it.form_details),
+    };
+  });
+
+  const message = missingFieldsMessage(gaps);
+  if (message) throw new Error(message);
+}
+
+/** The same check for an order already saved, read back from the database. */
+async function assertOrderComplete(orderId: string): Promise<void> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("order_items")
+    .select("service_id, form_details")
+    .eq("order_id", orderId);
+  if (error) throw new Error(error.message);
+  await assertItemsComplete(
+    (data ?? []).map((r: any) => ({
+      service_id: r.service_id,
+      form_details: (r.form_details ?? {}) as Record<string, string>,
+    }))
+  );
+}
 
 export async function createOrder(
   input: CreateOrderInput
@@ -67,6 +123,10 @@ export async function createOrder(
           )}. Add it to the customer, or save this as a new inquiry for now.`
         );
       }
+
+      // And the document's own required fields — a birth certificate with no
+      // birthdate cannot be filed.
+      await assertItemsComplete(parsed.items);
     }
 
     const { data: order, error: orderErr } = await supabase
@@ -178,6 +238,13 @@ export async function advanceStatus(
       throw new Error("Use “Mark as Delivered” to record COD collection.");
     }
 
+    // The gate is the same at both ends of Details Received: an order may not
+    // arrive there, nor leave it for Processing, with required fields blank.
+    // The second half is what catches orders saved before this was enforced.
+    if (target === "details_received" || current === "details_received") {
+      await assertOrderComplete(orderId);
+    }
+
     const patch: Record<string, unknown> = { status: target };
     if (target === "processing") {
       Object.assign(patch, await computeExpectedDates(orderId));
@@ -268,6 +335,31 @@ export async function bulkAdvanceStatus(
       throw new Error(
         "Marking delivered records the COD collection per order. Open each one and use “Mark as Delivered”."
       );
+    }
+
+    // Same gate as one at a time, checked across the whole selection before
+    // anything is written: a batch that half-moved would be worse than one
+    // that did not move at all, and the board would not show which half.
+    if (target === "details_received" || current === "details_received") {
+      const incomplete: string[] = [];
+      for (const id of ids) {
+        try {
+          await assertOrderComplete(id);
+        } catch {
+          incomplete.push(id);
+        }
+      }
+      if (incomplete.length > 0) {
+        const { data: codes } = await supabase
+          .from("orders")
+          .select("tracking_code")
+          .in("id", incomplete);
+        const list = (codes ?? []).map((c: any) => c.tracking_code).join(", ");
+        throw new Error(
+          `${incomplete.length} of those orders still have required details blank (${list}). ` +
+            `Open each one and fill them in. Nothing was changed.`
+        );
+      }
     }
 
     // `processing` stamps expected dates computed from that order's own

@@ -38,6 +38,7 @@ import { DocumentPhotoScan } from "./DocumentPhotoScan";
 import type { PlaceIssue } from "@/lib/parse/places";
 import { SurnameWarnings } from "./SurnameWarnings";
 import { surnameIssues } from "@/lib/parse/surname";
+import { joinLabels, missingRequiredLabels } from "@/lib/required-fields";
 import { createOrder } from "@/lib/actions/orders";
 import { parsePastedText, type ParseResult } from "@/lib/actions/parse";
 import type {
@@ -456,6 +457,39 @@ export function NewOrderForm({
           `The delivery address needs the ${missing.join(", ")}. Ask the customer for ${
             missing.length === 1 ? "it" : "them"
           } before creating the order, or save this as a new inquiry for now.`
+        );
+        return;
+      }
+
+      // The document's own required fields, on the same terms. The server
+      // refuses either way; catching it here opens the right panel and names
+      // the boxes instead of just saying no.
+      const gaps = chosen
+        .map((s) => ({
+          serviceName: s.name,
+          serviceId: s.id,
+          labels: missingRequiredLabels(
+            (s.form_fields ?? []) as FormFieldDef[],
+            selected[s.id].form_details
+          ),
+        }))
+        .filter((g) => g.labels.length > 0);
+      if (gaps.length > 0) {
+        setSelected((prev) => {
+          const next = { ...prev };
+          for (const g of gaps) {
+            if (next[g.serviceId]) {
+              next[g.serviceId] = { ...next[g.serviceId], fieldsOpen: true };
+            }
+          }
+          return next;
+        });
+        setError(
+          "Required details are still blank — " +
+            gaps
+              .map((g) => `${g.serviceName}: ${joinLabels(g.labels)}`)
+              .join("; ") +
+            ". Fill them in, or save this as a new inquiry until the customer sends them."
         );
         return;
       }
