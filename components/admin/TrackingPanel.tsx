@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, Check, Download, ExternalLink, MessageCircle } from "lucide-react";
+import { Copy, Check, ExternalLink, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toMessage, unwrap } from "@/lib/action-result";
 import { setOrderMessengerPage } from "@/lib/actions/messenger-pages";
@@ -80,13 +80,6 @@ export function TrackingPanel({
                 </>
               )}
             </Button>
-            <a
-              href={qrDataUrl}
-              download={`docuassist-${code}.png`}
-              className="inline-flex h-9 items-center gap-2 rounded-md border border-input px-3 text-sm font-medium hover:bg-accent"
-            >
-              <Download className="h-4 w-4" /> Download QR
-            </a>
             <a
               href={publicUrl}
               target="_blank"
