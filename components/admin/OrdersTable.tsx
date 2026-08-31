@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  Users,
   Search,
   PhoneCall,
   Printer,
@@ -50,6 +51,8 @@ export interface OrderRow {
   /** Set by the supplier when a job is held up; the customer sees the reason. */
   delayed_at: string | null;
   delay_reason: string | null;
+  /** Parents'-surname warnings on this order's documents, if any. */
+  name_issues: string[];
   /** Reason logged on the most recent failed delivery attempt, if any. */
   last_attempt_note: string | null;
   last_attempt_at: string | null;
@@ -61,6 +64,13 @@ export interface OrderRow {
  * recovered before the third attempt is a sale that would otherwise come back.
  */
 export const FAILED_ATTEMPTS = "__failed_attempts";
+
+/**
+ * Also not a status — the orders whose parents' names break the Philippine
+ * rule. Encoding is never blocked on it, deliberately, so these accumulate and
+ * have to be found again later. This is how they are found.
+ */
+export const NAME_MISMATCH = "__name_mismatch";
 
 function needsCall(o: OrderRow): boolean {
   return o.status === "shipped" && o.delivery_attempts > 0;
@@ -104,12 +114,18 @@ export function OrdersTable({
   const [moving, startMove] = useTransition();
 
   const callList = useMemo(() => orders.filter(needsCall), [orders]);
+  const nameList = useMemo(
+    () => orders.filter((o) => o.name_issues.length > 0),
+    [orders]
+  );
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const rows = orders.filter((o) => {
       if (status === FAILED_ATTEMPTS) {
         if (!needsCall(o)) return false;
+      } else if (status === NAME_MISMATCH) {
+        if (o.name_issues.length === 0) return false;
       } else if (status !== "all" && o.status !== status) return false;
       if (service !== "all" && !o.service_codes.includes(service)) return false;
       if (tagFilter === "untagged" && o.tag_ids.length > 0) return false;
@@ -284,6 +300,27 @@ export function OrdersTable({
     <div className="space-y-4">
       {/* Standing reminder so the call list is the first thing seen, without
           having to remember to open the filter. */}
+      {/* The same standing reminder for the names, because these are the ones
+          that were knowingly saved past a warning and would otherwise only
+          turn up when the PSA counter rejects them. */}
+      {nameList.length > 0 && status !== NAME_MISMATCH && (
+        <button
+          type="button"
+          onClick={() => setStatus(NAME_MISMATCH)}
+          className="flex w-full items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-left text-sm text-amber-900 hover:bg-amber-100"
+        >
+          <Users className="h-4 w-4 shrink-0" />
+          <span className="flex-1">
+            <strong>
+              {nameList.length} order{nameList.length === 1 ? "" : "s"} with
+              parents&apos; names to check
+            </strong>{" "}
+            — the last name or middle name doesn&apos;t follow the rule. Open
+            each one and confirm the names before it is filed.
+          </span>
+        </button>
+      )}
+
       {callList.length > 0 && !onCallList && (
         <button
           type="button"
@@ -320,6 +357,9 @@ export function OrdersTable({
           <option value="all">All statuses</option>
           <option value={FAILED_ATTEMPTS}>
             ⚠ Failed delivery attempts{callList.length ? ` (${callList.length})` : ""}
+          </option>
+          <option value={NAME_MISMATCH}>
+            ⚠ Parents&apos; names to check{nameList.length ? ` (${nameList.length})` : ""}
           </option>
           {statuses.map((s) => (
             <option key={s.code} value={s.code}>
@@ -640,6 +680,14 @@ export function OrdersTable({
                       )}
                       {age === "alert" && !o.delayed_at && (
                         <Badge className="bg-red-100 text-red-700">Aging</Badge>
+                      )}
+                      {o.name_issues.length > 0 && (
+                        <Badge
+                          className="bg-amber-100 text-amber-800"
+                          title={o.name_issues.join("\n")}
+                        >
+                          Name check
+                        </Badge>
                       )}
                     </div>
                   </td>

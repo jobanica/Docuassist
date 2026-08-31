@@ -4,6 +4,7 @@ import { getStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { buttonVariants } from "@/components/ui/button";
 import { OrdersTable, type OrderRow } from "@/components/admin/OrdersTable";
+import { surnameIssues } from "@/lib/parse/surname";
 import type { OrderStatus, Service } from "@/lib/types";
 import { listTags } from "@/lib/actions/tags";
 
@@ -24,7 +25,7 @@ export default async function OrdersPage() {
            delayed_at, delay_reason, delivery_attempts, source, created_by,
            customers ( id, full_name, phone, customer_tags ( tag_id ) ),
            staff_users ( name ),
-           order_items ( services ( code, name ) )`
+           order_items ( form_details, services ( code, name ) )`
         )
         .order("created_at", { ascending: false }),
       // Why each delivery failed, for the call list. Oldest first so the loop
@@ -49,10 +50,20 @@ export default async function OrdersPage() {
   const rows: OrderRow[] = (orders ?? []).map((o: any) => {
     const svcCodes: string[] = [];
     const svcNames: string[] = [];
+    // The parents'-surname rule is checked here rather than only inside the
+    // order, so the ones to go back over can be found from the board instead
+    // of by opening every order to look.
+    const nameIssues: string[] = [];
     for (const it of o.order_items ?? []) {
       if (it.services) {
         svcCodes.push(it.services.code);
         svcNames.push(it.services.name);
+        for (const issue of surnameIssues(
+          it.services.code,
+          (it.form_details ?? {}) as Record<string, string>
+        )) {
+          nameIssues.push(issue.message);
+        }
       }
     }
     return {
@@ -75,6 +86,7 @@ export default async function OrdersPage() {
       created_by_name: o.staff_users?.name ?? null,
       service_codes: svcCodes,
       service_names: svcNames,
+      name_issues: nameIssues,
       last_attempt_note: lastAttempt.get(o.id)?.note ?? null,
       last_attempt_at: lastAttempt.get(o.id)?.at ?? null,
     };
