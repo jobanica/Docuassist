@@ -342,15 +342,10 @@ export function NewOrderForm({
       // Computed before calling setState rather than counted inside an updater:
       // React runs updaters at render time, so anything counted in there is
       // still zero on the next line.
-      // Who to bill and deliver to. The receiver named in the reply wins: on a
-      // marriage or death certificate the document is not about the person
-      // ordering it, and those templates have no applicant name to fall back
-      // on at all — which is why nothing was filled there before.
-      const owner = [r.values.first_name, r.values.middle_name, r.values.last_name]
-        .filter((x) => x && x.trim())
-        .join(" ")
-        .trim();
-      const customerName = (r.customer.full_name ?? "").trim() || owner;
+      // Who to bill and deliver to. Which of the two names in the reply this
+      // is — the document's owner or whoever accepts the parcel — is decided
+      // in one place, on the server, so the paste and the photo agree.
+      const customerName = (r.customer.full_name ?? "").trim();
       let nameFilled = false;
       let deliveryFilled = 0;
       if (mode === "new") {

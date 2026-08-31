@@ -42,3 +42,35 @@ export function documentPlacePair(
   }
   return null;
 }
+
+/**
+ * The document owner's name, as it should appear on the customer record.
+ *
+ * The reply carries two names: whose document this is, and who will accept the
+ * parcel. They are often different people — a mother orders her son's CENOMAR
+ * and has it sent to her sister — and the business files and searches by the
+ * document's owner, so that is the one the customer record should carry.
+ *
+ * Returns "" when the template has no single owner to name, and the receiver
+ * stands in instead:
+ *
+ *  - A marriage certificate is about two people, so there is no one name.
+ *  - A death certificate names the deceased. They are not the customer, they
+ *    cannot receive the parcel, and their first name would greet whoever
+ *    opens the tracking link.
+ */
+export function documentOwnerName(
+  fields: { key: string }[],
+  values: Record<string, string>
+): string {
+  const has = (k: string) => fields.some((f) => f.key === k);
+  if (!has("last_name") || !has("first_name")) return "";
+  if (has("death_city") || has("death_province")) return "";
+
+  return [values.first_name, values.middle_name, values.last_name]
+    .map((v) => (v ?? "").trim())
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}

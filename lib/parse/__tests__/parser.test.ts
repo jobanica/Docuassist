@@ -7,6 +7,7 @@ import {
   checkProvince,
   placeIssues,
   documentPlacePair,
+  documentOwnerName,
   resolveCompound,
   checkBarangay,
 } from "@/lib/parse/places";
@@ -654,6 +655,35 @@ Province: Sorsogon`, [...PH_FIELDS, ...DELIVERY_FIELDS], opts);
   check("and the province only the courier asks for", ph.values.delivery_province, "Sorsogon");
   check("nothing required is missing",
     PH_FIELDS.filter((f: any) => f.required && !ph.values[f.key]).length, 0);
+}
+
+console.log("\n[23] The customer is the document's owner, not the receiver");
+{
+  const K = (...keys: string[]) => keys.map((key) => ({ key }));
+  const person = { first_name: "Christian", middle_name: "Talam", last_name: "Tingson" };
+
+  // Birth and CENOMAR name one living person: that is the customer.
+  const cenomar = K("last_name", "first_name", "middle_name", "birth_city", "birth_province");
+  check("CENOMAR owner is the customer",
+    documentOwnerName(cenomar, person), "Christian Talam Tingson");
+  check("a missing middle name leaves no double space",
+    documentOwnerName(cenomar, { first_name: "Ana", last_name: "Cruz" }), "Ana Cruz");
+  check("nothing read yet is not a name",
+    documentOwnerName(cenomar, {}), "");
+
+  // A marriage certificate is about two people — no single owner to name.
+  const marriage = K("husband_last", "husband_first", "wife_last", "wife_first",
+                     "marriage_city", "marriage_province");
+  check("marriage has no single owner", documentOwnerName(marriage, person), "");
+
+  // A death certificate names the deceased, who cannot be the customer.
+  const death = K("last_name", "first_name", "middle_name", "death_city", "death_province");
+  check("the deceased is not the customer", documentOwnerName(death, person), "");
+
+  // The ID forms name their applicant the same way a birth certificate does.
+  const tin = K("last_name", "first_name", "middle_name", "birthdate");
+  check("TIN applicant is the customer",
+    documentOwnerName(tin, person), "Christian Talam Tingson");
 }
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

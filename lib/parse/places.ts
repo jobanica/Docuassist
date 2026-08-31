@@ -2,7 +2,11 @@ import { CITIES, PROVINCES } from "@/lib/data/psgc";
 import { levenshtein } from "./labels";
 import { barangaysOfCity } from "@/lib/data/psgc-barangays";
 
-export { documentPlacePair, type PlacePair } from "./place-fields";
+export {
+  documentPlacePair,
+  documentOwnerName,
+  type PlacePair,
+} from "./place-fields";
 
 /**
  * Check a city/municipality and province against the PSA's own PSGC list.

@@ -7,6 +7,7 @@ import { expandNameGroups, normalizeSex, parseTier1 } from "@/lib/parse/tier1";
 import {
   placeIssues,
   documentPlacePair,
+  documentOwnerName,
   type PlaceIssue,
 } from "@/lib/parse/places";
 import {
@@ -147,6 +148,13 @@ export async function parsePastedText(
     }
     filledKeys = filledKeys.filter((k) => !(k in DELIVERY_TO_CUSTOMER));
 
+    // The reply names two people: whose document this is, and who will accept
+    // the parcel. The business files by the document's owner, so that name
+    // wins — the receiver only stands in where the template has no single
+    // owner to name.
+    const owner = documentOwnerName(docFields, values);
+    if (owner) customer.full_name = owner;
+
     // Check the places against the PSA's own list before staff act on them.
     // The document's own pair is read off its schema, so a marriage or death
     // certificate is checked on its own keys rather than being skipped.
@@ -269,6 +277,9 @@ export async function parseDocumentImage(
     normalizeSex(values);
 
     const filledKeys = Object.keys(values);
+    // A certificate states no delivery address, but it does say whose document
+    // it is — which is the name the customer record should carry.
+    const owner = documentOwnerName(docFields, values);
     const missingRequired = docFields
       .filter((f) => f.required && !values[f.key])
       .map((f) => f.key);
@@ -306,7 +317,7 @@ export async function parseDocumentImage(
       values,
       filledKeys,
       missingRequired,
-      customer: {},
+      customer: (owner ? { full_name: owner } : {}) as Record<string, string>,
       places,
       tier: 3 as const,
       aiUnavailable: false,
