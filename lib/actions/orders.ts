@@ -10,6 +10,7 @@ import {
   missingFieldsMessage,
   missingRequiredLabels,
 } from "@/lib/required-fields";
+import { nameCheckKey } from "@/lib/parse/surname";
 import { nextStatus, canCancel, PIPELINE } from "@/lib/status";
 import { addDaysISO } from "@/lib/dates";
 import { notifyOrder } from "@/lib/sms/notify";
@@ -24,6 +25,9 @@ const orderItemSchema = z.object({
   form_details: z.record(z.string(), z.string()).default({}),
   /** The customer's reply pasted verbatim by staff. Kept as sent. */
   pasted_details: z.string().max(20000).default(""),
+  /** Set when staff accepted the parents'-surname warning while encoding —
+   *  the names are right and this says why. Empty means not accepted. */
+  name_check_ack_reason: z.string().max(200).default(""),
 });
 
 const createOrderSchema = z.object({
@@ -154,6 +158,16 @@ export async function createOrder(
         price_at_order: it.price_at_order,
         form_details: it.form_details,
         pasted_details: it.pasted_details.trim() || null,
+        // Pinned to the names it was given for, so a later edit re-opens the
+        // check rather than inheriting an acceptance meant for other names.
+        ...(it.name_check_ack_reason.trim()
+          ? {
+              name_check_ack_key: nameCheckKey(it.form_details),
+              name_check_ack_reason: it.name_check_ack_reason.trim(),
+              name_check_ack_at: new Date().toISOString(),
+              name_check_ack_by: staff.id,
+            }
+          : {}),
       }))
     );
     if (itemsErr) throw new Error(itemsErr.message);
@@ -818,5 +832,89 @@ export async function updateOrderItemDetails(
     const orderId = (item as any).order_id;
     revalidatePath(`/orders/${orderId}`);
     revalidatePath(`/orders/${orderId}/print`);
+  });
+}
+
+/**
+ * "The names are right" — recorded, with a reason.
+ *
+ * The parents'-surname rule is a warning, not a law, and one of its false
+ * alarms is ordinary here: unmarried parents, so the child is registered under
+ * the mother's surname with the father still named on the certificate. Staff
+ * knowing that had nowhere to put it — the warning came back on every visit,
+ * and the board listed the order among the ones still to check.
+ *
+ * The names are stored with the acceptance rather than a bare flag. Change one
+ * of them afterwards and the key no longer matches, so the check runs again on
+ * the new names instead of inheriting a blessing meant for the old ones.
+ */
+export async function acceptNameCheck(
+  itemId: string,
+  reason: string
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    const text = z.string().trim().min(1, "Say why the names are right")
+      .max(200).parse(reason);
+
+    const supabase = createClient();
+    const { data: item, error: readErr } = await supabase
+      .from("order_items")
+      .select("order_id, form_details")
+      .eq("id", itemId)
+      .single();
+    if (readErr) throw new Error(readErr.message);
+
+    const details = (item.form_details ?? {}) as Record<string, string>;
+    const { error } = await supabase
+      .from("order_items")
+      .update({
+        name_check_ack_key: nameCheckKey(details),
+        name_check_ack_reason: text,
+        name_check_ack_at: new Date().toISOString(),
+        name_check_ack_by: staff.id,
+      })
+      .eq("id", itemId);
+    if (error) throw new Error(error.message);
+
+    // Kept in the order's own history so the decision has a name and a date
+    // against it later. Notes stay out of the customer's timeline.
+    await supabase.from("order_status_history").insert({
+      order_id: item.order_id,
+      event_type: "note",
+      note: `Name check accepted — ${text}`,
+      changed_by: staff.id,
+    });
+
+    revalidatePath("/orders");
+    revalidatePath(`/orders/${item.order_id}`);
+  });
+}
+
+/** Undo an acceptance — the warning comes back, on the board too. */
+export async function undoNameCheck(itemId: string): Promise<ActionResult<void>> {
+  return run(async () => {
+    await requireStaff();
+    const supabase = createClient();
+    const { data: item, error: readErr } = await supabase
+      .from("order_items")
+      .select("order_id")
+      .eq("id", itemId)
+      .single();
+    if (readErr) throw new Error(readErr.message);
+
+    const { error } = await supabase
+      .from("order_items")
+      .update({
+        name_check_ack_key: null,
+        name_check_ack_reason: null,
+        name_check_ack_at: null,
+        name_check_ack_by: null,
+      })
+      .eq("id", itemId);
+    if (error) throw new Error(error.message);
+
+    revalidatePath("/orders");
+    revalidatePath(`/orders/${item.order_id}`);
   });
 }

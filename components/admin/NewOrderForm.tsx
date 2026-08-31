@@ -48,6 +48,15 @@ import type {
   Service,
 } from "@/lib/types";
 
+/** The five names the parents'-surname rule reads. */
+const NAME_KEYS = [
+  "last_name",
+  "middle_name",
+  "father_last",
+  "father_first",
+  "mother_last",
+];
+
 type SelectedService = {
   quantity: number;
   /** The customer's filled-out form, pasted from Messenger exactly as sent. */
@@ -58,6 +67,9 @@ type SelectedService = {
   autoFilled: string[];
   /** Whether the field grid is open for this document. */
   fieldsOpen: boolean;
+  /** Set when staff accept the parents'-surname warning here — unmarried
+   *  parents, adoption — and say why. Saved onto the item with the order. */
+  nameCheckReason: string;
 };
 
 const emptyNewCustomer = {
@@ -194,6 +206,7 @@ export function NewOrderForm({
           form_details: {},
           autoFilled: [],
           fieldsOpen: false,
+          nameCheckReason: "",
         };
       return next;
     });
@@ -271,6 +284,14 @@ export function NewOrderForm({
     ["province", "province"],
   ];
 
+  /** Accepting the parents'-surname warning on a document not yet saved. */
+  function setNameCheckReason(svcId: string, reason: string) {
+    setSelected((prev) => ({
+      ...prev,
+      [svcId]: { ...prev[svcId], nameCheckReason: reason },
+    }));
+  }
+
   function setField(svcId: string, key: string, value: string) {
     setSelected((prev) => ({
       ...prev,
@@ -279,6 +300,9 @@ export function NewOrderForm({
         form_details: { ...prev[svcId].form_details, [key]: value },
         // Staff has reviewed this box — drop the auto-filled highlight.
         autoFilled: prev[svcId].autoFilled.filter((k) => k !== key),
+        // An acceptance was given for the names as they read a moment ago.
+        // Edit one of them and it no longer applies, same as on a saved order.
+        nameCheckReason: NAME_KEYS.includes(key) ? "" : prev[svcId].nameCheckReason,
       },
     }));
     const pair = documentPlacePair(
@@ -333,6 +357,11 @@ export function NewOrderForm({
             form_details: details,
             autoFilled: filled,
             fieldsOpen: true,
+            // Auto-fill can put a name into a box that was empty when the
+            // warning was accepted, so the acceptance is given up too.
+            nameCheckReason: filled.some((k) => NAME_KEYS.includes(k))
+              ? ""
+              : cur.nameCheckReason,
           },
         };
       });
@@ -543,6 +572,7 @@ export function NewOrderForm({
               price_at_order: Number(s.price),
               pasted_details: selected[s.id].pasted_details,
               form_details: selected[s.id].form_details,
+              name_check_ack_reason: selected[s.id].nameCheckReason,
             })),
           })
         );
@@ -1062,6 +1092,13 @@ export function NewOrderForm({
                 svc.code,
                 selected[svc.id]?.form_details ?? {}
               )}
+              accepted={
+                selected[svc.id]?.nameCheckReason
+                  ? { reason: selected[svc.id].nameCheckReason }
+                  : null
+              }
+              onAccept={(reason) => setNameCheckReason(svc.id, reason)}
+              onUndo={() => setNameCheckReason(svc.id, "")}
             />
           ))}
 

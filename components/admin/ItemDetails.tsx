@@ -17,14 +17,18 @@ import { toMessage, unwrap } from "@/lib/action-result";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { updateOrderItemDetails } from "@/lib/actions/orders";
+import {
+  updateOrderItemDetails,
+  acceptNameCheck,
+  undoNameCheck,
+} from "@/lib/actions/orders";
 import { parsePastedText, type ParseResult } from "@/lib/actions/parse";
 import { PlaceWarnings } from "./PlaceWarnings";
 import { checkPlaces } from "@/lib/actions/places";
 import { documentPlacePair } from "@/lib/parse/place-fields";
 import type { PlaceIssue } from "@/lib/parse/places";
 import { SurnameWarnings } from "./SurnameWarnings";
-import { surnameIssues } from "@/lib/parse/surname";
+import { surnameIssues, nameCheckAccepted } from "@/lib/parse/surname";
 import { PSA_FORMS } from "@/lib/psa-forms";
 import { DocumentPhotoScan } from "./DocumentPhotoScan";
 import { PsaFormImage } from "./PsaFormImage";
@@ -70,6 +74,7 @@ export function ItemDetails({
   formDetails,
   pastedDetails,
   parsingEnabled,
+  nameCheck,
 }: {
   itemId: string;
   orderId: string;
@@ -87,6 +92,13 @@ export function ItemDetails({
   pastedDetails: string | null;
   /** Admin switch (Settings → Auto-fill). Off hides the button entirely. */
   parsingEnabled: boolean;
+  /** A standing "the names are right", and the names it was given for. */
+  nameCheck: {
+    key: string | null;
+    reason: string | null;
+    at: string | null;
+    by: string | null;
+  };
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -177,6 +189,38 @@ export function ItemDetails({
       try {
         unwrap(await updateOrderItemDetails(itemId, patch));
         done?.();
+        router.refresh();
+      } catch (e) {
+        setError(toMessage(e));
+      }
+    });
+  }
+
+  /**
+   * "The names are right", saved with the details it was judged against.
+   *
+   * The fields are written first so the acceptance and the row agree: the
+   * server pins it to what is stored, and staff usually reach this button
+   * with an edit still on screen.
+   */
+  function acceptNames(reason: string) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        unwrap(await updateOrderItemDetails(itemId, { form_details: values }));
+        unwrap(await acceptNameCheck(itemId, reason));
+        router.refresh();
+      } catch (e) {
+        setError(toMessage(e));
+      }
+    });
+  }
+
+  function undoNames() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        unwrap(await undoNameCheck(itemId));
         router.refresh();
       } catch (e) {
         setError(toMessage(e));
@@ -409,7 +453,21 @@ export function ItemDetails({
               </div>
               {/* Checked live off the edited values, so a fix clears it as
                   soon as the field is corrected. */}
-              <SurnameWarnings issues={surnameIssues(serviceCode, values)} />
+              <SurnameWarnings
+                issues={surnameIssues(serviceCode, values)}
+                accepted={
+                  nameCheckAccepted(values, nameCheck.key) && nameCheck.reason
+                    ? {
+                        reason: nameCheck.reason,
+                        at: nameCheck.at,
+                        by: nameCheck.by,
+                      }
+                    : null
+                }
+                onAccept={acceptNames}
+                onUndo={undoNames}
+                busy={pending}
+              />
               <PlaceWarnings
                 issues={places}
                 overridden={placesOk}

@@ -52,7 +52,9 @@ export default async function OrderDetailPage({
        customers (*),
        couriers ( id, name, tracking_page_url ),
        order_items ( id, service_id, quantity, price_at_order, form_details,
-                     pasted_details, services ( name, code, form_fields ),
+                     pasted_details, name_check_ack_key, name_check_ack_reason,
+                     name_check_ack_at, staff_users ( name ),
+                     services ( name, code, form_fields ),
                      order_item_files ( id, file_name, mime_type, size_bytes, created_at ) ),
        order_delay_files ( id, file_name, mime_type, size_bytes, created_at )`
     )
@@ -307,6 +309,12 @@ export default async function OrderDetailPage({
                       fields={fields}
                       formDetails={(it.form_details ?? {}) as Record<string, string>}
                       pastedDetails={it.pasted_details ?? null}
+                      nameCheck={{
+                        key: it.name_check_ack_key ?? null,
+                        reason: it.name_check_ack_reason ?? null,
+                        at: it.name_check_ack_at ?? null,
+                        by: it.staff_users?.name ?? null,
+                      }}
                     />
                   </div>
                 );

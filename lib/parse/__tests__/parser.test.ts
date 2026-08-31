@@ -11,7 +11,11 @@ import {
   resolveCompound,
   checkBarangay,
 } from "@/lib/parse/places";
-import { surnameIssues } from "@/lib/parse/surname";
+import {
+  surnameIssues,
+  nameCheckKey,
+  nameCheckAccepted,
+} from "@/lib/parse/surname";
 import {
   DELIVERY_FIELDS,
   DELIVERY_ONLY_IN_BLOCK,
@@ -437,6 +441,49 @@ console.log("\n[16] The Philippine naming rule");
   check("but not to a marriage certificate",
     surnameIssues("psa_marriage", { ...both, last_name: "Santos" }).length, 0);
   check("an empty form is not a wrong one", surnameIssues("psa_birth", {}).length, 0);
+}
+
+console.log("\n[16b] Accepting the warning, and losing it again");
+{
+  // The case this exists for: the parents are not married, the father is named
+  // on the certificate, and the child is registered under the mother's
+  // surname. The rule cannot tell that from a typo — the office can.
+  const unmarried = {
+    last_name: "NARDO", middle_name: "",
+    father_last: "JAMERO", father_first: "RODOLFO",
+    mother_last: "NARDO", mother_first: "HELEN",
+  };
+  check("the rule still flags it", surnameIssues("psa_birth", unmarried).length, 2);
+
+  const key = nameCheckKey(unmarried);
+  check("an acceptance covers the names it was given for",
+    nameCheckAccepted(unmarried, key), true);
+  check("case and spacing are not a different name",
+    nameCheckAccepted({ ...unmarried, last_name: " nardo " }, key), true);
+  check("no acceptance stored means not accepted",
+    nameCheckAccepted(unmarried, null), false);
+  check("an empty key is not an acceptance",
+    nameCheckAccepted(unmarried, ""), false);
+
+  // The point of pinning it: a name typed after the acceptance is checked
+  // again, rather than inheriting a blessing meant for a different name.
+  for (const [field, value] of [
+    ["last_name", "SANTOS"],
+    ["middle_name", "JAMERO"],
+    ["father_last", "REYES"],
+    ["father_first", "BEN"],
+    ["mother_last", "CRUZ"],
+  ] as const) {
+    check(`editing ${field} drops the acceptance`,
+      nameCheckAccepted({ ...unmarried, [field]: value }, key), false);
+  }
+  // Fat-finger an edit and correct it back and the acceptance holds again.
+  check("correcting a name back restores it",
+    nameCheckAccepted({ ...unmarried, last_name: "NARDO" }, key), true);
+
+  // Names the rule doesn't read don't disturb it.
+  check("an unrelated field is not part of the key",
+    nameCheckAccepted({ ...unmarried, first_name: "JOHN" }, key), true);
 }
 
 console.log("\n[17] Every template's own place fields are checked");

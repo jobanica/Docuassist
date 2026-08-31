@@ -137,3 +137,49 @@ export function surnameIssues(
 
   return out;
 }
+
+// -----------------------------------------------------------------------------
+// Accepting a warning
+// -----------------------------------------------------------------------------
+/**
+ * Some of these warnings are right about the rule and wrong about the family.
+ *
+ * The common one in the Philippines: the parents are not married, so the child
+ * is registered under the mother's surname even though the father is named on
+ * the certificate. The rule cannot tell that from a transcription slip, and the
+ * office can — so staff accept the warning and say why, once, instead of
+ * meeting it again on every visit to the order and on the board.
+ */
+export const NAME_CHECK_REASONS = [
+  "The parents are not married — the child carries the mother's surname",
+  "The child is adopted, or the name was legally changed",
+  "This is exactly how the PSA record reads",
+  "The customer confirmed the names are right",
+];
+
+/**
+ * The names an acceptance was given for.
+ *
+ * Stored alongside the acceptance and compared on every read, so accepting a
+ * warning never blesses a name typed later: change any of the five names and
+ * the key stops matching, the acceptance stops applying, and the warning comes
+ * back. Correct the name back and the old acceptance holds again, which is the
+ * right answer for a fat-fingered edit.
+ */
+export function nameCheckKey(details: Record<string, string>): string {
+  return [
+    norm(details.last_name),
+    norm(details.middle_name),
+    norm(details.father_last),
+    norm(details.father_first),
+    norm(details.mother_last),
+  ].join("|");
+}
+
+/** Whether a stored acceptance still covers the names as they are now. */
+export function nameCheckAccepted(
+  details: Record<string, string>,
+  ackKey: string | null | undefined
+): boolean {
+  return Boolean(ackKey) && ackKey === nameCheckKey(details);
+}
