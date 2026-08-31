@@ -10,12 +10,21 @@ export function RtsDonut({
   rate,
   returned,
   shipped,
+  docs,
+  costPerDoc,
   lostAmount,
+  uncollected,
 }: {
   rate: number;
   returned: number;
   shipped: number;
+  /** Documents inside the returned parcels — what the cost is charged per. */
+  docs: number;
+  costPerDoc: number;
+  /** Cash already spent on those documents. */
   lostAmount: number;
+  /** Sale price those parcels would have brought in. Not cash out. */
+  uncollected: number;
 }) {
   const pct = Math.min(100, Math.max(0, rate));
   const tone =
@@ -59,8 +68,24 @@ export function RtsDonut({
           <dd className="font-medium text-slate-800">{returned}</dd>
         </div>
         <div className="flex justify-between">
-          <dt className="text-slate-500">Lost to RTS</dt>
+          <dt className="text-slate-500">Documents returned</dt>
+          <dd className="font-medium text-slate-800">{docs}</dd>
+        </div>
+        {/* The two costs of a return, kept apart on purpose: one is money that
+            has already left the account, the other is a sale that never
+            happened. Adding them together would double-count the parcel. */}
+        <div className="flex justify-between border-t border-slate-100 pt-1.5">
+          <dt className="text-slate-500">
+            Spent on them
+            {costPerDoc > 0 && (
+              <span className="text-slate-400"> · {peso(costPerDoc)} each</span>
+            )}
+          </dt>
           <dd className="font-medium text-red-600">− {peso(lostAmount)}</dd>
+        </div>
+        <div className="flex justify-between">
+          <dt className="text-slate-500">Sales not collected</dt>
+          <dd className="font-medium text-slate-800">{peso(uncollected)}</dd>
         </div>
       </dl>
     </div>

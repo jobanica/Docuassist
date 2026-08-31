@@ -81,8 +81,14 @@ export default async function DashboardPage({
         <Stat
           icon={<PackageX className="h-4 w-4 text-red-500" />}
           label="RTS losses"
-          value={`− ${peso(s?.rts_amount ?? 0)}`}
-          sub={`${s?.rts_count ?? 0} returned`}
+          value={`− ${peso(s?.rts_loss_amount ?? 0)}`}
+          sub={
+            (s?.rts_docs ?? 0) > 0
+              ? `${s?.rts_docs} document${s?.rts_docs === 1 ? "" : "s"} × ${peso(
+                  s?.rts_cost_per_doc ?? 0
+                )}`
+              : "nothing returned"
+          }
           tone="bad"
         />
         <Stat
@@ -119,7 +125,10 @@ export default async function DashboardPage({
             rate={s?.rts_rate ?? 0}
             returned={s?.shipped_returned_count ?? 0}
             shipped={s?.shipped_count ?? 0}
-            lostAmount={s?.rts_amount ?? 0}
+            docs={s?.rts_docs ?? 0}
+            costPerDoc={s?.rts_cost_per_doc ?? 0}
+            lostAmount={s?.rts_loss_amount ?? 0}
+            uncollected={s?.rts_amount ?? 0}
           />
         </Card>
       </div>
@@ -166,7 +175,7 @@ export default async function DashboardPage({
               r.service_name,
               `${peso(r.booked_amount)} (${r.booked_count})`,
               peso(r.collected_amount),
-              r.rts_count > 0 ? `− ${peso(r.rts_amount)}` : "—",
+              r.rts_docs > 0 ? `− ${peso(r.rts_loss_amount)}` : "—",
             ])}
             empty="No orders in this range."
             redLast
@@ -177,11 +186,12 @@ export default async function DashboardPage({
           <h2 className="mb-1 font-semibold text-slate-900">By courier</h2>
           <p className="mb-3 text-xs text-slate-500">Is one courier failing more?</p>
           <Table
-            head={["Courier", "Shipped", "Returned", "RTS rate"]}
+            head={["Courier", "Shipped", "Returned", "Lost", "RTS rate"]}
             rows={sales.byCourier.map((r) => [
               r.courier_name,
               String(r.shipped_count),
               String(r.returned_count),
+              r.rts_docs > 0 ? `− ${peso(r.rts_loss_amount)}` : "—",
               `${r.rts_rate}%`,
             ])}
             empty="Nothing shipped in this range."
@@ -204,7 +214,7 @@ export default async function DashboardPage({
             r.courier_name ?? "—",
             (r.return_reason ?? "—") +
               (r.delivery_attempts > 0 ? ` (${r.delivery_attempts}/3)` : ""),
-            `− ${peso(r.total_amount)}`,
+            `− ${peso(r.loss_amount)}`,
             fmtDate(r.returned_at),
           ])}
           empty="No returns in this range. 🎉"

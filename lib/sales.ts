@@ -5,11 +5,19 @@ export interface SalesSummary {
   booked_count: number;
   collected_amount: number;
   collected_count: number;
+  /** Sale price of returned orders — revenue that never arrived. */
   rts_amount: number;
   rts_count: number;
+  /** Documents in those orders. A parcel of three costs three times over. */
+  rts_docs: number;
+  rts_cost_per_doc: number;
+  /** Money already spent on parcels that came back: docs x cost per doc. */
+  rts_loss_amount: number;
   cancelled_amount: number;
   cancelled_count: number;
   net_amount: number;
+  /** Net sales once the cash sunk into the returns is taken out too. */
+  net_after_rts_cost: number;
   shipped_count: number;
   shipped_returned_count: number;
   rts_rate: number;
@@ -29,6 +37,8 @@ export interface ServiceBreakdown {
   collected_amount: number;
   rts_amount: number;
   rts_count: number;
+  rts_docs: number;
+  rts_loss_amount: number;
 }
 
 export interface CourierBreakdown {
@@ -36,6 +46,8 @@ export interface CourierBreakdown {
   shipped_count: number;
   returned_count: number;
   rts_amount: number;
+  rts_docs: number;
+  rts_loss_amount: number;
   rts_rate: number;
 }
 
@@ -46,6 +58,9 @@ export interface ReturnedOrderRow {
   city: string | null;
   courier_name: string | null;
   total_amount: number;
+  /** Documents in this parcel, and the cash sunk into them. */
+  docs: number;
+  loss_amount: number;
   delivery_attempts: number;
   return_reason: string | null;
   returned_at: string;

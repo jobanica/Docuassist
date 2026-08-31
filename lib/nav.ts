@@ -19,6 +19,7 @@ export const SETTINGS_TABS: NavItem[] = [
   { href: "/settings/public-form", label: "Online order form", icon: "Link2" },
   { href: "/settings/parsing", label: "Auto-fill", icon: "Wand2" },
   { href: "/settings/tags", label: "Tags", icon: "Tags" },
+  { href: "/settings/rts-costs", label: "RTS costs", icon: "PackageX" },
   { href: "/settings/staff", label: "Staff accounts", icon: "Users", adminOnly: true },
 ];
 

@@ -143,3 +143,52 @@ export async function updateParsingSettings(input: {
     revalidatePath("/settings/parsing");
   });
 }
+
+/**
+ * What a return costs the business, per document (§11).
+ *
+ * These are the parts of the loss the dashboard reports when a parcel comes
+ * back: the PSA and encoding already paid for, the courier's round trip, the
+ * agent's commission, and the ad spend that won the order. They live in
+ * settings rather than in code because every one of them moves — a courier
+ * raises its rate, a campaign gets cheaper — and none of that is worth a
+ * deploy.
+ */
+export async function updateRtsCosts(input: {
+  processing: string;
+  shipping: string;
+  commission: string;
+  ad: string;
+}): Promise<ActionResult<void>> {
+  return run(async () => {
+    await requireAdmin();
+
+    const entries: [string, string][] = [
+      ["rts_cost_processing", input.processing],
+      ["rts_cost_shipping", input.shipping],
+      ["rts_cost_commission", input.commission],
+      ["rts_cost_ad", input.ad],
+    ];
+
+    const rows = entries.map(([key, raw]) => {
+      const v = (raw ?? "").trim();
+      // A blank box means "this part costs nothing", which is a real answer —
+      // but a typo must not silently become zero and understate the losses.
+      if (v && !/^\d+(\.\d{1,2})?$/.test(v)) {
+        throw new Error(
+          `"${v}" is not an amount. Enter pesos in digits, e.g. 205 or 205.50.`
+        );
+      }
+      return { key, value: v || "0" };
+    });
+
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("app_settings")
+      .upsert(rows, { onConflict: "key" });
+    if (error) throw new Error(error.message);
+
+    revalidatePath("/settings/rts-costs");
+    revalidatePath("/dashboard");
+  });
+}

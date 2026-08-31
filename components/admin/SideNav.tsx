@@ -13,6 +13,7 @@ import {
   Link2,
   Wand2,
   Tags,
+  PackageX,
   type LucideIcon,
 } from "lucide-react";
 import { MAIN_NAV, SETTINGS_TABS } from "@/lib/nav";
@@ -28,6 +29,7 @@ const ICONS: Record<string, LucideIcon> = {
   Link2,
   Wand2,
   Tags,
+  PackageX,
 };
 
 /**
