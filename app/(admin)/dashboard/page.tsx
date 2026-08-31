@@ -76,7 +76,11 @@ export default async function DashboardPage({
           icon={<TrendingUp className="h-4 w-4 text-[#2a78d6]" />}
           label="Booked"
           value={peso(s?.booked_amount ?? 0)}
-          sub={`${s?.booked_count ?? 0} orders encoded`}
+          sub={
+            (s?.cancelled_count ?? 0) > 0
+              ? `${s?.booked_count ?? 0} orders · ${s?.cancelled_count} cancelled not counted`
+              : `${s?.booked_count ?? 0} orders encoded`
+          }
         />
         <Stat
           icon={<PackageX className="h-4 w-4 text-red-500" />}
@@ -95,7 +99,11 @@ export default async function DashboardPage({
           icon={<Ban className="h-4 w-4 text-slate-400" />}
           label="Net sales"
           value={peso(s?.net_amount ?? 0)}
-          sub={`less ${s?.cancelled_count ?? 0} cancelled`}
+          sub={
+            (s?.rts_count ?? 0) > 0
+              ? `booked less ${s?.rts_count} returned`
+              : "nothing returned to deduct"
+          }
         />
       </div>
 
@@ -106,7 +114,8 @@ export default async function DashboardPage({
             <div>
               <h2 className="font-semibold text-slate-900">Revenue by month</h2>
               <p className="text-xs text-slate-500">
-                Booked when encoded · collected when COD is received
+                Booked when encoded, less cancellations · collected when COD is
+                received
               </p>
             </div>
             <Link
