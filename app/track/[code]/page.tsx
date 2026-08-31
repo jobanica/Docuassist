@@ -326,14 +326,23 @@ function MessengerButton({
   );
 }
 
+/**
+ * What this page actually discloses, said accurately.
+ *
+ * It used to promise "only your first name and order status", which stopped
+ * being true the moment each document started naming the person it is for. A
+ * privacy notice that overstates what is withheld is worse than none: it is
+ * the one line a customer is entitled to rely on.
+ */
 function PrivacyNote() {
   return (
     <p className="mt-8 flex items-start gap-2 px-2 text-center text-xs text-slate-400">
       <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
       <span>
         We protect your personal data under the Data Privacy Act of 2012. This
-        page shows only your first name and order status — never your full
-        details.
+        page shows the name on each document you requested and where your order
+        has reached — never your address, contact number, or anything else on
+        your form. Share the link only with people you want to see it.
       </span>
     </p>
   );
