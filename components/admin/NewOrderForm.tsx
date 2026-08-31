@@ -34,11 +34,12 @@ import { PlaceWarnings } from "./PlaceWarnings";
 import { checkPlaces } from "@/lib/actions/places";
 import { documentPlacePair } from "@/lib/parse/place-fields";
 import { PSA_FORMS } from "@/lib/psa-forms";
+import { DocumentPhotoScan } from "./DocumentPhotoScan";
 import type { PlaceIssue } from "@/lib/parse/places";
 import { SurnameWarnings } from "./SurnameWarnings";
 import { surnameIssues } from "@/lib/parse/surname";
 import { createOrder } from "@/lib/actions/orders";
-import { parsePastedText } from "@/lib/actions/parse";
+import { parsePastedText, type ParseResult } from "@/lib/actions/parse";
 import type {
   Customer,
   FormFieldDef,
@@ -296,6 +297,24 @@ export function NewOrderForm({
       const r = unwrap(
         await parsePastedText(selected[svcId].pasted_details ?? "", svcId)
       );
+      applyParsed(svcId, r, "reply");
+    } catch (e) {
+      setError(toMessage(e));
+    } finally {
+      setParsing(null);
+    }
+  }
+
+  /**
+   * Put a parse result into the form, whether it came from the pasted reply or
+   * from a photo of the document. Never over anything already typed.
+   */
+  function applyParsed(
+    svcId: string,
+    r: ParseResult,
+    source: "reply" | "photo"
+  ) {
+    {
       setSelected((prev) => {
         const cur = prev[svcId];
         const details = { ...cur.form_details };
@@ -373,15 +392,17 @@ export function NewOrderForm({
         ...prev,
         [svcId]:
           filled.length === 0
-            ? "Nothing could be read from that reply — fill the boxes by hand."
+            ? source === "photo"
+              ? "Nothing could be read from that photo — try a clearer shot, or fill the boxes by hand."
+              : "Nothing could be read from that reply — fill the boxes by hand."
             : `Filled ${listed}${
-                r.tier === 2 ? " (AI helped)" : ""
+                source === "photo"
+                  ? " from the photo"
+                  : r.tier === 2
+                    ? " (AI helped)"
+                    : ""
               }. Check them before you create the order.`,
       }));
-    } catch (e) {
-      setError(toMessage(e));
-    } finally {
-      setParsing(null);
     }
   }
 
@@ -820,9 +841,20 @@ export function NewOrderForm({
                   </Button>
                   {!selected[s.id].pasted_details.trim() && (
                     <p className="text-xs text-muted-foreground">
-                      Paste the customer&apos;s reply above first.
+                      Paste the customer&apos;s reply above — or read the
+                      document from a photo instead.
                     </p>
                   )}
+
+                  {/* The other half of intake: customers who send the
+                      certificate itself and fill in nothing. */}
+                  <div className="border-t pt-2">
+                    <DocumentPhotoScan
+                      serviceId={s.id}
+                      disabled={parsing === s.id}
+                      onParsed={(r) => applyParsed(s.id, r, "photo")}
+                    />
+                  </div>
                   {parseNote[s.id] && (
                     <p className="flex items-start gap-1.5 rounded-md bg-amber-50 p-2 text-xs text-amber-900">
                       <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />

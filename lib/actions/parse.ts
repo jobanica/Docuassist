@@ -16,6 +16,11 @@ import {
   NEVER_IN_DELIVERY_BLOCK,
 } from "@/lib/parse/delivery";
 import { parseTier2 } from "@/lib/parse/tier2";
+import {
+  parseDocumentImages,
+  MAX_IMAGES,
+  type VisionImage,
+} from "@/lib/parse/vision";
 import type { FormFieldDef } from "@/lib/types";
 
 export interface ParseResult {
@@ -29,8 +34,8 @@ export interface ParseResult {
   customer: Record<string, string>;
   /** Cities/provinces that don't exist or don't match, for staff to confirm. */
   places: PlaceIssue[];
-  /** which tier produced the final result (2 means the AI fallback ran) */
-  tier: 1 | 2;
+  /** 1 = rules, 2 = AI read the text, 3 = AI read a photo of the document */
+  tier: 1 | 2 | 3;
   /** true when Tier-2 was needed but unavailable/failed */
   aiUnavailable: boolean;
 }
@@ -187,5 +192,124 @@ export async function parsePastedText(
     }
 
     return { values, filledKeys, missingRequired, customer, places, tier, aiUnavailable };
+  });
+}
+
+/** Biggest base64 payload we accept per image (~3MB of JPEG). */
+const MAX_IMAGE_CHARS = 4_200_000;
+
+/**
+ * Read the document straight off a photo of it.
+ *
+ * Customers frequently send the certificate itself instead of filling anything
+ * in, and re-typing it by hand is both the slowest part of intake and where
+ * the typos come from.
+ *
+ * The image is forwarded to the model and stored nowhere — not in the
+ * database, not on disk. Only the fields it read come back, and as with every
+ * other parse they are returned for staff to check, never written directly.
+ */
+export async function parseDocumentImage(
+  images: VisionImage[],
+  serviceId: string,
+  orderId?: string | null
+): Promise<ActionResult<ParseResult>> {
+  return run(async () => {
+    await requireStaff();
+    const supabase = createClient();
+
+    const { data: settings } = await supabase
+      .from("app_settings")
+      .select("key, value")
+      .in("key", ["parsing_enabled", "parsing_ai_enabled"]);
+    const flag = new Map((settings ?? []).map((r) => [r.key, r.value ?? ""]));
+    if ((flag.get("parsing_enabled") ?? "true") === "false") {
+      throw new Error(
+        "Auto-fill is switched off. An admin can turn it back on in Settings → Auto-fill."
+      );
+    }
+    // Reading a photo is only possible with the AI; there is no rule-based
+    // fallback to quietly degrade to, so say so rather than returning nothing.
+    if ((flag.get("parsing_ai_enabled") ?? "false") === "false") {
+      throw new Error(
+        "Reading a photo needs the AI reader, which is switched off. An admin can turn it on in Settings → Auto-fill."
+      );
+    }
+
+    const shots = (images ?? []).slice(0, MAX_IMAGES);
+    if (shots.length === 0) throw new Error("Attach a photo of the document first.");
+    for (const img of shots) {
+      if (!img?.data) throw new Error("That image could not be read.");
+      if (img.data.length > MAX_IMAGE_CHARS) {
+        throw new Error(
+          "That photo is too large even after resizing. Try a screenshot instead of the original file."
+        );
+      }
+    }
+
+    const { data: service, error } = await supabase
+      .from("services")
+      .select("code, form_fields")
+      .eq("id", serviceId)
+      .single();
+    if (error) throw new Error(error.message);
+
+    const docFields = (service.form_fields ?? []) as FormFieldDef[];
+    const result = await parseDocumentImages(shots, docFields);
+    if (!result) {
+      throw new Error(
+        "The photo couldn't be read. Try a clearer, straighter shot — or type the details in by hand."
+      );
+    }
+
+    // "Full Name" read off the certificate as one line still has to reach the
+    // three boxes the PSA form prints.
+    const values = { ...result.values };
+    expandNameGroups(values, docFields);
+    normalizeSex(values);
+
+    const filledKeys = Object.keys(values);
+    const missingRequired = docFields
+      .filter((f) => f.required && !values[f.key])
+      .map((f) => f.key);
+
+    // A certificate carries the document's own place of birth, never a
+    // delivery address — so only that pair is worth checking here.
+    const pair = documentPlacePair(docFields);
+    const places = placeIssues(
+      pair
+        ? [
+            {
+              group: "birth" as const,
+              cityLabel: pair.cityLabel,
+              provinceLabel: pair.provinceLabel,
+              city: values[pair.cityKey],
+              province: values[pair.provinceKey],
+            },
+          ]
+        : []
+    );
+
+    try {
+      await supabase.from("parse_logs").insert({
+        order_id: orderId ?? null,
+        service_code: service.code,
+        tier: 3,
+        tokens_in: result.tokensIn,
+        tokens_out: result.tokensOut,
+      });
+    } catch {
+      /* logging is best-effort */
+    }
+
+    return {
+      values,
+      filledKeys,
+      missingRequired,
+      customer: {},
+      places,
+      tier: 3 as const,
+      aiUnavailable: false,
+    };
   });
 }

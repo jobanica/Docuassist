@@ -23,7 +23,7 @@ export function stripCodeFences(raw: string): string {
  * than declared statically. Every field is a string and always required;
  * "" means "not stated in the message".
  */
-function schemaFor(fields: FormFieldDef[]): Record<string, unknown> {
+export function schemaFor(fields: FormFieldDef[]): Record<string, unknown> {
   const properties: Record<string, unknown> = {};
   for (const f of fields) {
     properties[f.key] = {
@@ -71,6 +71,28 @@ function systemPrompt(fields: FormFieldDef[]): string {
     "- For number fields, return digits only.",
     "- Do not include commentary — only the structured fields.",
   ].join("\n");
+}
+
+/**
+ * Keep only known keys, coerce to strings, drop empties. Shared with the image
+ * reader, which returns the same shape from the same schema.
+ */
+export function coerceValues(
+  raw: Record<string, unknown>,
+  fields: FormFieldDef[],
+  toDate: (v: string) => string
+): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const f of fields) {
+    const v = raw[f.key];
+    if (v === null || v === undefined) continue;
+    let s = String(v).trim();
+    if (!s) continue;
+    if (f.type === "date") s = toDate(s);
+    if (f.type === "number") s = (s.match(/\d+/) ?? [""])[0];
+    if (s) values[f.key] = s;
+  }
+  return values;
 }
 
 /**
@@ -124,19 +146,7 @@ export async function parseTier2(
     }
     if (!raw || typeof raw !== "object") return null;
 
-    // Keep only known keys, coerce to strings, drop empties.
-    const values: Record<string, string> = {};
-    for (const f of fields) {
-      const v = raw[f.key];
-      if (v === null || v === undefined) continue;
-      let s = String(v).trim();
-      if (!s) continue;
-      if (f.type === "date") s = normalizeDate(s);
-      if (f.type === "number") s = (s.match(/\d+/) ?? [""])[0];
-      if (s) values[f.key] = s;
-    }
-
-    return { values, ...usage };
+    return { values: coerceValues(raw, fields, normalizeDate), ...usage };
   } catch (e) {
     // Never fail the encode flow because the parse helper broke (§9).
     console.warn(

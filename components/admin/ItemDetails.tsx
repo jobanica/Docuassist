@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { updateOrderItemDetails } from "@/lib/actions/orders";
-import { parsePastedText } from "@/lib/actions/parse";
+import { parsePastedText, type ParseResult } from "@/lib/actions/parse";
 import { PlaceWarnings } from "./PlaceWarnings";
 import { checkPlaces } from "@/lib/actions/places";
 import { documentPlacePair } from "@/lib/parse/place-fields";
@@ -26,6 +26,7 @@ import type { PlaceIssue } from "@/lib/parse/places";
 import { SurnameWarnings } from "./SurnameWarnings";
 import { surnameIssues } from "@/lib/parse/surname";
 import { PSA_FORMS } from "@/lib/psa-forms";
+import { DocumentPhotoScan } from "./DocumentPhotoScan";
 import type { FormFieldDef } from "@/lib/types";
 
 /**
@@ -111,6 +112,21 @@ export function ItemDetails({
       const r = unwrap(
         await parsePastedText(pastedDetails ?? "", serviceId, orderId)
       );
+      applyParsed(r, "reply");
+    } catch (e) {
+      setError(toMessage(e));
+    } finally {
+      setParsing(false);
+    }
+  }
+
+  /**
+   * Put a parse result into the boxes, from the pasted reply or from a photo
+   * of the document. Never over anything already typed, and never saved until
+   * staff press Save.
+   */
+  function applyParsed(r: ParseResult, source: "reply" | "photo") {
+    {
       const next = { ...values };
       const filled: string[] = [];
       for (const [k, v] of Object.entries(r.values)) {
@@ -129,15 +145,17 @@ export function ItemDetails({
       setOpenFields(true);
       setParseNote(
         filled.length === 0
-          ? "Nothing new could be read from the reply — fill the fields by hand."
+          ? source === "photo"
+            ? "Nothing new could be read from that photo — try a clearer shot, or fill the fields by hand."
+            : "Nothing new could be read from the reply — fill the fields by hand."
           : `Filled ${filled.length} field${filled.length === 1 ? "" : "s"}${
-              r.tier === 2 ? " (AI helped)" : ""
+              source === "photo"
+                ? " from the photo"
+                : r.tier === 2
+                  ? " (AI helped)"
+                  : ""
             }. Check them, then Save.`
       );
-    } catch (e) {
-      setError(toMessage(e));
-    } finally {
-      setParsing(false);
     }
   }
 
@@ -275,17 +293,28 @@ export function ItemDetails({
                   : "The details this document needs. Copy them across from the reply above."}
               </p>
 
-              {parsingEnabled && pastedDetails && (
+              {parsingEnabled && (
                 <div className="space-y-2">
-                  <Button
-                    size="sm"
-                    className="bg-[#eda100] font-semibold text-[#3d2f00] shadow-sm hover:bg-[#d99400] disabled:bg-slate-100 disabled:text-slate-400"
+                  {pastedDetails && (
+                    <Button
+                      size="sm"
+                      className="bg-[#eda100] font-semibold text-[#3d2f00] shadow-sm hover:bg-[#d99400] disabled:bg-slate-100 disabled:text-slate-400"
+                      disabled={parsing || pending}
+                      onClick={autoFill}
+                    >
+                      <Wand2 className="h-3.5 w-3.5" />
+                      {parsing ? "Reading…" : "Auto-fill from the reply"}
+                    </Button>
+                  )}
+
+                  {/* Works with no paste at all — plenty of customers send the
+                      certificate and nothing else. */}
+                  <DocumentPhotoScan
+                    serviceId={serviceId}
+                    orderId={orderId}
                     disabled={parsing || pending}
-                    onClick={autoFill}
-                  >
-                    <Wand2 className="h-3.5 w-3.5" />
-                    {parsing ? "Reading…" : "Auto-fill from the reply"}
-                  </Button>
+                    onParsed={(r) => applyParsed(r, "photo")}
+                  />
                   {parseNote && (
                     <p className="flex items-start gap-1.5 rounded-md bg-amber-50 p-2 text-xs text-amber-900">
                       <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
