@@ -11,6 +11,7 @@ import {
   missingRequiredLabels,
 } from "@/lib/required-fields";
 import { clampDiscount, peso } from "@/lib/money";
+import { shippingFee } from "@/lib/actions/settings";
 import { nameCheckKey } from "@/lib/parse/surname";
 import { nextStatus, canCancel, PIPELINE } from "@/lib/status";
 import { addDaysISO } from "@/lib/dates";
@@ -1014,5 +1015,192 @@ export async function setOrderDiscount(
     revalidatePath(`/orders/${orderId}`);
     revalidatePath("/dashboard");
     return { discount, total: Number(saved.total_amount) };
+  });
+}
+
+/**
+ * Two orders for one person, made into one job.
+ *
+ * The same customer orders a death certificate on Monday and another on
+ * Friday. One processor handles both, one trip to the PSA, one parcel — so
+ * carrying them as two orders means two tracking links to explain and two
+ * shipping fees to eat.
+ *
+ * The documents move onto the earliest of the selected orders, which keeps its
+ * tracking code. The others are pointed at it rather than deleted: the
+ * customer already has those links, and a link that answers "not found" is
+ * worse than no link at all. Each absorbed code keeps working and now shows
+ * the combined order.
+ *
+ * `total` is what the combined order should cost. Staff usually knock
+ * something off for the bundle — that difference is recorded as the order's
+ * discount, so the documents keep their own prices and the per-service report
+ * still says what a death certificate earns.
+ */
+export async function combineOrders(
+  orderIds: string[],
+  total?: number
+): Promise<ActionResult<{ id: string; tracking_code: string; total: number }>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    const ids = Array.from(new Set(orderIds.filter(Boolean)));
+    if (ids.length < 2) {
+      throw new Error("Pick at least two orders to combine.");
+    }
+
+    const supabase = createClient();
+    const { data: rows, error } = await supabase
+      .from("orders")
+      .select(
+        `id, tracking_code, status, customer_id, created_at, merged_into,
+         discount_amount, customers ( full_name ),
+         order_items ( id, price_at_order, quantity )`
+      )
+      .in("id", ids)
+      .order("created_at", { ascending: true });
+    if (error) throw new Error(error.message);
+
+    // A scoped account may not see every id the browser sent, and an order can
+    // move in another tab while the boxes are being ticked.
+    if (!rows || rows.length !== ids.length) {
+      throw new Error(
+        "Some of those orders are no longer available — refresh the board and select again. Nothing was changed."
+      );
+    }
+
+    const names = Array.from(
+      new Set(rows.map((r: any) => r.customer_id).filter(Boolean))
+    );
+    if (names.length > 1) {
+      throw new Error(
+        "Those orders belong to different customers. Combining is for one person's documents going in one parcel."
+      );
+    }
+    if (rows.some((r: any) => r.merged_into)) {
+      throw new Error(
+        "One of those was already combined into another order. Refresh the board and try again."
+      );
+    }
+
+    // Combining is about what ships together, so it stops at the point where
+    // shipping is arranged: after that there is a courier and a tracking
+    // number per parcel, and the parcels are already separate.
+    const tooLate = rows.filter((r: any) =>
+      ["shipped", "delivered", "returned", "cancelled"].includes(r.status)
+    );
+    if (tooLate.length > 0) {
+      throw new Error(
+        `${tooLate
+          .map((r: any) => r.tracking_code)
+          .join(" and ")} ${
+          tooLate.length === 1 ? "has" : "have"
+        } already left the office, so there is nothing left to combine. Orders can be combined up to Released.`
+      );
+    }
+
+    // The oldest keeps its code: it is the link the customer has had longest,
+    // and the one they are most likely to have saved.
+    const keeper = rows[0] as any;
+    const absorbed = rows.slice(1) as any[];
+
+    // The combined job can only be as far along as its least advanced part —
+    // a parcel does not go out because two of its three documents are ready.
+    const behind = rows
+      .map((r: any) => PIPELINE.indexOf(r.status))
+      .reduce((a, b) => Math.min(a, b), PIPELINE.length);
+    const status = PIPELINE[behind] as StatusCode;
+
+    const { error: moveErr } = await supabase
+      .from("order_items")
+      .update({ order_id: keeper.id })
+      .in(
+        "id",
+        absorbed.flatMap((o) => (o.order_items ?? []).map((i: any) => i.id))
+      );
+    if (moveErr) throw new Error(moveErr.message);
+
+    const subtotal = rows.reduce(
+      (sum: number, o: any) =>
+        sum +
+        (o.order_items ?? []).reduce(
+          (s: number, i: any) => s + Number(i.price_at_order) * i.quantity,
+          0
+        ),
+      0
+    );
+    // Every price is the document plus one trip to the customer, so documents
+    // that travel together owe one delivery between them. That is the whole
+    // reason the price changes on combining, and it is the figure staff would
+    // otherwise work out by hand every time.
+    const docs = rows.reduce(
+      (n: number, o: any) =>
+        n + (o.order_items ?? []).reduce((k: number, i: any) => k + i.quantity, 0),
+      0
+    );
+    const saved = Math.max(docs - 1, 0) * (await shippingFee());
+    const promised = rows.reduce(
+      (s: number, o: any) => s + Number(o.discount_amount),
+      0
+    );
+    const asked = total === undefined ? subtotal - promised - saved : total;
+    const discount = clampDiscount(subtotal - asked, subtotal);
+
+    const { data: kept, error: keepErr } = await supabase
+      .from("orders")
+      .update({
+        status,
+        discount_amount: discount,
+        discount_reason:
+          discount > 0
+            ? `Combined ${rows.length} orders into one parcel`
+            : null,
+      })
+      .eq("id", keeper.id)
+      .select("total_amount")
+      .single();
+    if (keepErr) throw new Error(keepErr.message);
+
+    const { error: mergeErr } = await supabase
+      .from("orders")
+      .update({
+        merged_into: keeper.id,
+        // Nothing left to discount, and nothing left to be held up about.
+        discount_amount: 0,
+        discount_reason: null,
+        delayed_at: null,
+        delay_reason: null,
+      })
+      .in(
+        "id",
+        absorbed.map((o) => o.id)
+      );
+    if (mergeErr) throw new Error(mergeErr.message);
+
+    const codes = absorbed.map((o) => o.tracking_code).join(", ");
+    await supabase.from("order_status_history").insert([
+      {
+        order_id: keeper.id,
+        event_type: "note",
+        note: `Combined with ${codes} — one parcel, ${peso(
+          Number(kept.total_amount)
+        )}`,
+        changed_by: staff.id,
+      },
+      ...absorbed.map((o) => ({
+        order_id: o.id,
+        event_type: "note",
+        note: `Combined into ${keeper.tracking_code}. This link now follows that order.`,
+        changed_by: staff.id,
+      })),
+    ]);
+
+    revalidatePath("/orders");
+    revalidatePath(`/orders/${keeper.id}`);
+    revalidatePath("/dashboard");
+    return {
+      id: keeper.id,
+      tracking_code: keeper.tracking_code,
+      total: Number(kept.total_amount),
+    };
   });
 }

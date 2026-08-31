@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getStaff } from "@/lib/auth";
 import { ServicesEditor } from "@/components/admin/ServicesEditor";
+import { ShippingFeeSetting } from "@/components/admin/ShippingFeeSetting";
 import type { Service } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +12,11 @@ export default async function ServicesSettingsPage() {
   if (!staff) redirect("/login");
 
   const supabase = createClient();
+  const { data: fee } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", "shipping_fee")
+    .maybeSingle();
   const { data: services } = await supabase
     .from("services")
     .select("*")
@@ -27,6 +33,10 @@ export default async function ServicesSettingsPage() {
       </p>
       <ServicesEditor
         services={(services ?? []) as Service[]}
+        canEdit={staff.role === "admin"}
+      />
+      <ShippingFeeSetting
+        initial={fee?.value ?? "185"}
         canEdit={staff.role === "admin"}
       />
     </div>

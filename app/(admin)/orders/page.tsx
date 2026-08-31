@@ -7,13 +7,14 @@ import { OrdersTable, type OrderRow } from "@/components/admin/OrdersTable";
 import { surnameIssues, nameCheckAccepted } from "@/lib/parse/surname";
 import type { OrderStatus, Service } from "@/lib/types";
 import { listTags } from "@/lib/actions/tags";
+import { shippingFee } from "@/lib/actions/settings";
 
 export const dynamic = "force-dynamic";
 
 export default async function OrdersPage() {
   const supabase = createClient();
 
-  const [staff, { data: statuses }, { data: services }, { data: orders }, { data: attempts }, tags] =
+  const [staff, { data: statuses }, { data: services }, { data: orders }, { data: attempts }, tags, fee] =
     await Promise.all([
       getStaff(),
       supabase.from("order_statuses").select("*").order("sort_order"),
@@ -25,8 +26,12 @@ export default async function OrdersPage() {
            delayed_at, delay_reason, delivery_attempts, source, created_by,
            customers ( id, full_name, phone, customer_tags ( tag_id ) ),
            staff_users ( name ),
-           order_items ( form_details, name_check_ack_key, services ( code, name ) )`
+           order_items ( form_details, quantity, name_check_ack_key,
+                         services ( code, name ) )`
         )
+        // An order combined into another has no documents and no money left on
+        // it — the board would just be showing the same job twice.
+        .is("merged_into", null)
         .order("created_at", { ascending: false }),
       // Why each delivery failed, for the call list. Oldest first so the loop
       // below leaves the most recent attempt per order in the map.
@@ -36,6 +41,7 @@ export default async function OrdersPage() {
         .eq("event_type", "failed_attempt")
         .order("created_at", { ascending: true }),
       listTags(),
+      shippingFee(),
     ]);
 
   const statusLabel = new Map(
@@ -56,7 +62,9 @@ export default async function OrdersPage() {
     // parents, adoption — drops off the list: it has been looked at, and the
     // list is for the ones that haven't.
     const nameIssues: string[] = [];
+    let documents = 0;
     for (const it of o.order_items ?? []) {
+      documents += it.quantity ?? 1;
       if (it.services) {
         svcCodes.push(it.services.code);
         svcNames.push(it.services.name);
@@ -74,6 +82,7 @@ export default async function OrdersPage() {
       status_label: statusLabel.get(o.status) ?? o.status,
       total_amount: Number(o.total_amount),
       discount_amount: Number(o.discount_amount ?? 0),
+      document_count: documents,
       created_at: o.created_at,
       status_since: o.status_since,
       delayed_at: o.delayed_at ?? null,
@@ -121,6 +130,7 @@ export default async function OrdersPage() {
 
       <OrdersTable
         tags={tags}
+        shippingFee={fee}
         orders={rows}
         statuses={(statuses ?? []) as OrderStatus[]}
         services={

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Printer } from "lucide-react";
+import { ArrowLeft, ArrowRight, Combine, Printer } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import {
   Card,
@@ -63,6 +63,18 @@ export default async function OrderDetailPage({
     .maybeSingle();
 
   if (!order) notFound();
+
+  // Opened from an old link or the history: this order's documents live on
+  // another one now, so point there rather than showing an empty shell.
+  const mergedInto = order.merged_into
+    ? (
+        await supabase
+          .from("orders")
+          .select("id, tracking_code")
+          .eq("id", order.merged_into)
+          .maybeSingle()
+      ).data
+    : null;
 
   // What the documents come to before any favour is taken off. total_amount is
   // already net of the discount, so this is the figure the panel counts down
@@ -268,6 +280,26 @@ export default async function OrderDetailPage({
                 : null;
             })()}
           />
+
+          {mergedInto && (
+            <div className="rounded-xl border border-[#1e3a5f]/20 bg-[#1e3a5f]/5 p-4">
+              <p className="flex items-center gap-2 text-sm font-semibold text-[#1e3a5f]">
+                <Combine className="h-4 w-4" />
+                Combined into {mergedInto.tracking_code}
+              </p>
+              <p className="mt-1 text-sm text-[#1e3a5f]/80">
+                The documents that were on this order ship in that parcel now.
+                This tracking link still works and shows that order, so the
+                customer needs nothing from us.
+              </p>
+              <Link
+                href={`/orders/${mergedInto.id}`}
+                className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-[#1e3a5f] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#16304f]"
+              >
+                Open {mergedInto.tracking_code} <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+          )}
 
           {/* A held-up job goes above its own contents: it is the first thing
               to act on when the customer asks where their ID is. */}

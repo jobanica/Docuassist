@@ -192,3 +192,44 @@ export async function updateRtsCosts(input: {
     revalidatePath("/dashboard");
   });
 }
+
+/**
+ * The shipping fee baked into every service price (§8).
+ *
+ * A PSA birth certificate is priced ₱685 — ₱500 for the document and ₱185 to
+ * get it to the customer. Combining orders is worth doing precisely because
+ * documents travelling together owe one delivery between them, so the figure
+ * has to be readable from the board, not just from the dashboard.
+ */
+export async function shippingFee(): Promise<number> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", "shipping_fee")
+    .maybeSingle();
+  const n = Number((data?.value ?? "").trim());
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/** Set it. Couriers raise their rates; that is not worth a deploy. */
+export async function updateShippingFee(
+  value: string
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    await requireAdmin();
+    const v = (value ?? "").trim();
+    if (v && !/^\d+(\.\d{1,2})?$/.test(v)) {
+      throw new Error(
+        `"${v}" is not an amount. Enter pesos in digits, e.g. 185 or 185.50.`
+      );
+    }
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("app_settings")
+      .upsert([{ key: "shipping_fee", value: v || "0" }], { onConflict: "key" });
+    if (error) throw new Error(error.message);
+    revalidatePath("/settings/services");
+    revalidatePath("/orders");
+  });
+}

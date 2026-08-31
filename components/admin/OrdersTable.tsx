@@ -12,8 +12,9 @@ import {
   ArrowRight,
   AlertCircle,
   Tags,
+  Combine,
 } from "lucide-react";
-import { bulkAdvanceStatus } from "@/lib/actions/orders";
+import { bulkAdvanceStatus, combineOrders } from "@/lib/actions/orders";
 import { tagCustomers } from "@/lib/actions/tags";
 import type { Tag } from "@/lib/tags";
 import { TagChip } from "./TagChip";
@@ -35,6 +36,8 @@ export interface OrderRow {
   total_amount: number;
   /** Taken off already; shown so a discounted order is visible on the board. */
   discount_amount: number;
+  /** Documents on this order — one delivery covers all of them. */
+  document_count: number;
   created_at: string;
   status_since: string;
   delivery_attempts: number;
@@ -89,11 +92,14 @@ export function OrdersTable({
   statuses,
   services,
   tags: initialTags,
+  shippingFee,
 }: {
   orders: OrderRow[];
   statuses: OrderStatus[];
   services: Service[];
   tags: Tag[];
+  /** Baked into every price, so one parcel only owes it once. */
+  shippingFee: number;
 }) {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<string>("all");
@@ -114,6 +120,10 @@ export function OrdersTable({
   const [confirmMove, setConfirmMove] = useState(false);
   const [moveError, setMoveError] = useState<string | null>(null);
   const [moving, startMove] = useTransition();
+  const [confirmCombine, setConfirmCombine] = useState(false);
+  const [combineTotal, setCombineTotal] = useState("");
+  const [combineError, setCombineError] = useState<string | null>(null);
+  const [combining, startCombining] = useTransition();
 
   const callList = useMemo(() => orders.filter(needsCall), [orders]);
   const nameList = useMemo(
@@ -259,6 +269,73 @@ export function OrdersTable({
       setPicked(new Set());
       setApplying([]);
       router.refresh();
+    });
+  }
+
+  /**
+   * Two orders for one person, made into one job.
+   *
+   * Offered only when the selection is one customer's and none of it has
+   * shipped — after that the parcels are already separate and there is
+   * nothing left to combine.
+   */
+  const combinable = useMemo(() => {
+    const rows = orders.filter((o) => picked.has(o.id));
+    if (rows.length < 2) return null;
+    const customers = new Set(rows.map((o) => o.customer_id));
+    if (customers.size > 1) {
+      return {
+        blocked:
+          "Those orders belong to different customers. Combining is for one person's documents going in one parcel.",
+      } as const;
+    }
+    const gone = rows.filter((o) =>
+      ["shipped", "delivered", "returned", "cancelled"].includes(o.status)
+    );
+    if (gone.length > 0) {
+      return {
+        blocked: `${gone
+          .map((o) => o.tracking_code)
+          .join(" and ")} already left the office. Orders can be combined up to Released.`,
+      } as const;
+    }
+    const oldest = rows.reduce((a, b) => (a.created_at <= b.created_at ? a : b));
+    const subtotal = rows.reduce(
+      (sum, o) => sum + o.total_amount + o.discount_amount,
+      0
+    );
+    // Every price is the document plus one trip to the customer. Documents
+    // going in one parcel owe one delivery between them, which is the whole
+    // reason for combining — so the box opens on that figure rather than
+    // making someone work it out each time.
+    const docs = rows.reduce((n, o) => n + o.document_count, 0);
+    const oneParcel = Math.max(docs - 1, 0) * shippingFee;
+    const promised = rows.reduce((sum, o) => sum + o.discount_amount, 0);
+    return {
+      rows,
+      keeper: oldest,
+      docs,
+      subtotal,
+      oneParcel,
+      promised,
+      suggested: Math.max(subtotal - promised - oneParcel, 0),
+    } as const;
+  }, [orders, picked]);
+
+  function runCombine() {
+    if (!combinable || "blocked" in combinable) return;
+    setCombineError(null);
+    const asked = combineTotal.trim() === "" ? undefined : Number(combineTotal);
+    startCombining(async () => {
+      const res = await combineOrders(Array.from(picked), asked);
+      if (!res.ok) {
+        setCombineError(res.error);
+        return;
+      }
+      setPicked(new Set());
+      setConfirmCombine(false);
+      setCombineTotal("");
+      router.push(`/orders/${res.value.id}`);
     });
   }
 
@@ -446,6 +523,9 @@ export function OrdersTable({
                 setPicked(new Set());
                 setConfirmMove(false);
                 setMoveError(null);
+                setConfirmCombine(false);
+                setCombineError(null);
+                setCombineTotal("");
               }}
               className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[#5c4300] hover:bg-[#eda100]/20"
             >
@@ -461,6 +541,19 @@ export function OrdersTable({
                 className="inline-flex h-9 items-center gap-2 rounded-md bg-[#1e3a5f] px-3 text-sm font-semibold text-white shadow-sm hover:bg-[#16304f]"
               >
                 <ArrowRight className="h-4 w-4" /> Move to {bulk.targetLabel}
+              </button>
+            )}
+            {combinable && !("blocked" in combinable) && !confirmCombine && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCombineError(null);
+                  setCombineTotal(String(combinable.suggested));
+                  setConfirmCombine(true);
+                }}
+                className="inline-flex h-9 items-center gap-2 rounded-md border border-[#1e3a5f]/30 bg-white px-3 text-sm font-semibold text-[#1e3a5f] shadow-sm hover:bg-[#1e3a5f]/5"
+              >
+                <Combine className="h-4 w-4" /> Combine into one
               </button>
             )}
             <button
@@ -524,6 +617,102 @@ export function OrdersTable({
             <p className="flex items-start gap-2 text-xs text-[#5c4300]">
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               {bulk.blocked}
+            </p>
+          )}
+
+          {/* Why combining isn't on offer, when two or more are ticked. */}
+          {combinable && "blocked" in combinable && (
+            <p className="flex items-start gap-2 text-xs text-[#5c4300]">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              {combinable.blocked}
+            </p>
+          )}
+
+          {combinable && !("blocked" in combinable) && confirmCombine && (
+            <div className="space-y-2 rounded-md bg-white/70 px-3 py-2.5">
+              <p className="text-sm text-[#5c4300]">
+                Move all {combinable.rows.length} orders&apos; documents onto{" "}
+                <strong>{combinable.keeper.tracking_code}</strong> — one parcel,
+                one tracking link for{" "}
+                <strong>{combinable.keeper.customer_name}</strong>.
+              </p>
+              {combinable.oneParcel > 0 && (
+                <p className="text-xs text-[#5c4300]/85">
+                  {combinable.docs} documents, one delivery — the price already
+                  includes {peso(shippingFee)} shipping each, so{" "}
+                  {peso(combinable.oneParcel)} of it is no longer owed. Change
+                  the figure if you want to charge something else.
+                </p>
+              )}
+              <p className="text-xs text-[#5c4300]/85">
+                The other link
+                {combinable.rows.length > 2 ? "s" : ""} keep
+                {combinable.rows.length > 2 ? "" : "s"} working and now show
+                {combinable.rows.length > 2 ? "" : "s"} this order, so whichever
+                one the customer saved is the right one.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <label
+                  htmlFor="combine-total"
+                  className="text-sm font-medium text-[#5c4300]"
+                >
+                  Charge for the combined order
+                </label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-[#5c4300]/70">
+                    ₱
+                  </span>
+                  <input
+                    id="combine-total"
+                    inputMode="decimal"
+                    value={combineTotal}
+                    onChange={(e) =>
+                      setCombineTotal(e.target.value.replace(/[^\d.]/g, ""))
+                    }
+                    className="h-9 w-32 rounded-md border border-[#8a6100]/30 bg-white pl-6 pr-2 text-sm"
+                  />
+                </div>
+                <span className="text-xs text-[#5c4300]/85">
+                  {Number(combineTotal) > combinable.subtotal
+                    ? `More than the documents come to (${peso(
+                        combinable.subtotal
+                      )}) — a combined order can be discounted, not marked up.`
+                    : `${peso(combinable.subtotal)} of documents, less ${peso(
+                        combinable.subtotal - Number(combineTotal)
+                      )}`}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="flex-1" />
+                <button
+                  type="button"
+                  onClick={() => setConfirmCombine(false)}
+                  disabled={combining}
+                  className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[#5c4300] hover:bg-[#eda100]/20 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={runCombine}
+                  disabled={
+                    combining || Number(combineTotal) > combinable.subtotal
+                  }
+                  className="inline-flex h-9 items-center gap-2 rounded-md bg-[#1e3a5f] px-3 text-sm font-semibold text-white shadow-sm hover:bg-[#16304f] disabled:opacity-60"
+                >
+                  <Combine className="h-4 w-4" />
+                  {combining
+                    ? "Combining…"
+                    : `Yes, combine into ${combinable.keeper.tracking_code}`}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {combineError && (
+            <p className="flex items-start gap-2 text-xs text-red-700">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              {combineError}
             </p>
           )}
 

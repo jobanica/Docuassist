@@ -28,7 +28,7 @@ export default async function CustomerDetailPage({
     supabase
       .from("customers")
       .select(
-        `*, orders ( id, tracking_code, status, total_amount, created_at ),
+        `*, orders ( id, tracking_code, status, total_amount, created_at, merged_into ),
          customer_tags ( tag_id )`
       )
       .eq("id", params.id)
@@ -43,9 +43,11 @@ export default async function CustomerDetailPage({
   const statusLabel = new Map(
     ((statuses ?? []) as OrderStatus[]).map((s) => [s.code, s.label])
   );
-  const orders = [...(c.orders ?? [])].sort(
-    (a, b) => +new Date(b.created_at) - +new Date(a.created_at)
-  );
+  // Orders combined into another are the same job counted twice — their
+  // documents and money now sit on the order that kept the parcel.
+  const orders = [...(c.orders ?? [])]
+    .filter((o: any) => !o.merged_into)
+    .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
