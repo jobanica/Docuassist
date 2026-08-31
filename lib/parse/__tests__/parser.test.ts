@@ -273,6 +273,19 @@ console.log("\n[12] Real cities and provinces (PSGC)");
   check("issues raised", issues.length, 2);
   check("province issue reads well", issues[0].message,
     '"Zamboanga del sor" isn\'t a province — did they mean Zamboanga Del Sur?');
+
+  // Both halves wrong at once — how a photo of a certificate fails when a
+  // value wraps: the province loses its second word and the city keeps a
+  // stray initial. Neither box can be fixed from itself, but the city we are
+  // already correcting names the province.
+  const both = placeIssues([
+    { group: "birth", cityLabel: "Place of birth — City", provinceLabel: "Place of birth — Province",
+      city: "Roseller T. Lim", province: "Zamboanga" },
+  ]);
+  const provIssue = both.find((i) => i.label.endsWith("Province"));
+  const cityIssue = both.find((i) => i.label.endsWith("City"));
+  check("truncated province still gets a fix", provIssue?.fixes?.[0].patch.province, "Zamboanga Sibugay");
+  check("and the city its own", cityIssue?.fixes?.[0].patch.city, "Roseller Lim");
 }
 
 console.log("\n[13] Template instructions are not values");

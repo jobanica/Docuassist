@@ -33,8 +33,12 @@ function systemPrompt(fields: FormFieldDef[]): string {
     "Rules:",
     '- Return "" for any field you cannot read with confidence. A wrong value is far worse than a blank one: it is filed at the PSA counter and rejected.',
     "- Never infer a value from another field, and never complete a partly hidden word. If half a surname is under a fold, return \"\".",
+    "- A value often wraps onto the next line. That is not a hidden word — read the whole value and join it. 'Roseller T. Lim, Zamboanga' ending a line with 'Sibugay,' beginning the next is the province Zamboanga Sibugay, not Zamboanga.",
     "- A certificate has separate blocks for the person it is about and for each parent. Keep them apart: a name under the father's block belongs only to the father's fields.",
     "- On a birth certificate the child is the document owner. On a marriage certificate the husband and wife are; on a death certificate the deceased is.",
+    "- A CENOMAR is a sentence, not a form: 'THIS IS TO CERTIFY that <name>, born on <date> in <place>, to <father> and <mother>'. The name before 'born' is the document owner's, and the two after 'to' are the parents'.",
+    "- A name written out in full is First Middle Last in Filipino usage: the LAST word (with its particle) is the surname, the word before it the middle name. 'MARILOU SANTOS ABAD' is first MARILOU, middle SANTOS, last ABAD. Only when a comma follows it — 'DELA CRUZ, JOHN PAUL ABAD' — does the surname come first.",
+    "- A death certificate carries both a date of birth and a date of death, and both a residence and a place of death. Fill each field from the label it asks for, never the other one.",
     "- Copy names and places exactly as printed, including particles (Dela Cruz, De los Santos) and spelling that looks wrong to you. Do not translate, expand abbreviations, or tidy them.",
     "- Registry forms print place of birth as city/municipality and province separately. Never put a province in a city field or vice versa.",
     "- delivery_* fields are where a parcel is sent. A certificate never states that — always return \"\" for them.",
@@ -64,7 +68,15 @@ export async function parseDocumentImages(
   if (!apiKey) return null;
   if (images.length === 0) return null;
 
-  const model = process.env.ANTHROPIC_PARSE_MODEL || "claude-haiku-4-5";
+  // Reading a photo is a harder job than reading pasted text, and it is the
+  // one place a misread is invisible: staff see a filled box, not a guess.
+  // Measured on skewed phone photos of a birth certificate, CENOMAR, marriage
+  // and death certificate, the smaller model used for text misread a legible
+  // "JANUARY 27, 2025" as 1925, "SIMUNUL" as "SIMINUL", and reversed a
+  // mother's maiden surname; this one read all four documents clean. It costs
+  // about twice as much per scan — roughly 40 centavos instead of 20 — which
+  // is far less than one rejected PSA application.
+  const model = process.env.ANTHROPIC_VISION_MODEL || "claude-sonnet-5";
   const client = new Anthropic({ apiKey });
 
   try {

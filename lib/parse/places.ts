@@ -450,6 +450,21 @@ function provincesForCity(city?: string): string[] {
   return compound ? [compound.province] : [];
 }
 
+/**
+ * The same answer, but derived from a city we would only ever *offer* to
+ * correct. Kept apart from provincesForCity because it is weaker evidence: a
+ * misspelt city has no business overruling a province that spells nearly
+ * right on its own. Used only when the province box is unreadable by itself.
+ */
+function provincesForNearCity(city?: string): string[] {
+  const raw = (city ?? "").trim();
+  if (!raw) return [];
+  const near = checkCity(raw);
+  if (near.status !== "suggest" || !near.suggestion) return [];
+  const hits = cityByAlias.get(norm(near.suggestion));
+  return hits ? Array.from(new Set(hits.map((e) => e.province))).sort() : [];
+}
+
 /** Turn a city/province pair into the warnings staff should act on. */
 export function placeIssues(
   pairs: {
@@ -510,6 +525,24 @@ export function placeIssues(
             { label: r.suggestion!, patch: { province: r.suggestion! } },
           ],
           message: `"${r.input}" isn't a province — did they mean ${r.suggestion}?`,
+        });
+      } else if (r.status === "unknown" && provincesForNearCity(p.city).length > 0) {
+        // Both halves wrong at once — a photo read as "Roseller T. Lim" beside
+        // a "Zamboanga" whose second word fell off the end of the line. The
+        // city we are already offering to correct names the province, so say
+        // so rather than making staff fix the city, re-check, and come back.
+        const viaCity = provincesForNearCity(p.city);
+        out.push({
+          label: p.provinceLabel,
+          input: r.input,
+          kind: "spelling",
+          suggestion: viaCity[0],
+          group: p.group,
+          fixes: viaCity.map((v) => ({ label: v, patch: { province: v } })),
+          message:
+            viaCity.length === 1
+              ? `"${r.input}" is not a province — ${p.city!.trim()} looks like it is in ${viaCity[0]}.`
+              : `"${r.input}" is not a province — ${p.city!.trim()} looks like it is in ${joinOr(viaCity)}.`,
         });
       } else if (r.status === "unknown") {
         out.push({
