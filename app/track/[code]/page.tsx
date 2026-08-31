@@ -27,6 +27,19 @@ import { peso } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * The person a document is for, marked so it can be found at a glance.
+ *
+ * Amber rather than the brand navy: it sits inside running text, and a second
+ * strong colour there would compete with the status badge below it, which is
+ * the thing the page exists to answer.
+ */
+// box-decoration-clone so a name that wraps keeps its rounded ends on both
+// lines instead of one long ragged block.
+const OWNER_MARK =
+  "box-decoration-clone rounded bg-[#eda100]/25 px-1.5 py-0.5 " +
+  "font-bold text-slate-900";
+
 export const metadata: Metadata = {
   title: "Track your order · DocuAssist PH",
   robots: { index: false, follow: false },
@@ -142,14 +155,23 @@ export default async function TrackPage({
           Here&apos;s the status of your{" "}
           {info.documents.length === 1 ? (
             <>
-              {/* The document bold, the person after it in plain weight — a
-                  whole sentence in bold stops emphasising anything. */}
               <span className="font-semibold">
                 {info.documents[0].service_name}
               </span>
-              {info.documents[0].owner_name
-                ? ` for ${info.documents[0].owner_name}.`
-                : "."}
+              {info.documents[0].owner_name ? (
+                <>
+                  {" for "}
+                  {/* Highlighted, because on an order carrying more than one
+                      certificate the person is the only thing telling them
+                      apart — it is what the customer is actually scanning for. */}
+                  <span className={OWNER_MARK}>
+                    {info.documents[0].owner_name}
+                  </span>
+                  .
+                </>
+              ) : (
+                "."
+              )}
             </>
           ) : info.documents.length > 1 ? (
             <>
@@ -181,7 +203,7 @@ export default async function TrackPage({
                   {d.owner_name && (
                     <>
                       <br />
-                      for {d.owner_name}
+                      for <span className={OWNER_MARK}>{d.owner_name}</span>
                     </>
                   )}
                 </span>
