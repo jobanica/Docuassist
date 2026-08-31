@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { toMessage, unwrap } from "@/lib/action-result";
 import { startProcessing, type SupplierQueueRow } from "@/lib/actions/supplier";
 import { fmtDate } from "@/lib/dates";
+import { RequirementFiles } from "./RequirementFiles";
 
 /**
  * The supplier's work list.
@@ -162,7 +163,17 @@ function OrderCard({
       {open && (
         <div className="mt-3 space-y-4">
           {row.items.map((item) => (
-            <ItemFields key={item.item_id} item={item} />
+            <div key={item.item_id} className="space-y-2">
+              <ItemFields item={item} />
+              {/* Read-only: the requirements travel with the job, but the
+                  office is who collects them from the customer. */}
+              <RequirementFiles
+                itemId={item.item_id}
+                orderId={row.order_id}
+                initial={item.files ?? []}
+                canEdit={false}
+              />
+            </div>
           ))}
           <Delivery row={row} />
         </div>

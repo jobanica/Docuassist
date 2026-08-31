@@ -28,6 +28,8 @@ import { surnameIssues } from "@/lib/parse/surname";
 import { PSA_FORMS } from "@/lib/psa-forms";
 import { DocumentPhotoScan } from "./DocumentPhotoScan";
 import { PsaFormImage } from "./PsaFormImage";
+import { RequirementFiles } from "./RequirementFiles";
+import type { RequirementFile } from "@/lib/actions/files";
 import type { FormFieldDef } from "@/lib/types";
 
 /**
@@ -63,6 +65,7 @@ export function ItemDetails({
   serviceCode,
   serviceName,
   customerName,
+  files,
   fields,
   formDetails,
   pastedDetails,
@@ -77,6 +80,8 @@ export function ItemDetails({
   serviceName: string;
   /** Only for naming the downloaded image file. */
   customerName: string;
+  /** Requirements already attached to this document. */
+  files: RequirementFile[];
   fields: FormFieldDef[];
   formDetails: Record<string, string>;
   pastedDetails: string | null;
@@ -263,6 +268,13 @@ export function ItemDetails({
             </pre>
           )}
         </div>
+      )}
+
+      {/* --- Requirements: an ID, a birth certificate, whatever the ID needs ---
+           Only the ID services ask for them. A PSA certificate is ordered on
+           its form alone, so the box would be clutter on those. */}
+      {!hasPsaForm && (
+        <RequirementFiles itemId={itemId} orderId={orderId} initial={files} />
       )}
 
       {/* --- The form as a picture, for sending to the customer --- */}

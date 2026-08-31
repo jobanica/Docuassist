@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { run, type ActionResult } from "@/lib/action-result";
 import { createClient } from "@/lib/supabase/server";
 import { requireStaff } from "@/lib/auth";
+import type { RequirementFile } from "@/lib/actions/files";
 
 export interface SupplierQueueItem {
   item_id: string;
@@ -13,6 +14,8 @@ export interface SupplierQueueItem {
   form_fields: { key: string; label: string }[];
   form_details: Record<string, string> | null;
   pasted_details: string | null;
+  /** The requirements the office attached — an ID, a birth certificate. */
+  files: RequirementFile[];
 }
 
 export interface SupplierQueueRow {

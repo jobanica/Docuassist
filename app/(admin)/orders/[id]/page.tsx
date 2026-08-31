@@ -50,7 +50,8 @@ export default async function OrderDetailPage({
        customers (*),
        couriers ( id, name, tracking_page_url ),
        order_items ( id, service_id, quantity, price_at_order, form_details,
-                     pasted_details, services ( name, code, form_fields ) )`
+                     pasted_details, services ( name, code, form_fields ),
+                     order_item_files ( id, file_name, mime_type, size_bytes, created_at ) )`
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -287,6 +288,10 @@ export default async function OrderDetailPage({
                       serviceCode={it.services?.code ?? ""}
                       serviceName={it.services?.name ?? "Document"}
                       customerName={o.customers?.full_name ?? "customer"}
+                      files={(it.order_item_files ?? []).slice().sort(
+                        (a: any, b: any) =>
+                          a.created_at < b.created_at ? -1 : 1
+                      )}
                       parsingEnabled={parsingEnabled}
                       fields={fields}
                       formDetails={(it.form_details ?? {}) as Record<string, string>}
