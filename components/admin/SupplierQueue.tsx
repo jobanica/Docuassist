@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronDown,
@@ -13,11 +13,14 @@ import {
   AlertTriangle,
   Inbox,
   GripVertical,
+  Search,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toMessage, unwrap } from "@/lib/action-result";
 import { startProcessing, type SupplierQueueRow } from "@/lib/actions/supplier";
 import { fmtDate } from "@/lib/dates";
+import { copyText } from "@/lib/clipboard";
 import { RequirementFiles } from "./RequirementFiles";
 import { DelayPanel } from "./DelayPanel";
 import { aging, agingPill, ageLabel } from "@/lib/status";
@@ -40,8 +43,37 @@ export function SupplierQueue({ rows }: { rows: SupplierQueueRow[] }) {
   const [moving, setMoving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const waiting = rows.filter((r) => r.status === "details_received");
-  const started = rows.filter((r) => r.status === "processing");
+  const [q, setQ] = useState("");
+  const [doc, setDoc] = useState("all");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+
+  // Every document actually on the board, so the picker never offers a
+  // service this supplier has never been given.
+  const docNames = useMemo(
+    () =>
+      Array.from(
+        new Set(rows.flatMap((r) => r.items.map((i) => i.service_name)))
+      ).sort(),
+    [rows]
+  );
+
+  const filtered = useMemo(
+    () => rows.filter((r) => matches(r, q, doc, from, to)),
+    [rows, q, doc, from, to]
+  );
+  const hidden = rows.length - filtered.length;
+  const filtering = Boolean(q.trim() || doc !== "all" || from || to);
+
+  function clearFilters() {
+    setQ("");
+    setDoc("all");
+    setFrom("");
+    setTo("");
+  }
+
+  const waiting = filtered.filter((r) => r.status === "details_received");
+  const started = filtered.filter((r) => r.status === "processing");
   // A job the supplier has flagged, or one that has sat a fortnight, is what
   // the lane header counts — it is the number worth glancing at.
   const needsAttention = started.filter(
@@ -73,6 +105,21 @@ export function SupplierQueue({ rows }: { rows: SupplierQueueRow[] }) {
           {error}
         </p>
       )}
+
+      <QueueFilters
+        q={q}
+        onQ={setQ}
+        doc={doc}
+        onDoc={setDoc}
+        docNames={docNames}
+        from={from}
+        onFrom={setFrom}
+        to={to}
+        onTo={setTo}
+        hidden={hidden}
+        filtering={filtering}
+        onClear={clearFilters}
+      />
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* --- Lane 1: waiting to be picked up ------------------------------ */}
@@ -125,6 +172,159 @@ export function SupplierQueue({ rows }: { rows: SupplierQueueRow[] }) {
           ))}
         </Lane>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Does this job survive the filter bar?
+ *
+ * The search runs over everything on the card, the encoded details included:
+ * the supplier is as likely to be holding a TIN number or a phone number they
+ * are trying to place as a customer's name.
+ *
+ * The dates are matched against when the request came in, not when it was
+ * picked up, so one range means the same thing in both lanes.
+ */
+function matches(
+  r: SupplierQueueRow,
+  q: string,
+  doc: string,
+  from: string,
+  to: string
+): boolean {
+  if (doc !== "all" && !r.items.some((i) => i.service_name === doc)) {
+    return false;
+  }
+  // created_at is a timestamp; the pickers give plain dates, and the "to" day
+  // is inclusive — someone filtering a single day expects that day's jobs.
+  const day = (r.created_at ?? "").slice(0, 10);
+  if (from && day < from) return false;
+  if (to && day > to) return false;
+
+  const needle = q.trim().toLowerCase();
+  if (!needle) return true;
+  const hay = [
+    r.customer_name,
+    r.tracking_code,
+    r.phone,
+    r.messenger_name,
+    r.address_line,
+    r.barangay,
+    r.city,
+    r.province,
+    ...r.items.flatMap((i) => [
+      i.service_name,
+      ...Object.values(i.form_details ?? {}),
+    ]),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return needle.split(/\s+/).every((word) => hay.includes(word));
+}
+
+/**
+ * Narrowing the board.
+ *
+ * A supplier with forty jobs on the board is looking for one of them — the
+ * name a customer just messaged about, or everything that came in on Monday.
+ * Client-side, because the whole queue is already here and a round trip per
+ * keystroke would be slower than the filtering.
+ */
+function QueueFilters({
+  q,
+  onQ,
+  doc,
+  onDoc,
+  docNames,
+  from,
+  onFrom,
+  to,
+  onTo,
+  hidden,
+  filtering,
+  onClear,
+}: {
+  q: string;
+  onQ: (v: string) => void;
+  doc: string;
+  onDoc: (v: string) => void;
+  docNames: string[];
+  from: string;
+  onFrom: (v: string) => void;
+  to: string;
+  onTo: (v: string) => void;
+  hidden: number;
+  filtering: boolean;
+  onClear: () => void;
+}) {
+  const field =
+    "h-9 rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-900";
+  return (
+    <div className="rounded-xl bg-white p-3 shadow-[0_1px_3px_rgba(16,24,40,0.06)]">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[13rem] flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="search"
+            value={q}
+            onChange={(e) => onQ(e.target.value)}
+            placeholder="Search name, tracking code, TIN, phone…"
+            className={`${field} w-full pl-8`}
+          />
+        </div>
+        <select
+          value={doc}
+          onChange={(e) => onDoc(e.target.value)}
+          className={`${field} min-w-0 flex-1 sm:flex-none`}
+          aria-label="Document"
+        >
+          <option value="all">All documents</option>
+          {docNames.map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+        {/* Takes its own full-width row on a phone: two date inputs and their
+            labels do not fit beside the document picker, and a "to" field
+            running off the edge is one the supplier cannot reach. */}
+        <div className="flex w-full items-center gap-1.5 sm:w-auto">
+          <span className="shrink-0 text-xs text-slate-500">Received</span>
+          <input
+            type="date"
+            value={from}
+            max={to || undefined}
+            onChange={(e) => onFrom(e.target.value)}
+            className={`${field} min-w-0 flex-1 sm:flex-none`}
+            aria-label="Received from"
+          />
+          <span className="shrink-0 text-xs text-slate-400">to</span>
+          <input
+            type="date"
+            value={to}
+            min={from || undefined}
+            onChange={(e) => onTo(e.target.value)}
+            className={`${field} min-w-0 flex-1 sm:flex-none`}
+            aria-label="Received to"
+          />
+        </div>
+        {filtering && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="inline-flex h-9 items-center gap-1 rounded-md px-2.5 text-sm text-slate-600 hover:bg-slate-100"
+          >
+            <X className="h-3.5 w-3.5" /> Clear
+          </button>
+        )}
+      </div>
+      {filtering && hidden > 0 && (
+        <p className="mt-2 text-xs text-slate-500">
+          {hidden} job{hidden === 1 ? "" : "s"} hidden by the filter.
+        </p>
+      )}
     </div>
   );
 }
@@ -379,17 +579,64 @@ function ItemFields({ item }: { item: SupplierQueueRow["items"][number] }) {
           Nothing filled in yet — the details are still being collected.
         </p>
       ) : (
-        <dl className="space-y-1.5 text-xs">
+        <dl className="text-xs">
           {filled.map((f) => (
-            <div key={f.key} className="flex justify-between gap-3">
-              <dt className="shrink-0 text-slate-500">{f.label}</dt>
-              <dd className="text-right font-medium text-slate-900">
-                {details[f.key]}
-              </dd>
-            </div>
+            <CopyLine key={f.key} label={f.label} value={details[f.key]} />
           ))}
         </dl>
       )}
+    </div>
+  );
+}
+
+/**
+ * One field, copied on its own.
+ *
+ * The supplier re-keys every one of these into the BIR or PhilHealth form, and
+ * a surname typed by eye off a phone screen is where the misspellings come
+ * from — the kind that get an application rejected weeks later. So each line
+ * is its own button: tap it, paste it, move on.
+ *
+ * The icon stays visible rather than appearing on hover, because there is no
+ * hover on the phone this is used from.
+ */
+function CopyLine({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    if (await copyText(value)) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    }
+  }
+
+  return (
+    <div className="flex items-start justify-between gap-2 rounded py-1">
+      <dt className="shrink-0 pt-0.5 text-slate-500">{label}</dt>
+      <dd className="min-w-0">
+        <button
+          type="button"
+          onClick={copy}
+          title={`Copy ${label}`}
+          aria-label={`Copy ${label}: ${value}`}
+          className={`flex w-full items-start gap-1.5 rounded px-1.5 py-0.5 text-right transition-colors ${
+            copied ? "bg-emerald-50" : "hover:bg-slate-100 active:bg-slate-200"
+          }`}
+        >
+          <span
+            className={`min-w-0 flex-1 break-words font-medium ${
+              copied ? "text-emerald-800" : "text-slate-900"
+            }`}
+          >
+            {value}
+          </span>
+          {copied ? (
+            <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+          ) : (
+            <Copy className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-300" />
+          )}
+        </button>
+      </dd>
     </div>
   );
 }
@@ -411,12 +658,9 @@ function CopyAll({
       item.service_name,
       ...filled.map((f) => `${f.label}: ${details[f.key]}`),
     ].join("\n");
-    try {
-      await navigator.clipboard.writeText(text);
+    if (await copyText(text)) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* clipboard unavailable — the fields are on screen to read */
     }
   }
 
@@ -448,24 +692,18 @@ function Delivery({ row }: { row: SupplierQueueRow }) {
 
   return (
     <div className="rounded-lg border border-dashed bg-white p-3 text-xs">
-      <p className="mb-1.5 font-semibold uppercase tracking-wide text-slate-500">
+      <p className="mb-1 font-semibold uppercase tracking-wide text-slate-500">
         Customer
       </p>
-      {row.phone && (
-        <p className="text-slate-700">
-          <span className="text-slate-500">Phone:</span> {row.phone}
-        </p>
-      )}
-      {row.messenger_name && (
-        <p className="text-slate-700">
-          <span className="text-slate-500">Messenger:</span> {row.messenger_name}
-        </p>
-      )}
-      {address && (
-        <p className="mt-0.5 text-slate-700">
-          <span className="text-slate-500">Address:</span> {address}
-        </p>
-      )}
+      {/* Copyable for the same reason the fields are: a phone number or a
+          barangay typed by eye is a delivery that goes to the wrong place. */}
+      <dl>
+        {row.phone && <CopyLine label="Phone" value={row.phone} />}
+        {row.messenger_name && (
+          <CopyLine label="Messenger" value={row.messenger_name} />
+        )}
+        {address && <CopyLine label="Address" value={address} />}
+      </dl>
     </div>
   );
 }
