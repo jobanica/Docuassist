@@ -10,7 +10,10 @@ export type StatusCode =
   | "cancelled"
   | "returned";
 
-export type Role = "admin" | "staff";
+/** A supplier is an outside partner who processes some documents for us. They
+ *  are not staff: the database's is_staff() excludes them, so they can read no
+ *  table directly and reach their own orders only through supplier_queue(). */
+export type Role = "admin" | "staff" | "supplier";
 
 export interface OrderStatus {
   code: StatusCode;

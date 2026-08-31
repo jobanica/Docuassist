@@ -52,5 +52,9 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // The layout needs to know which page it is rendering so it can keep a
+  // supplier on their own screen. Set here because middleware already has the
+  // URL and the layout does not — and because it costs nothing.
+  supabaseResponse.headers.set("x-pathname", path);
   return supabaseResponse;
 }

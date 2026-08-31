@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   LayoutDashboard,
@@ -10,7 +11,7 @@ import {
 } from "lucide-react";
 import { getStaff } from "@/lib/auth";
 import { SideNav } from "@/components/admin/SideNav";
-import { MAIN_NAV } from "@/lib/nav";
+import { MAIN_NAV, SUPPLIER_NAV } from "@/lib/nav";
 
 const MOBILE_ICONS = {
   LayoutDashboard,
@@ -28,7 +29,18 @@ export default async function AdminLayout({
   const staff = await getStaff();
   if (!staff) redirect("/login");
 
-  const items = MAIN_NAV.filter((i) => !i.adminOnly || staff.role === "admin");
+  // A supplier belongs on their queue and nowhere else. The database already
+  // refuses them every other page's data, so this only spares them a screen of
+  // empty tables — it is not what keeps them out.
+  if (staff.role === "supplier") {
+    const path = headers().get("x-pathname") ?? "";
+    if (!path.startsWith("/queue")) redirect("/queue");
+  }
+
+  const items =
+    staff.role === "supplier"
+      ? SUPPLIER_NAV
+      : MAIN_NAV.filter((i) => !i.adminOnly || staff.role === "admin");
 
   return (
     <div className="flex min-h-screen bg-[#eef1f6]">

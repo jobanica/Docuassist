@@ -49,7 +49,7 @@ const createSchema = z.object({
     .string()
     .min(8, "Password must be at least 8 characters")
     .max(200),
-  role: z.enum(["admin", "staff"]),
+  role: z.enum(["admin", "staff", "supplier"]),
 });
 
 export type CreateStaffInput = z.infer<typeof createSchema>;
@@ -95,7 +95,7 @@ export async function createStaffAccount(
 
 export async function setStaffRole(
   id: string,
-  role: "admin" | "staff"
+  role: "admin" | "staff" | "supplier"
 ): Promise<ActionResult<void>> {
   return run(async () => {
     const me = await requireAdmin();
@@ -282,7 +282,7 @@ export interface StaffRow {
   id: string;
   name: string;
   email: string | null;
-  role: "admin" | "staff";
+  role: "admin" | "staff" | "supplier";
   active: boolean;
   created_at: string;
   /** Page pre-selected on orders this person creates. */

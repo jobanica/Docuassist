@@ -45,6 +45,11 @@ export async function signIn(
   }
 
   // Admins land on the sales dashboard; staff on the orders board.
-  const home = staff.role === "admin" ? "/dashboard" : "/orders";
+  const home =
+    staff.role === "supplier"
+      ? "/queue"
+      : staff.role === "admin"
+        ? "/dashboard"
+        : "/orders";
   redirect(next.startsWith("/") ? next : home);
 }

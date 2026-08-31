@@ -23,6 +23,12 @@ export const SETTINGS_TABS: NavItem[] = [
   { href: "/settings/staff", label: "Staff accounts", icon: "Users", adminOnly: true },
 ];
 
+/** A supplier sees only their own work list — no dashboard, no customers, no
+ *  settings. The pages re-check the role; this only keeps the nav honest. */
+export const SUPPLIER_NAV: NavItem[] = [
+  { href: "/queue", label: "To process", icon: "Package" },
+];
+
 export const MAIN_NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard", adminOnly: true },
   { href: "/orders", label: "Orders", icon: "Package" },

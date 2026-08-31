@@ -72,7 +72,7 @@ export function StaffSettings({
     name: "",
     email: "",
     password: generatePassword(),
-    role: "staff" as "admin" | "staff",
+    role: "staff" as "admin" | "staff" | "supplier",
   });
 
   function run(fn: () => Promise<ActionResult<unknown>>, after?: () => void) {
@@ -181,11 +181,14 @@ export function StaffSettings({
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
               value={form.role}
               onChange={(e) =>
-                setForm({ ...form, role: e.target.value as "admin" | "staff" })
+                setForm({ ...form, role: e.target.value as "admin" | "staff" | "supplier" })
               }
             >
               <option value="staff">Staff — Orders &amp; Customers</option>
               <option value="admin">Admin — everything, incl. sales</option>
+              <option value="supplier">
+                Supplier — only their documents, no prices
+              </option>
             </select>
           </label>
         </div>
@@ -252,13 +255,14 @@ export function StaffSettings({
                         run(() =>
                           setStaffRole(
                             s.id,
-                            e.target.value as "admin" | "staff"
+                            e.target.value as "admin" | "staff" | "supplier"
                           )
                         )
                       }
                     >
                       <option value="staff">Staff</option>
                       <option value="admin">Admin</option>
+                      <option value="supplier">Supplier</option>
                     </select>
                   </td>
                   <td className="px-3 py-3">
@@ -622,10 +626,23 @@ function ScopeCell({
                 {names.length} document{names.length === 1 ? "" : "s"}
               </span>
             </>
+          ) : staff.role === "supplier" ? (
+            // "No rows" means "everything" for staff, but a supplier with
+            // nothing ticked sees nothing at all — which looks like a broken
+            // account rather than a locked one unless it is said here.
+            <>
+              <Lock className="h-3.5 w-3.5 shrink-0 text-red-600" />
+              <span className="truncate text-red-700">Pick documents</span>
+            </>
           ) : (
             <span className="text-slate-600">All documents</span>
           )}
         </button>
+        {!limited && staff.role === "supplier" && (
+          <p className="mt-1 text-[11px] text-red-600">
+            Their queue is empty until you tick the documents they process.
+          </p>
+        )}
         {limited && (
           <p className="mt-1 truncate text-[11px] text-slate-500" title={names.join(", ")}>
             {names.join(", ")}

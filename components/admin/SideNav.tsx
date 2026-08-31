@@ -16,7 +16,7 @@ import {
   PackageX,
   type LucideIcon,
 } from "lucide-react";
-import { MAIN_NAV, SETTINGS_TABS } from "@/lib/nav";
+import { MAIN_NAV, SETTINGS_TABS, SUPPLIER_NAV } from "@/lib/nav";
 
 const ICONS: Record<string, LucideIcon> = {
   LayoutDashboard,
@@ -43,8 +43,13 @@ const ICONS: Record<string, LucideIcon> = {
 export function SideNav({ role }: { role: string }) {
   const pathname = usePathname() ?? "";
   const inSettings = pathname.startsWith("/settings");
-  const main = MAIN_NAV.filter((i) => !i.adminOnly || role === "admin");
-  const tabs = SETTINGS_TABS.filter((i) => !i.adminOnly || role === "admin");
+  const isSupplier = role === "supplier";
+  const main = isSupplier
+    ? SUPPLIER_NAV
+    : MAIN_NAV.filter((i) => !i.adminOnly || role === "admin");
+  const tabs = isSupplier
+    ? []
+    : SETTINGS_TABS.filter((i) => !i.adminOnly || role === "admin");
 
   return (
     <nav className="mt-2 flex-1 space-y-1 px-4">
