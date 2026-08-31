@@ -398,6 +398,40 @@ console.log("\n[16] The Philippine naming rule");
   check("a father's surname with no father recorded is still questioned",
     surnameIssues("psa_birth", { ...single, last_name: "Garilao" })[0].field, "last_name");
 
+  // Nobody leaves a father's box empty — they write N/A in it. Reading that as
+  // a surname turned the exemption off exactly where it was needed, and the
+  // rule then insisted the child be called N/A.
+  const naFather = {
+    last_name: "LARGO", middle_name: "SASA",
+    father_last: "N/A", father_first: "N/A", father_middle: "N/A",
+    mother_last: "LARGO", mother_first: "ALETH", mother_middle: "SASA",
+  };
+  check("N/A in the father's boxes is no father, not a surname",
+    surnameIssues("psa_birth", naFather).length, 0);
+  for (const stand of ["NA", "n.a.", "none", "None", "wala", "WALA PO", "-", "x", "XXX", "unknown"]) {
+    check(`"${stand}" reads as no father`,
+      surnameIssues("psa_birth", {
+        ...naFather, father_last: stand, father_first: stand,
+      }).length, 0);
+  }
+  // The exemption still has teeth: a stand-in father does not excuse a last
+  // name that matches neither parent.
+  check("but a name matching neither parent is still questioned",
+    surnameIssues("psa_birth", { ...naFather, last_name: "Santos" })[0].field, "last_name");
+  // And a real father is still a real father.
+  check("a father who is actually named is still checked",
+    surnameIssues("psa_birth", { ...naFather, father_last: "Reyes", father_first: "Ben" })
+      .some((i) => i.field === "last_name"), true);
+
+  // A father who has died is still the father: the child keeps his surname, so
+  // this must not be read as "no father".
+  check("a deceased father is not an absent one",
+    surnameIssues("psa_birth", {
+      last_name: "Reyes", middle_name: "Cruz",
+      father_last: "deceased", father_first: "Ben",
+      mother_last: "Cruz", mother_first: "Ana",
+    }).some((i) => i.field === "last_name"), true);
+
   check("the rule applies to CENOMAR too",
     surnameIssues("cenomar", { ...both, last_name: "Santos" }).length, 1);
   check("but not to a marriage certificate",

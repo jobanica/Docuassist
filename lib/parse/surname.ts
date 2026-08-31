@@ -39,6 +39,42 @@ function norm(v: string | undefined): string {
 /** Templates with a parent block — only these carry the rule. */
 export const SURNAME_RULE_SERVICES = ["psa_birth", "cenomar"];
 
+/**
+ * Ways staff write "there isn't one" into a box that will not stay empty.
+ *
+ * A form with a required-looking father field gets "N/A" far more often than
+ * it gets left blank, and reading that as a surname turns the single-mother
+ * exemption off exactly when it is needed: the rule then insists the child be
+ * called N/A. Compared after norm(), which has already folded case, accents
+ * and punctuation — so "N/A", "n.a." and "N / A" all arrive as "N A".
+ */
+const ABSENT = new Set([
+  "N A",
+  "NA",
+  "NONE",
+  "NOT APPLICABLE",
+  "NOT STATED",
+  "NOT KNOWN",
+  "UNKNOWN",
+  "WALA",
+  "WALA PO",
+  "DI ALAM",
+  "HINDI ALAM",
+  "X",
+  "XX",
+  "XXX",
+  "NIL",
+  "BLANK",
+]);
+// Deliberately not here: "DECEASED" and "LATE". A father who has died is still
+// the father, and the child still carries his surname — reading those as "no
+// father" would swap one wrong warning for another.
+
+/** True when the box is empty or holds one of those stand-ins. */
+function absent(normalised: string): boolean {
+  return !normalised || ABSENT.has(normalised);
+}
+
 export function surnameIssues(
   serviceCode: string,
   details: Record<string, string>
@@ -55,12 +91,17 @@ export function surnameIssues(
   if (!last) return [];
 
   const out: SurnameIssue[] = [];
-  const noFather = !fatherLast && !fatherFirst;
+  // "No father" covers both the blank form and the one where somebody typed
+  // N/A. A child with no father on record takes the mother's surname and
+  // carries no middle name, and neither is a mistake to warn about.
+  const noFather = absent(fatherLast) && absent(fatherFirst);
+  // A mother's box holding a stand-in is nothing to compare against either.
+  const haveMother = !absent(motherLast);
 
   if (noFather) {
     // Single mother: the child takes the mother's surname, and the middle name
     // is left out. Both are expected here, so neither is flagged on its own.
-    if (motherLast && last !== motherLast) {
+    if (haveMother && last !== motherLast) {
       out.push({
         field: "last_name",
         expected: details.mother_last?.trim(),
@@ -70,7 +111,7 @@ export function surnameIssues(
     return out;
   }
 
-  if (fatherLast && last !== fatherLast) {
+  if (!absent(fatherLast) && last !== fatherLast) {
     out.push({
       field: "last_name",
       expected: details.father_last?.trim(),
@@ -80,13 +121,13 @@ export function surnameIssues(
 
   // A missing middle name is a real gap once a father is on record, since the
   // rule then always produces one.
-  if (motherLast && !middle) {
+  if (haveMother && !middle) {
     out.push({
       field: "middle_name",
       expected: details.mother_last?.trim(),
       message: `Middle name is blank — with both parents recorded it should be the mother's maiden last name (${details.mother_last?.trim()}).`,
     });
-  } else if (motherLast && middle !== motherLast) {
+  } else if (haveMother && middle !== motherLast) {
     out.push({
       field: "middle_name",
       expected: details.mother_last?.trim(),
