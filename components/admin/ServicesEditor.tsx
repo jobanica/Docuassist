@@ -399,6 +399,7 @@ function ServiceForm({
                   <option value="date">date</option>
                   <option value="number">number</option>
                   <option value="textarea">long text</option>
+                  <option value="select">choice</option>
                 </select>
                 <label className="flex items-center gap-1.5 text-xs">
                   <input

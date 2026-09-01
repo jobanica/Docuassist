@@ -22,9 +22,15 @@ const formFieldSchema = z.object({
     .min(1, "Field key is required")
     .regex(/^[a-z0-9_]+$/, "Key must be lowercase letters, numbers or underscores"),
   label: z.string().trim().min(1, "Field label is required"),
-  type: z.enum(["text", "date", "number", "textarea"]),
+  type: z.enum(["text", "date", "number", "textarea", "select"]),
   required: z.boolean(),
   synonyms: z.array(z.string().trim()).default([]),
+  // Passed through rather than edited here: a select's options carry meaning
+  // the rest of the system reads (the ID verification fee keys off one of
+  // them), so this screen must not quietly drop them when a price is changed.
+  options: z
+    .array(z.object({ value: z.string(), label: z.string() }))
+    .optional(),
 });
 
 const serviceSchema = z.object({

@@ -408,7 +408,27 @@ export function ItemDetails({
                     <Label className="text-xs">
                       {f.required ? `${f.label} *` : f.label}
                     </Label>
-                    {f.type === "textarea" ? (
+                    {f.type === "select" && (f.options ?? []).length > 0 ? (
+                      <select
+                        className={`h-9 w-full rounded-md border border-input bg-background px-2 text-sm ${
+                          autoFilled.includes(f.key)
+                            ? "border-amber-400 bg-amber-50"
+                            : ""
+                        }`}
+                        value={values[f.key] ?? ""}
+                        onChange={(e) => {
+                          setValues({ ...values, [f.key]: e.target.value });
+                          setAutoFilled((a) => a.filter((k) => k !== f.key));
+                        }}
+                      >
+                        <option value="">— choose —</option>
+                        {(f.options ?? []).map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : f.type === "textarea" ? (
                       <Textarea
                         rows={2}
                         value={values[f.key] ?? ""}

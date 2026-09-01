@@ -4,13 +4,14 @@ import { createClient } from "@/lib/supabase/server";
 import { NewOrderForm } from "@/components/admin/NewOrderForm";
 import { getStaff } from "@/lib/auth";
 import { listMessengerPages } from "@/lib/actions/messenger-pages";
+import { idVerificationFee } from "@/lib/actions/settings";
 import type { Service } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewOrderPage() {
   const supabase = createClient();
-  const [staff, { data: services }, pages, { data: parsingSetting }] =
+  const [staff, { data: services }, pages, { data: parsingSetting }, verifyFee] =
     await Promise.all([
       getStaff(),
       supabase
@@ -25,6 +26,7 @@ export default async function NewOrderPage() {
         .select("value")
         .eq("key", "parsing_enabled")
         .maybeSingle(),
+      idVerificationFee(),
     ]);
 
   // Offer only what RLS would let them insert, so the order can't fail at the
@@ -59,6 +61,7 @@ export default async function NewOrderPage() {
         services={allowed}
         messengerPages={pages.filter((p) => p.active)}
         parsingEnabled={(parsingSetting?.value ?? "true") !== "false"}
+        verificationFee={verifyFee}
         defaultPageId={
           staff?.default_messenger_page_id ??
           pages.find((p) => p.is_default)?.id ??

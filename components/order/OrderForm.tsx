@@ -224,12 +224,27 @@ export function OrderForm({ config }: { config: Config }) {
                     <label className="text-xs font-medium text-slate-600">
                       {f.label} {f.required && <span className="text-red-500">*</span>}
                     </label>
-                    <input
-                      type={f.type === "date" ? "date" : f.type === "number" ? "number" : "text"}
-                      value={picked[s.id].form_details[f.key] ?? ""}
-                      onChange={(e) => setField(s.id, f.key, e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-base"
-                    />
+                    {f.type === "select" && (f.options ?? []).length > 0 ? (
+                      <select
+                        value={picked[s.id].form_details[f.key] ?? ""}
+                        onChange={(e) => setField(s.id, f.key, e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base"
+                      >
+                        <option value="">— pumili po —</option>
+                        {(f.options ?? []).map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type={f.type === "date" ? "date" : f.type === "number" ? "number" : "text"}
+                        value={picked[s.id].form_details[f.key] ?? ""}
+                        onChange={(e) => setField(s.id, f.key, e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-base"
+                      />
+                    )}
                   </div>
                 ))}
               </div>

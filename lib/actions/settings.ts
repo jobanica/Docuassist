@@ -233,3 +233,43 @@ export async function updateShippingFee(
     revalidatePath("/orders");
   });
 }
+
+/**
+ * What it costs to have an agency look up a forgotten TIN or PhilHealth
+ * number (§8). A separate errand at the BIR or PhilHealth office, so a
+ * separate fee — the ID still earns what an ID earns.
+ */
+export async function idVerificationFee(): Promise<number> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", "id_verification_fee")
+    .maybeSingle();
+  const n = Number((data?.value ?? "").trim());
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/** Set it. Agencies and errands change price; that is not worth a deploy. */
+export async function updateIdVerificationFee(
+  value: string
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    await requireAdmin();
+    const v = (value ?? "").trim();
+    if (v && !/^\d+(\.\d{1,2})?$/.test(v)) {
+      throw new Error(
+        `"${v}" is not an amount. Enter pesos in digits, e.g. 100 or 100.50.`
+      );
+    }
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("app_settings")
+      .upsert([{ key: "id_verification_fee", value: v || "0" }], {
+        onConflict: "key",
+      });
+    if (error) throw new Error(error.message);
+    revalidatePath("/settings/services");
+    revalidatePath("/orders");
+  });
+}

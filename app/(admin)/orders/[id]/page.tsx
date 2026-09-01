@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowRight, Combine, Printer } from "lucide-react";
+import { ArrowLeft, ArrowRight, Combine, IdCard, Printer } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import {
   Card,
@@ -20,6 +20,8 @@ import { CustomerCard } from "@/components/admin/CustomerCard";
 import { listMessengerPages } from "@/lib/actions/messenger-pages";
 import { qrDataUrl, trackingUrl } from "@/lib/qr";
 import { peso } from "@/lib/money";
+import { idVerificationFee } from "@/lib/actions/settings";
+import { verificationCount } from "@/lib/id-verification";
 import { fmtDate, fmtDateTime, daysSince } from "@/lib/dates";
 import { aging, attemptBadgeClasses } from "@/lib/status";
 import type {
@@ -76,13 +78,18 @@ export default async function OrderDetailPage({
       ).data
     : null;
 
-  // What the documents come to before any favour is taken off. total_amount is
-  // already net of the discount, so this is the figure the panel counts down
-  // from.
-  const subtotal = (order.order_items ?? []).reduce(
-    (sum: number, it: any) => sum + Number(it.price_at_order) * it.quantity,
-    0
-  );
+  // What the documents come to before any favour is taken off, including the
+  // lookup fee for an ID whose owner cannot find their existing number.
+  // total_amount is already net of the discount, so this is the figure the
+  // panel counts down from.
+  const verifyFee = await idVerificationFee();
+  const verifying = verificationCount(order.order_items ?? []);
+  const subtotal =
+    (order.order_items ?? []).reduce(
+      (sum: number, it: any) => sum + Number(it.price_at_order) * it.quantity,
+      0
+    ) +
+    verifying * verifyFee;
 
   const [
     { data: statuses },
@@ -362,6 +369,20 @@ export default async function OrderDetailPage({
               })}
               {/* The favour done for a regular, kept off the document's own
                   price so the per-service report stays honest. */}
+              {/* Its own line, because it is not part of the price of an ID —
+                  it is a separate errand at the agency, and the customer was
+                  quoted it separately too. */}
+              {verifying > 0 && (
+                <p className="flex items-center justify-between gap-3 border-t pt-3 text-sm text-violet-700">
+                  <span className="inline-flex items-center gap-1.5">
+                    <IdCard className="h-3.5 w-3.5" />
+                    ID number verification
+                    {verifying > 1 && ` × ${verifying}`}
+                  </span>
+                  <span>{peso(verifying * verifyFee)}</span>
+                </p>
+              )}
+
               <DiscountPanel
                 orderId={o.id}
                 subtotal={subtotal}

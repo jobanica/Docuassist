@@ -13,6 +13,8 @@ import {
 import { clampDiscount, peso } from "@/lib/money";
 import { shippingFee } from "@/lib/actions/settings";
 import { nameCheckKey } from "@/lib/parse/surname";
+import { missingIdNumber, verificationCount } from "@/lib/id-verification";
+import { idVerificationFee } from "@/lib/actions/settings";
 import { nextStatus, canCancel, PIPELINE } from "@/lib/status";
 import { addDaysISO } from "@/lib/dates";
 import { notifyOrder } from "@/lib/sms/notify";
@@ -65,7 +67,7 @@ async function assertItemsComplete(
   const supabase = createClient();
   const { data: services, error } = await supabase
     .from("services")
-    .select("id, name, form_fields")
+    .select("id, code, name, form_fields")
     .in("id", ids);
   if (error) throw new Error(error.message);
 
@@ -80,6 +82,19 @@ async function assertItemsComplete(
 
   const message = missingFieldsMessage(gaps);
   if (message) throw new Error(message);
+
+  // The account number is only wanted once the customer says they have the
+  // account and know it — so it cannot be a required field, and is checked
+  // here instead. Without it the supplier has an existing account and no way
+  // to reach it, which is the one case the whole question exists to avoid.
+  const noNumber = items
+    .filter((it) => missingIdNumber(byId.get(it.service_id)?.code ?? "", it.form_details))
+    .map((it) => byId.get(it.service_id)?.name ?? "Document");
+  if (noNumber.length > 0) {
+    throw new Error(
+      `${noNumber.join(" and ")}: the customer said they already have an account, so the number is needed. If they cannot find it, change the answer to “number unknown” — that adds the verification fee and the supplier looks it up.`
+    );
+  }
 }
 
 /** The same check for an order already saved, read back from the database. */
@@ -139,11 +154,12 @@ export async function createOrder(
     }
 
     // A discount cannot be larger than the order it comes off — a slipped
-    // keystroke should not turn a sale into a refund.
-    const subtotal = parsed.items.reduce(
-      (sum, it) => sum + it.price_at_order * it.quantity,
-      0
-    );
+    // keystroke should not turn a sale into a refund. The verification fee is
+    // part of what is owed, so it is part of what can be discounted; the
+    // database works the total out the same way.
+    const subtotal =
+      parsed.items.reduce((sum, it) => sum + it.price_at_order * it.quantity, 0) +
+      verificationCount(parsed.items) * (await idVerificationFee());
     const discount = clampDiscount(parsed.discount_amount, subtotal);
 
     const { data: order, error: orderErr } = await supabase
@@ -964,7 +980,9 @@ export async function setOrderDiscount(
     const supabase = createClient();
     const { data: order, error: readErr } = await supabase
       .from("orders")
-      .select("status, discount_amount, order_items ( price_at_order, quantity )")
+      .select(
+        "status, discount_amount, order_items ( price_at_order, quantity, form_details )"
+      )
       .eq("id", orderId)
       .single();
     if (readErr) throw new Error(readErr.message);
@@ -977,10 +995,12 @@ export async function setOrderDiscount(
       );
     }
 
-    const subtotal = (order.order_items ?? []).reduce(
-      (sum: number, it: any) => sum + Number(it.price_at_order) * it.quantity,
-      0
-    );
+    const subtotal =
+      (order.order_items ?? []).reduce(
+        (sum: number, it: any) => sum + Number(it.price_at_order) * it.quantity,
+        0
+      ) +
+      verificationCount(order.order_items ?? []) * (await idVerificationFee());
     const discount = clampDiscount(parsed.amount, subtotal);
     const wasGiven = Number(order.discount_amount) > 0;
 
@@ -1054,7 +1074,7 @@ export async function combineOrders(
       .select(
         `id, tracking_code, status, customer_id, created_at, merged_into,
          discount_amount, customers ( full_name ),
-         order_items ( id, price_at_order, quantity )`
+         order_items ( id, price_at_order, quantity, form_details )`
       )
       .in("id", ids)
       .order("created_at", { ascending: true });
@@ -1119,13 +1139,15 @@ export async function combineOrders(
       );
     if (moveErr) throw new Error(moveErr.message);
 
+    const verifyFee = await idVerificationFee();
     const subtotal = rows.reduce(
       (sum: number, o: any) =>
         sum +
         (o.order_items ?? []).reduce(
           (s: number, i: any) => s + Number(i.price_at_order) * i.quantity,
           0
-        ),
+        ) +
+        verificationCount(o.order_items ?? []) * verifyFee,
       0
     );
     // Every price is the document plus one trip to the customer, so documents

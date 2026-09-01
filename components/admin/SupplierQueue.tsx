@@ -15,16 +15,25 @@ import {
   GripVertical,
   Search,
   X,
+  IdCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toMessage, unwrap } from "@/lib/action-result";
 import { startProcessing, type SupplierQueueRow } from "@/lib/actions/supplier";
 import { fmtDate } from "@/lib/dates";
 import { copyText } from "@/lib/clipboard";
+import { fieldDisplayValue } from "@/lib/form-fields";
+import {
+  ACCOUNT_TYPE_KEY,
+  ACCOUNT_NEW,
+  ACCOUNT_EXISTING_KNOWN,
+  ACCOUNT_EXISTING_UNKNOWN,
+  ID_NUMBER_KEY,
+} from "@/lib/id-verification";
 import { RequirementFiles } from "./RequirementFiles";
 import { DelayPanel } from "./DelayPanel";
 import { aging, agingPill, ageLabel } from "@/lib/status";
-import type { StatusCode } from "@/lib/types";
+import type { FormFieldDef, StatusCode } from "@/lib/types";
 
 /**
  * The supplier's board.
@@ -466,6 +475,13 @@ function Card({
           </div>
         </div>
 
+        {/* New or existing decides the whole job — whether the supplier
+            registers this person or looks up an account they already have —
+            so it sits above the dates and the ageing pill. */}
+        {row.items.map((i) => (
+          <AccountBadge key={i.item_id} item={i} />
+        ))}
+
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {lane === "started" ? (
             <span
@@ -581,7 +597,11 @@ function ItemFields({ item }: { item: SupplierQueueRow["items"][number] }) {
       ) : (
         <dl className="text-xs">
           {filled.map((f) => (
-            <CopyLine key={f.key} label={f.label} value={details[f.key]} />
+            <CopyLine
+              key={f.key}
+              label={f.label}
+              value={fieldDisplayValue(f, details[f.key])}
+            />
           ))}
         </dl>
       )}
@@ -648,7 +668,7 @@ function CopyAll({
   details,
 }: {
   item: SupplierQueueRow["items"][number];
-  filled: { key: string; label: string }[];
+  filled: FormFieldDef[];
   details: Record<string, string>;
 }) {
   const [copied, setCopied] = useState(false);
@@ -656,7 +676,7 @@ function CopyAll({
   async function copy() {
     const text = [
       item.service_name,
-      ...filled.map((f) => `${f.label}: ${details[f.key]}`),
+      ...filled.map((f) => `${f.label}: ${fieldDisplayValue(f, details[f.key])}`),
     ].join("\n");
     if (await copyText(text)) {
       setCopied(true);
@@ -704,6 +724,59 @@ function Delivery({ row }: { row: SupplierQueueRow }) {
         )}
         {address && <CopyLine label="Address" value={address} />}
       </dl>
+    </div>
+  );
+}
+
+/**
+ * New account, or one they already have.
+ *
+ * The single most important thing on a TIN or PhilHealth card, and the one the
+ * supplier had no way of seeing: filing an existing account as a new
+ * registration gets it bounced, and looking up a number nobody paid to have
+ * looked up is unpaid work. So all three answers say plainly what to do, and
+ * the number comes with the badge rather than being buried in the details.
+ */
+function AccountBadge({ item }: { item: SupplierQueueRow["items"][number] }) {
+  const answer = (item.form_details?.[ACCOUNT_TYPE_KEY] ?? "").trim();
+  if (!answer) return null;
+
+  const numberKey = ID_NUMBER_KEY[item.service_code];
+  const number = String(item.form_details?.[numberKey] ?? "").trim();
+
+  const look = {
+    [ACCOUNT_NEW]: {
+      text: "New application",
+      hint: "Register from scratch.",
+      cls: "border-sky-200 bg-sky-50 text-sky-900",
+    },
+    [ACCOUNT_EXISTING_KNOWN]: {
+      text: "Existing account",
+      hint: number
+        ? "Do not register again — use the number."
+        : "Existing account, but no number was recorded. Ask the office.",
+      cls: "border-amber-200 bg-amber-50 text-amber-900",
+    },
+    [ACCOUNT_EXISTING_UNKNOWN]: {
+      text: "Existing — number to be verified",
+      hint: "Look the number up at the agency. The customer has paid for this.",
+      cls: "border-violet-200 bg-violet-50 text-violet-900",
+    },
+  }[answer];
+  if (!look) return null;
+
+  return (
+    <div className={`mt-2 rounded-lg border px-2.5 py-2 text-xs ${look.cls}`}>
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold">
+        <IdCard className="h-3.5 w-3.5 shrink-0" />
+        {item.service_name}: {look.text}
+        {number && (
+          <span className="rounded bg-white/70 px-1.5 py-0.5 font-mono font-bold">
+            {number}
+          </span>
+        )}
+      </p>
+      <p className="mt-0.5 opacity-80">{look.hint}</p>
     </div>
   );
 }

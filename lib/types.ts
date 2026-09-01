@@ -26,9 +26,11 @@ export interface OrderStatus {
 export interface FormFieldDef {
   key: string;
   label: string;
-  type: "text" | "date" | "number" | "textarea";
+  type: "text" | "date" | "number" | "textarea" | "select";
   required: boolean;
   synonyms?: string[];
+  /** Only for type "select". The stored value is `value`; `label` is shown. */
+  options?: { value: string; label: string }[];
 }
 
 export interface Service {

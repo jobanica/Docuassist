@@ -5,13 +5,15 @@ import { run, type ActionResult } from "@/lib/action-result";
 import { createClient } from "@/lib/supabase/server";
 import { requireStaff } from "@/lib/auth";
 import type { RequirementFile } from "@/lib/actions/files";
+import type { FormFieldDef } from "@/lib/types";
 
 export interface SupplierQueueItem {
   item_id: string;
   service_name: string;
   service_code: string;
   quantity: number;
-  form_fields: { key: string; label: string }[];
+  /** The service's whole field schema, so a select's options are here too. */
+  form_fields: FormFieldDef[];
   form_details: Record<string, string> | null;
   pasted_details: string | null;
   /** The requirements the office attached — an ID, a birth certificate. */

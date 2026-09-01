@@ -25,6 +25,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { clampDiscount, percentOff, peso } from "@/lib/money";
+import { needsVerification } from "@/lib/id-verification";
 import { searchCustomers, createCustomer } from "@/lib/actions/customers";
 import {
   findDuplicateOrders,
@@ -99,6 +100,7 @@ export function NewOrderForm({
   messengerPages,
   defaultPageId,
   parsingEnabled,
+  verificationFee,
 }: {
   services: Service[];
   messengerPages: MessengerPage[];
@@ -106,6 +108,8 @@ export function NewOrderForm({
   defaultPageId: string | null;
   /** Admin switch (Settings → Auto-fill). Off hides the button entirely. */
   parsingEnabled: boolean;
+  /** Charged per ID whose existing number has to be looked up at the agency. */
+  verificationFee: number;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -444,10 +448,17 @@ export function NewOrderForm({
 
   const selectedPage = messengerPages.find((p) => p.id === pageId) ?? null;
   const chosen = services.filter((s) => selected[s.id]);
-  const subtotal = chosen.reduce(
-    (sum, s) => sum + Number(s.price) * (selected[s.id]?.quantity ?? 1),
-    0
-  );
+  // What the customer owes before any favour: the documents, plus a lookup fee
+  // for each ID whose owner cannot find their existing number.
+  const verifying = chosen.filter((s) =>
+    needsVerification(selected[s.id]?.form_details)
+  ).length;
+  const subtotal =
+    chosen.reduce(
+      (sum, s) => sum + Number(s.price) * (selected[s.id]?.quantity ?? 1),
+      0
+    ) +
+    verifying * verificationFee;
   // Regulars ask for one while they are being encoded, so it belongs here
   // rather than only on the saved order.
   const discount = clampDiscount(Number(discountAmount), subtotal);
@@ -991,7 +1002,25 @@ export function NewOrderForm({
                                 </span>
                               )}
                             </div>
-                            {f.type === "textarea" ? (
+                            {f.type === "select" &&
+                            (f.options ?? []).length > 0 ? (
+                              <select
+                                className={`h-9 w-full rounded-md border border-input bg-background px-2 text-sm ${
+                                  auto ? "border-amber-400 bg-amber-50" : ""
+                                }`}
+                                value={selected[s.id].form_details[f.key] ?? ""}
+                                onChange={(e) =>
+                                  setField(s.id, f.key, e.target.value)
+                                }
+                              >
+                                <option value="">— choose —</option>
+                                {(f.options ?? []).map((o) => (
+                                  <option key={o.value} value={o.value}>
+                                    {o.label}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : f.type === "textarea" ? (
                               <Textarea
                                 rows={2}
                                 className={
@@ -1247,6 +1276,14 @@ export function NewOrderForm({
 
           <div className="flex items-center justify-between border-t pt-4">
             <div>
+              {verifying > 0 && (
+                <p className="text-xs text-violet-700">
+                  includes {peso(verifying * verificationFee)} ID verification —{" "}
+                  {verifying === 1
+                    ? "the customer doesn't know their existing number"
+                    : `${verifying} accounts to look up`}
+                </p>
+              )}
               {discount > 0 && (
                 <p className="text-xs text-muted-foreground">
                   {peso(subtotal)} less {peso(discount)} discount

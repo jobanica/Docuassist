@@ -26,9 +26,20 @@ export function stripCodeFences(raw: string): string {
 export function schemaFor(fields: FormFieldDef[]): Record<string, unknown> {
   const properties: Record<string, unknown> = {};
   for (const f of fields) {
+    // A choice field has a fixed set of answers; letting the model return
+    // free text there would put a value in the box that nothing else reads.
+    const choices = f.type === "select" ? (f.options ?? []) : [];
     properties[f.key] = {
       type: "string",
-      description: `${f.label}. Return "" if the customer's message does not state it.`,
+      description:
+        choices.length > 0
+          ? `${f.label}. One of: ${choices
+              .map((o) => `"${o.value}" (${o.label})`)
+              .join(", ")}. Return "" if the message does not say.`
+          : `${f.label}. Return "" if the customer's message does not state it.`,
+      ...(choices.length > 0
+        ? { enum: ["", ...choices.map((o) => o.value)] }
+        : {}),
     };
   }
   return {
