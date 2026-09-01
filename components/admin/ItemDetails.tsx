@@ -32,6 +32,7 @@ import { surnameIssues, nameCheckAccepted } from "@/lib/parse/surname";
 import { PSA_FORMS } from "@/lib/psa-forms";
 import { DocumentPhotoScan } from "./DocumentPhotoScan";
 import { PsaFormImage } from "./PsaFormImage";
+import { DetailsSlipImage } from "./DetailsSlipImage";
 import { RequirementFiles } from "./RequirementFiles";
 import type { RequirementFile } from "@/lib/actions/files";
 import type { FormFieldDef } from "@/lib/types";
@@ -332,6 +333,17 @@ export function ItemDetails({
         <PsaFormImage
           serviceCode={serviceCode}
           serviceName={serviceName}
+          details={values}
+          label={`${customerName} ${serviceName}`}
+        />
+      )}
+
+      {/* --- ID services have no PSA form, so a plain confirmation slip goes
+              to the customer to proofread instead --- */}
+      {!hasPsaForm && fields.length > 0 && (
+        <DetailsSlipImage
+          serviceName={serviceName}
+          fields={fields}
           details={values}
           label={`${customerName} ${serviceName}`}
         />
