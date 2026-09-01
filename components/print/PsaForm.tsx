@@ -29,10 +29,11 @@ const t = (n: number) => `${Math.round(n * T * 10) / 10}px`;
 
 /** The form's own width, and the label gutter beside each row of boxes. */
 const FORM_W = 760;
-// 30 boxes at 18px scaled by S, plus this, has to clear the section's padding
-// and both borders inside a 760px form. It is the figure that gives way when
-// S goes up, and the labels wrap to suit.
-const GUTTER = 76;
+// 27 boxes at 18px scaled by S, plus this, has to clear the section's padding
+// and both borders inside a 760px form. Dropping the box count from 30 to 27
+// bought the width, so the gutter is wide enough that "Middle Name" and
+// "Place of Birth" sit on one line instead of wrapping.
+const GUTTER = 140;
 
 /**
  * Values longer than their box count get cut off on the form. Silently

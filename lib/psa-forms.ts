@@ -40,11 +40,12 @@ export interface PsaFormTemplate {
   sections: FormSection[];
 }
 
-/* Name and place rows run the full width of the form, the way the printed PSA
-   sheet does: 30 boxes at 18px is exactly the space left beside the label
-   gutter, so the last box lands on the right margin. */
-const NAME_BOXES = 30;
-const PLACE_BOXES = 30;
+/* Name and place rows run the width the label gutter leaves them. 27 boxes at
+   18px is the most that fits once the gutter is wide enough to hold a label on
+   one line — three fewer than the sheet has, which no Philippine surname needs
+   (findOverflows warns staff on the rare one that does). */
+const NAME_BOXES = 27;
+const PLACE_BOXES = 27;
 
 /** Owner / parent name block shared by the birth and CENOMAR forms. */
 function nameBlock(heading: string, prefix: string, lastLabel = "Last Name"): FormSection {
