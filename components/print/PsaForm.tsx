@@ -241,8 +241,8 @@ export function PsaForm({
         <img
           src="/psa-logo.svg"
           alt="Philippine Statistics Authority"
-          width={42}
-          height={40}
+          width={55}
+          height={52}
           className="shrink-0"
         />
         <div className="flex-1 text-center leading-tight">
@@ -258,7 +258,7 @@ export function PsaForm({
           </p>
         </div>
         {/* Balances the seal so the title stays centred on the sheet. */}
-        <span className="w-[42px] shrink-0" aria-hidden />
+        <span className="w-[55px] shrink-0" aria-hidden />
       </div>
 
       <div
