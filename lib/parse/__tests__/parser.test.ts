@@ -17,6 +17,11 @@ import {
   nameCheckAccepted,
 } from "@/lib/parse/surname";
 import {
+  documentOwnerNames,
+  documentSearchText,
+  sameParty,
+} from "@/lib/order-people";
+import {
   DELIVERY_FIELDS,
   DELIVERY_ONLY_IN_BLOCK,
   NEVER_IN_DELIVERY_BLOCK,
@@ -773,6 +778,36 @@ console.log("\n[23] The customer is the document's owner, not the receiver");
   const tin = K("last_name", "first_name", "middle_name", "birthdate");
   check("TIN applicant is the customer",
     documentOwnerName(tin, person), "Christian Talam Tingson");
+}
+
+console.log("\n[24] Finding an order by the person on the document");
+{
+  const hayana = {
+    first_name: "Hayana", middle_name: "Nardo", last_name: "Salih",
+    father_last: "Salih", father_first: "Omar",
+    mother_last: "Nardo", mother_first: "Muting",
+  };
+  check("owner name is pulled off the document",
+    documentOwnerNames(hayana)[0], "Hayana Nardo Salih");
+  check("search text carries the owner",
+    documentSearchText(hayana).includes("hayana"), true);
+  check("search text carries a parent",
+    documentSearchText(hayana).includes("omar"), true);
+
+  const marriage = {
+    husband_first: "Juan", husband_last: "Cruz",
+    wife_first: "Maria", wife_last: "Santos",
+  };
+  check("a marriage names both spouses",
+    documentOwnerNames(marriage).join(" | "), "Juan Cruz | Maria Santos");
+
+  // The booker with a middle name the customer record lacks is the same person.
+  check("a middle-name-longer owner is the same party",
+    sameParty("Muting Bajao Nardo", "Muting Nardo"), true);
+  check("subset the other way round too",
+    sameParty("Muting Nardo", "Muting Bajao Nardo"), true);
+  check("a genuinely different person is not",
+    sameParty("Hayana Nardo Salih", "Muting Nardo"), false);
 }
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

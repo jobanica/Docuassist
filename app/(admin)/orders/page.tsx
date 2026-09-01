@@ -5,6 +5,11 @@ import { createClient } from "@/lib/supabase/server";
 import { buttonVariants } from "@/components/ui/button";
 import { OrdersTable, type OrderRow } from "@/components/admin/OrdersTable";
 import { surnameIssues, nameCheckAccepted } from "@/lib/parse/surname";
+import {
+  documentOwnerNames,
+  documentSearchText,
+  sameParty,
+} from "@/lib/order-people";
 import type { OrderStatus, Service } from "@/lib/types";
 import { listTags } from "@/lib/actions/tags";
 import { shippingFee } from "@/lib/actions/settings";
@@ -63,13 +68,20 @@ export default async function OrdersPage() {
     // parents, adoption — drops off the list: it has been looked at, and the
     // list is for the ones that haven't.
     const nameIssues: string[] = [];
+    // The people named on the documents — so an order booked under one customer
+    // is still found and shown by whoever each certificate is actually for.
+    const ownerNames: string[] = [];
+    const searchNames: string[] = [];
     let documents = 0;
     for (const it of o.order_items ?? []) {
       documents += it.quantity ?? 1;
+      const details = (it.form_details ?? {}) as Record<string, string>;
+      ownerNames.push(...documentOwnerNames(details));
+      const st = documentSearchText(details);
+      if (st) searchNames.push(st);
       if (it.services) {
         svcCodes.push(it.services.code);
         svcNames.push(it.services.name);
-        const details = (it.form_details ?? {}) as Record<string, string>;
         if (nameCheckAccepted(details, it.name_check_ack_key)) continue;
         for (const issue of surnameIssues(it.services.code, details)) {
           nameIssues.push(issue.message);
@@ -103,6 +115,12 @@ export default async function OrdersPage() {
       created_by_name: o.staff_users?.name ?? null,
       service_codes: svcCodes,
       service_names: svcNames,
+      // Distinct owner names, minus one that just repeats the customer — the
+      // board only needs to point out the ones that differ.
+      document_owners: Array.from(
+        new Set(ownerNames.map((n) => n.trim()).filter(Boolean))
+      ).filter((n) => !sameParty(n, o.customers?.full_name ?? "")),
+      document_search: searchNames.join(" "),
       name_issues: nameIssues,
       last_attempt_note: lastAttempt.get(o.id)?.note ?? null,
       last_attempt_at: lastAttempt.get(o.id)?.at ?? null,

@@ -54,6 +54,12 @@ export interface OrderRow {
   created_by_name: string | null;
   service_codes: string[];
   service_names: string[];
+  /** People named on the documents who aren't the booking customer — shown so
+   *  a certificate for someone else is visible on the row. */
+  document_owners: string[];
+  /** Every name on the documents (owner, spouse, parents), lower-cased, so the
+   *  search finds an order by whoever a document is for, not just the customer. */
+  document_search: string;
   /** Set by the supplier when a job is held up; the customer sees the reason. */
   delayed_at: string | null;
   delay_reason: string | null;
@@ -161,8 +167,13 @@ export function OrdersTable({
       if (from && o.created_at.slice(0, 10) < from) return false;
       if (to && o.created_at.slice(0, 10) > to) return false;
       if (needle) {
-        const hay = `${o.customer_name} ${o.customer_phone ?? ""} ${o.tracking_code}`.toLowerCase();
-        if (!hay.includes(needle)) return false;
+        // The document names are searchable too, so an order booked under one
+        // customer is found by whoever each certificate is actually for.
+        const hay =
+          `${o.customer_name} ${o.customer_phone ?? ""} ${o.tracking_code} ${o.document_search}`.toLowerCase();
+        // Match on any word typed, so "hayana nardo" still finds a row that
+        // holds the name — the words can sit in different fields.
+        if (!needle.split(/\s+/).every((w) => hay.includes(w))) return false;
       }
       return true;
     });
@@ -851,6 +862,14 @@ export function OrdersTable({
                     <Link href={`/orders/${o.id}`} className="font-medium hover:underline">
                       {o.customer_name}
                     </Link>
+                    {/* A document for someone other than the customer it was
+                        booked under — named here so it isn't hidden behind the
+                        booker's name. */}
+                    {o.document_owners.length > 0 && (
+                      <div className="text-xs text-[#2a78d6]">
+                        for {o.document_owners.join(", ")}
+                      </div>
+                    )}
                     {o.customer_phone ? (
                       // tel: so a tap dials straight from the phone the staff
                       // are most likely holding while working the call list.
