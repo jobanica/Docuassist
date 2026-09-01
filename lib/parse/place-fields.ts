@@ -22,6 +22,10 @@ export interface PlacePair {
   provinceKey: string;
   cityLabel: string;
   provinceLabel: string;
+  /** Present when the document also asks for a barangay in the same block —
+   *  a residence address does, a place of birth does not. */
+  barangayKey?: string;
+  barangayLabel?: string;
 }
 
 export function documentPlacePair(
@@ -33,11 +37,19 @@ export function documentPlacePair(
     const provinceKey = `${m[1]}_province`;
     const prov = fields.find((x) => x.key === provinceKey);
     if (!prov) continue;
+    // A residence block (address_city / address_province) carries a barangay
+    // too; a place-of-event block (birth_city, death_city) does not. Pick it
+    // up when it is there so the barangay is checked against the city.
+    const barangayKey = `${m[1]}_barangay`;
+    const brgy = fields.find((x) => x.key === barangayKey);
     return {
       cityKey: f.key,
       provinceKey,
       cityLabel: f.label || "Place — city",
       provinceLabel: prov.label || "Place — province",
+      ...(brgy
+        ? { barangayKey, barangayLabel: brgy.label || "Barangay" }
+        : {}),
     };
   }
   return null;

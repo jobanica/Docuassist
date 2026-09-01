@@ -250,6 +250,12 @@ export function NewOrderForm({
               provinceLabel: pair.provinceLabel,
               city: doc[pair.cityKey],
               province: doc[pair.provinceKey],
+              ...(pair.barangayKey
+                ? {
+                    barangayLabel: pair.barangayLabel,
+                    barangay: doc[pair.barangayKey],
+                  }
+                : {}),
             },
           ]
         : []),
@@ -1168,13 +1174,19 @@ export function NewOrderForm({
               const doc = { ...selected[svc.id].form_details };
               if (patch.city !== undefined) doc[pair.cityKey] = patch.city;
               if (patch.province !== undefined) doc[pair.provinceKey] = patch.province;
+              if (patch.barangay !== undefined && pair.barangayKey) {
+                doc[pair.barangayKey] = patch.barangay;
+              }
               setSelected((prev) => ({
                 ...prev,
                 [svc.id]: {
                   ...prev[svc.id],
                   form_details: doc,
                   autoFilled: prev[svc.id].autoFilled.filter(
-                    (k) => k !== pair.cityKey && k !== pair.provinceKey
+                    (k) =>
+                      k !== pair.cityKey &&
+                      k !== pair.provinceKey &&
+                      k !== pair.barangayKey
                   ),
                 },
               }));

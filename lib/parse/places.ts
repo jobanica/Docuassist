@@ -689,7 +689,12 @@ export function placeIssues(
           input: written,
           kind: "unknown",
           group: p.group,
-          message: `${b.city} has no barangay called "${written}". Couriers sort on the barangay, so a wrong one is a returned parcel.`,
+          // The stakes differ by where the barangay sits: a delivery address
+          // is a returned parcel, an ID application is a rejected form.
+          message:
+            p.group === "delivery"
+              ? `${b.city} has no barangay called "${written}". Couriers sort on the barangay, so a wrong one is a returned parcel.`
+              : `${b.city} has no barangay called "${written}". Check it before filing — a wrong barangay gets the application bounced.`,
         });
       }
     }

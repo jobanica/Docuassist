@@ -58,6 +58,12 @@ function pairCheck(
       provinceLabel: pair.provinceLabel,
       city: values[pair.cityKey],
       province: values[pair.provinceKey],
+      ...(pair.barangayKey
+        ? {
+            barangayLabel: pair.barangayLabel,
+            barangay: values[pair.barangayKey],
+          }
+        : {}),
     },
   ];
 }
@@ -503,6 +509,10 @@ export function ItemDetails({
                   if (patch.province !== undefined) {
                     next[placePair.provinceKey] = patch.province;
                     touched.push(placePair.provinceKey);
+                  }
+                  if (patch.barangay !== undefined && placePair.barangayKey) {
+                    next[placePair.barangayKey] = patch.barangay;
+                    touched.push(placePair.barangayKey);
                   }
                   if (touched.length === 0) return;
                   setValues(next);
