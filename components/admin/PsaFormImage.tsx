@@ -1,6 +1,7 @@
 "use client";
 
 import { PsaForm } from "@/components/print/PsaForm";
+import { CustomerCheckBanner } from "@/components/print/CustomerCheckBanner";
 import { CaptureButtons } from "./CaptureButtons";
 
 /**
@@ -33,11 +34,17 @@ export function PsaFormImage({
       readyHint="the filled PSA form, as a picture"
       emptyHint="fill the PSA form fields first"
     >
-      <PsaForm
-        serviceCode={serviceCode}
-        serviceName={serviceName}
-        details={details}
-      />
+      {/* A confirmation strip above the form — only in the picture the
+          customer gets, so the printed government form stays clean. Its width
+          matches the form's fixed 760px so the two align as one image. */}
+      <div className="flex w-fit flex-col">
+        <CustomerCheckBanner width={760} />
+        <PsaForm
+          serviceCode={serviceCode}
+          serviceName={serviceName}
+          details={details}
+        />
+      </div>
     </CaptureButtons>
   );
 }
