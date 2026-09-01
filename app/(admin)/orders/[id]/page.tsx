@@ -16,12 +16,14 @@ import { PaymentToggle } from "@/components/admin/PaymentToggle";
 import { ItemDetails } from "@/components/admin/ItemDetails";
 import { DiscountPanel } from "@/components/admin/DiscountPanel";
 import { DelayNotice } from "@/components/admin/DelayNotice";
+import { SupplierNoteNotice } from "@/components/admin/SupplierNoteNotice";
 import { CustomerCard } from "@/components/admin/CustomerCard";
 import { listMessengerPages } from "@/lib/actions/messenger-pages";
 import { qrDataUrl, trackingUrl } from "@/lib/qr";
 import { peso } from "@/lib/money";
 import { idVerificationFee } from "@/lib/actions/settings";
 import { verificationCount } from "@/lib/id-verification";
+import { supplierNotesForOrder } from "@/lib/actions/supplier";
 import { fmtDate, fmtDateTime, daysSince } from "@/lib/dates";
 import { aging, attemptBadgeClasses } from "@/lib/status";
 import type {
@@ -84,6 +86,8 @@ export default async function OrderDetailPage({
   // panel counts down from.
   const verifyFee = await idVerificationFee();
   const verifying = verificationCount(order.order_items ?? []);
+  // Supplier's own notes on this job — office-only, never on the tracking page.
+  const supplierNotes = await supplierNotesForOrder(order.id);
   const subtotal =
     (order.order_items ?? []).reduce(
       (sum: number, it: any) => sum + Number(it.price_at_order) * it.quantity,
@@ -307,6 +311,10 @@ export default async function OrderDetailPage({
               </Link>
             </div>
           )}
+
+          {/* What the supplier flagged as missing — above the contents, since
+              it is the reason this job is not moving. */}
+          <SupplierNoteNotice notes={supplierNotes} />
 
           {/* A held-up job goes above its own contents: it is the first thing
               to act on when the customer asks where their ID is. */}

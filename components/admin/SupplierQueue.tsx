@@ -20,6 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { toMessage, unwrap } from "@/lib/action-result";
 import { startProcessing, type SupplierQueueRow } from "@/lib/actions/supplier";
+import { SupplierNotesPanel } from "./SupplierNotesPanel";
 import { fmtDate } from "@/lib/dates";
 import { copyText } from "@/lib/clipboard";
 import { fieldDisplayValue } from "@/lib/form-fields";
@@ -539,6 +540,10 @@ function Card({
             />
           </div>
         )}
+
+        {/* A short-a-detail note to the office, on either lane — the gap is
+            often spotted before the job is even started. */}
+        <SupplierNotesPanel orderId={row.order_id} notes={row.notes ?? []} />
 
         <button
           type="button"

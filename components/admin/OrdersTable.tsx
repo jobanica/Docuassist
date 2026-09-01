@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Tags,
   Combine,
+  MessageSquare,
 } from "lucide-react";
 import { bulkAdvanceStatus, combineOrders } from "@/lib/actions/orders";
 import { tagCustomers } from "@/lib/actions/tags";
@@ -58,6 +59,8 @@ export interface OrderRow {
   delay_reason: string | null;
   /** Parents'-surname warnings on this order's documents, if any. */
   name_issues: string[];
+  /** Supplier notes the office hasn't marked handled — a flag to act on. */
+  open_supplier_notes: number;
   /** Reason logged on the most recent failed delivery attempt, if any. */
   last_attempt_note: string | null;
   last_attempt_at: string | null;
@@ -76,6 +79,9 @@ export const FAILED_ATTEMPTS = "__failed_attempts";
  * have to be found again later. This is how they are found.
  */
 export const NAME_MISMATCH = "__name_mismatch";
+
+/** Also not a status — orders the supplier has flagged and nobody has cleared. */
+export const SUPPLIER_NOTE = "__supplier_note";
 
 function needsCall(o: OrderRow): boolean {
   return o.status === "shipped" && o.delivery_attempts > 0;
@@ -130,6 +136,10 @@ export function OrdersTable({
     () => orders.filter((o) => o.name_issues.length > 0),
     [orders]
   );
+  const noteList = useMemo(
+    () => orders.filter((o) => o.open_supplier_notes > 0),
+    [orders]
+  );
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -138,6 +148,8 @@ export function OrdersTable({
         if (!needsCall(o)) return false;
       } else if (status === NAME_MISMATCH) {
         if (o.name_issues.length === 0) return false;
+      } else if (status === SUPPLIER_NOTE) {
+        if (o.open_supplier_notes === 0) return false;
       } else if (status !== "all" && o.status !== status) return false;
       if (service !== "all" && !o.service_codes.includes(service)) return false;
       if (tagFilter === "untagged" && o.tag_ids.length > 0) return false;
@@ -400,6 +412,28 @@ export function OrdersTable({
         </button>
       )}
 
+      {/* The supplier holds the TIN/PhilHealth jobs and is the first to see a
+          missing detail; this puts the ones they flagged in front of the
+          office instead of waiting on someone opening the order. */}
+      {noteList.length > 0 && status !== SUPPLIER_NOTE && (
+        <button
+          type="button"
+          onClick={() => setStatus(SUPPLIER_NOTE)}
+          className="flex w-full items-center gap-3 rounded-lg border border-[#2a78d6]/40 bg-[#2a78d6]/5 px-4 py-3 text-left text-sm text-[#1e3a5f] hover:bg-[#2a78d6]/10"
+        >
+          <MessageSquare className="h-4 w-4 shrink-0" />
+          <span className="flex-1">
+            <strong>
+              {noteList.length} order{noteList.length === 1 ? "" : "s"} the
+              supplier flagged
+            </strong>{" "}
+            — a missing or unreadable detail on a TIN or PhilHealth job. Open it,
+            chase the customer, then mark it handled.
+          </span>
+          <span className="shrink-0 font-medium underline">Show them</span>
+        </button>
+      )}
+
       {callList.length > 0 && !onCallList && (
         <button
           type="button"
@@ -439,6 +473,9 @@ export function OrdersTable({
           </option>
           <option value={NAME_MISMATCH}>
             ⚠ Parents&apos; names to check{nameList.length ? ` (${nameList.length})` : ""}
+          </option>
+          <option value={SUPPLIER_NOTE}>
+            💬 Supplier flagged{noteList.length ? ` (${noteList.length})` : ""}
           </option>
           {statuses.map((s) => (
             <option key={s.code} value={s.code}>
@@ -878,6 +915,14 @@ export function OrdersTable({
                           title={o.name_issues.join("\n")}
                         >
                           Name check
+                        </Badge>
+                      )}
+                      {o.open_supplier_notes > 0 && (
+                        <Badge
+                          className="bg-[#2a78d6]/15 text-[#1e3a5f]"
+                          title="The supplier flagged a missing detail"
+                        >
+                          Supplier note
                         </Badge>
                       )}
                     </div>

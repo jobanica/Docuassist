@@ -26,6 +26,7 @@ export default async function OrdersPage() {
            delayed_at, delay_reason, delivery_attempts, source, created_by,
            customers ( id, full_name, phone, customer_tags ( tag_id ) ),
            staff_users ( name ),
+           supplier_notes ( id, addressed_at ),
            order_items ( form_details, quantity, name_check_ack_key,
                          services ( code, name ) )`
         )
@@ -87,6 +88,11 @@ export default async function OrdersPage() {
       status_since: o.status_since,
       delayed_at: o.delayed_at ?? null,
       delay_reason: o.delay_reason ?? null,
+      // Any supplier note nobody has marked handled — the board flags it so
+      // the TIN/PhilHealth staff can find the ones still waiting on them.
+      open_supplier_notes: (o.supplier_notes ?? []).filter(
+        (n: any) => !n.addressed_at
+      ).length,
       delivery_attempts: o.delivery_attempts,
       source: o.source ?? "staff",
       customer_id: o.customers?.id ?? null,
