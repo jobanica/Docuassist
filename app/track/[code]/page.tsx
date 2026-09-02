@@ -6,6 +6,7 @@ import {
   FileText,
   MessageCircle,
   PackageX,
+  Search,
   ShieldCheck,
 } from "lucide-react";
 import {
@@ -102,9 +103,15 @@ export default async function TrackPage({
           <PackageX className="mx-auto h-10 w-10 text-slate-300" />
           <p className="mt-3 font-semibold text-slate-900">Order not found</p>
           <p className="mt-1 text-sm text-slate-500">
-            Double-check your link, or message our page and we&apos;ll help you
-            po.
+            Double-check your link, or search by phone number instead.
           </p>
+          <a
+            href="/track"
+            className="mt-3 inline-flex items-center gap-2 rounded-full border border-blue-600 px-5 py-2.5 text-sm font-medium text-blue-700 hover:bg-blue-50"
+          >
+            <Search className="h-4 w-4" />
+            Search by phone number
+          </a>
           <MessengerButton url={business.messenger_url} />
         </div>
         <PrivacyNote />

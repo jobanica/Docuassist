@@ -65,6 +65,38 @@ export type LookupResult =
   | { kind: "not_found" }
   | { kind: "rate_limited" };
 
+/**
+ * One order in the centralized search results. A deliberately small slice of
+ * TrackingInfo — enough to recognise the order and see where it has reached,
+ * with the tracking_code to open its full page. No money, address, or contact.
+ */
+export interface TrackingSummary {
+  tracking_code: string;
+  first_name: string | null;
+  status: StatusCode;
+  status_label: string;
+  status_sort_order: number;
+  is_terminal: boolean;
+  is_delayed: boolean;
+  expected_delivery_date: string | null;
+  created_at: string;
+  documents: {
+    service_name: string;
+    quantity: number;
+    owner_name: string | null;
+  }[];
+}
+
+export type SearchResult =
+  | { kind: "ok"; data: TrackingSummary[] }
+  | { kind: "rate_limited" };
+
+/** What the centralized search action hands back to the page. */
+export type TrackSearchResult =
+  | { kind: "ok"; data: TrackingSummary[] }
+  | { kind: "need_phone" }
+  | { kind: "rate_limited" };
+
 const RATE_MAX = 30; // lookups per IP per window
 const RATE_WINDOW = 60; // seconds
 
@@ -103,6 +135,41 @@ export async function lookupTracking(
   if (error) throw new Error(error.message);
   if (!data) return { kind: "not_found" };
   return { kind: "ok", data: data as TrackingInfo };
+}
+
+const SEARCH_MAX = 15; // searches per IP per window — tighter than a code lookup
+const SEARCH_WINDOW = 60; // seconds
+
+/**
+ * Centralized tracking search, keyed by phone number.
+ *
+ * Phone is required (a name alone must not surface a stranger's documents); a
+ * name only narrows the matches. Returns whitelisted summaries and nothing
+ * else — the database function is the choke point, this just calls it under
+ * the same per-IP rate limit as the single-order lookup.
+ */
+export async function searchTrackingByPhone(
+  phone: string,
+  name: string,
+  ip: string
+): Promise<SearchResult> {
+  const supabase = publicClient();
+
+  const { data: allowed, error: rlErr } = await supabase.rpc("check_rate_limit", {
+    p_key: `tracksearch:${ip}`,
+    p_max: SEARCH_MAX,
+    p_window_seconds: SEARCH_WINDOW,
+  });
+  if (!rlErr && allowed === false) {
+    return { kind: "rate_limited" };
+  }
+
+  const { data, error } = await supabase.rpc("search_tracking_by_phone", {
+    p_phone: phone,
+    p_name: name || null,
+  });
+  if (error) throw new Error(error.message);
+  return { kind: "ok", data: (data ?? []) as TrackingSummary[] };
 }
 
 /** Public, non-sensitive business branding (name, Messenger link, logo). */
