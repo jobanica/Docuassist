@@ -30,6 +30,8 @@ export interface SupplierQueueRow {
   delayed_at: string | null;
   delay_reason: string | null;
   delay_files: RequirementFile[];
+  /** Set when the supplier has posted the finished ID to the office. */
+  supplier_shipped_at: string | null;
   customer_name: string;
   phone: string | null;
   messenger_name: string | null;
@@ -114,6 +116,33 @@ export async function markDelayed(
     if (error) throw new Error(error.message);
     revalidatePath("/queue");
     return (data ?? "") as string;
+  });
+}
+
+/**
+ * The supplier posting the finished ID to the office.
+ *
+ * A middle leg with no pipeline status of its own — the customer's order is
+ * still "processing" until the office releases it — so this is a flag, set
+ * while the job is still theirs. Passing false takes the mark back.
+ */
+export async function shipToOffice(
+  orderId: string,
+  shipped = true
+): Promise<ActionResult<string | null>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    if (staff.role !== "supplier") {
+      throw new Error("This is the supplier's action.");
+    }
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("supplier_ship_to_office", {
+      p_order: orderId,
+      p_shipped: shipped,
+    });
+    if (error) throw new Error(error.message);
+    revalidatePath("/queue");
+    return (data ?? null) as string | null;
   });
 }
 

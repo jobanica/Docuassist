@@ -63,6 +63,8 @@ export interface OrderRow {
   /** Set by the supplier when a job is held up; the customer sees the reason. */
   delayed_at: string | null;
   delay_reason: string | null;
+  /** The supplier has posted the finished ID; the office should release it. */
+  id_posted: boolean;
   /** Parents'-surname warnings on this order's documents, if any. */
   name_issues: string[];
   /** Supplier notes the office hasn't marked handled — a flag to act on. */
@@ -942,6 +944,14 @@ export function OrdersTable({
                           title="The supplier flagged a missing detail"
                         >
                           Supplier note
+                        </Badge>
+                      )}
+                      {o.id_posted && (
+                        <Badge
+                          className="bg-violet-100 text-violet-800"
+                          title="The supplier posted the finished ID — release it once it arrives"
+                        >
+                          ID posted
                         </Badge>
                       )}
                     </div>

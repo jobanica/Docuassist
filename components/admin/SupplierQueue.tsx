@@ -16,10 +16,16 @@ import {
   Search,
   X,
   IdCard,
+  Send,
+  Undo2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toMessage, unwrap } from "@/lib/action-result";
-import { startProcessing, type SupplierQueueRow } from "@/lib/actions/supplier";
+import {
+  startProcessing,
+  shipToOffice,
+  type SupplierQueueRow,
+} from "@/lib/actions/supplier";
 import { SupplierNotesPanel } from "./SupplierNotesPanel";
 import { fmtDate } from "@/lib/dates";
 import { copyText } from "@/lib/clipboard";
@@ -39,17 +45,19 @@ import type { FormFieldDef, StatusCode } from "@/lib/types";
 /**
  * The supplier's board.
  *
- * Two lanes, because there are exactly two places a job can be while it is
- * theirs: waiting to be picked up, and in their hands. Anything further along
- * has left them — the office records that when the finished IDs arrive — so a
- * third lane would be a column nobody could ever drag into.
+ * Three lanes for the three places a job sits while it is theirs: waiting to be
+ * picked up, being made, and finished-and-posted to the office. The last two
+ * are both status 'processing' — the "posted" split is an internal flag, so the
+ * customer sees Processing throughout — and the card drops off entirely once
+ * the office marks it Released and it leaves Processing.
  *
  * Deliberately not the orders board: no money, no navigation to anything else.
  */
 export function SupplierQueue({ rows }: { rows: SupplierQueueRow[] }) {
   const router = useRouter();
   const [dragging, setDragging] = useState<string | null>(null);
-  const [over, setOver] = useState(false);
+  // Which lane is being hovered over, so only that one lights up.
+  const [overLane, setOverLane] = useState<LaneId | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -83,28 +91,62 @@ export function SupplierQueue({ rows }: { rows: SupplierQueueRow[] }) {
   }
 
   const waiting = filtered.filter((r) => r.status === "details_received");
-  const started = filtered.filter((r) => r.status === "processing");
+  // "Processing" splits in two: still in the supplier's hands, and finished
+  // and posted to the office (Jobani). Both are status 'processing' — the flag
+  // is internal, the customer sees Processing throughout.
+  const inProgress = filtered.filter(
+    (r) => r.status === "processing" && !r.supplier_shipped_at
+  );
+  const sent = filtered.filter(
+    (r) => r.status === "processing" && r.supplier_shipped_at
+  );
   // A job the supplier has flagged, or one that has sat a fortnight, is what
   // the lane header counts — it is the number worth glancing at.
-  const needsAttention = started.filter(
+  const needsAttention = inProgress.filter(
     (r) =>
       Boolean(r.delayed_at) ||
       aging(r.status as StatusCode, r.status_since ?? "") === "alert"
   ).length;
 
-  async function move(orderId: string) {
+  /** Run a supplier transition and refresh, whatever the card's next step is. */
+  async function run(orderId: string, fn: () => Promise<unknown>) {
     setError(null);
     setMoving(orderId);
     try {
-      unwrap(await startProcessing(orderId));
+      unwrap((await fn()) as any);
       router.refresh();
     } catch (e) {
       setError(toMessage(e));
     } finally {
       setMoving(null);
       setDragging(null);
-      setOver(false);
+      setOverLane(null);
     }
+  }
+
+  const startJob = (id: string) => run(id, () => startProcessing(id));
+  const postToOffice = (id: string) => run(id, () => shipToOffice(id, true));
+  const bringBack = (id: string) => run(id, () => shipToOffice(id, false));
+
+  /**
+   * A card dropped into a lane goes to that lane's meaning — the source is read
+   * from the card's own state, so one handler covers every allowed move and
+   * silently ignores the ones that aren't (a waiting card dropped straight into
+   * "Sent", say).
+   */
+  function drop(target: LaneId) {
+    const id = dragging;
+    if (!id) return;
+    const row = rows.find((r) => r.order_id === id);
+    if (!row) return;
+    const shipped = Boolean(row.supplier_shipped_at);
+    if (target === "started") {
+      if (row.status === "details_received") startJob(id);
+      else if (row.status === "processing" && shipped) bringBack(id);
+    } else if (target === "sent") {
+      if (row.status === "processing" && !shipped) postToOffice(id);
+    }
+    setOverLane(null);
   }
 
   return (
@@ -131,7 +173,7 @@ export function SupplierQueue({ rows }: { rows: SupplierQueueRow[] }) {
         onClear={clearFilters}
       />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-3">
         {/* --- Lane 1: waiting to be picked up ------------------------------ */}
         <Lane
           title="To start"
@@ -150,35 +192,80 @@ export function SupplierQueue({ rows }: { rows: SupplierQueueRow[] }) {
               isDragging={dragging === r.order_id}
               busy={moving === r.order_id}
               onDragStart={() => setDragging(r.order_id)}
-              onDragEnd={() => { setDragging(null); setOver(false); }}
-              onStart={() => move(r.order_id)}
+              onDragEnd={() => { setDragging(null); setOverLane(null); }}
+              onStart={() => startJob(r.order_id)}
             />
           ))}
         </Lane>
 
-        {/* --- Lane 2: in their hands --------------------------------------- */}
+        {/* --- Lane 2: being made ------------------------------------------- */}
         <Lane
           title="In progress"
-          count={started.length}
+          count={inProgress.length}
           attention={needsAttention}
-          hint="Leaves the board once the finished IDs are received."
+          hint="Post the finished ID to the office, then move it across."
           tone="amber"
           empty="Nothing in progress."
           emptyIcon={<Clock className="h-5 w-5" />}
-          dropActive={over && dragging !== null}
+          dropActive={overLane === "started" && dragging !== null}
           onDragOver={(e) => {
             if (!dragging) return;
             e.preventDefault();       // without this the drop never fires
-            setOver(true);
+            setOverLane("started");
           }}
-          onDragLeave={() => setOver(false)}
+          onDragLeave={() => setOverLane((l) => (l === "started" ? null : l))}
           onDrop={(e) => {
             e.preventDefault();
-            if (dragging) move(dragging);
+            drop("started");
           }}
         >
-          {started.map((r) => (
-            <Card key={r.order_id} row={r} lane="started" />
+          {inProgress.map((r) => (
+            <Card
+              key={r.order_id}
+              row={r}
+              lane="started"
+              draggable
+              isDragging={dragging === r.order_id}
+              busy={moving === r.order_id}
+              onDragStart={() => setDragging(r.order_id)}
+              onDragEnd={() => { setDragging(null); setOverLane(null); }}
+              onShip={() => postToOffice(r.order_id)}
+            />
+          ))}
+        </Lane>
+
+        {/* --- Lane 3: posted to the office (Jobani) ------------------------ */}
+        <Lane
+          title="Sent to Jobani"
+          count={sent.length}
+          hint="With the office now. Drops off when they mark it Released."
+          tone="violet"
+          empty="Nothing posted yet."
+          emptyIcon={<Send className="h-5 w-5" />}
+          dropActive={overLane === "sent" && dragging !== null}
+          onDragOver={(e) => {
+            if (!dragging) return;
+            e.preventDefault();
+            setOverLane("sent");
+          }}
+          onDragLeave={() => setOverLane((l) => (l === "sent" ? null : l))}
+          onDrop={(e) => {
+            e.preventDefault();
+            drop("sent");
+          }}
+        >
+          {sent.map((r) => (
+            <Card
+              key={r.order_id}
+              row={r}
+              lane="sent"
+              draggable
+              isDragging={dragging === r.order_id}
+              busy={moving === r.order_id}
+              onDragStart={() => setDragging(r.order_id)}
+              onDragEnd={() => { setDragging(null); setOverLane(null); }}
+              onBringBack={() => bringBack(r.order_id)}
+            />
           ))}
         </Lane>
       </div>
@@ -339,9 +426,13 @@ function QueueFilters({
   );
 }
 
+/** The lanes a card can sit in and be dropped into. */
+type LaneId = "waiting" | "started" | "sent";
+
 const laneTone: Record<string, { bar: string; chip: string }> = {
   sky: { bar: "bg-sky-400", chip: "bg-sky-100 text-sky-800" },
   amber: { bar: "bg-amber-400", chip: "bg-amber-100 text-amber-800" },
+  violet: { bar: "bg-violet-400", chip: "bg-violet-100 text-violet-800" },
 };
 
 function Lane({
@@ -362,7 +453,7 @@ function Lane({
   count: number;
   attention?: number;
   hint: string;
-  tone: "sky" | "amber";
+  tone: "sky" | "amber" | "violet";
   empty: string;
   emptyIcon: React.ReactNode;
   children: React.ReactNode;
@@ -425,15 +516,21 @@ function Card({
   onDragStart,
   onDragEnd,
   onStart,
+  onShip,
+  onBringBack,
 }: {
   row: SupplierQueueRow;
-  lane: "waiting" | "started";
+  lane: LaneId;
   draggable?: boolean;
   isDragging?: boolean;
   busy?: boolean;
   onDragStart?: () => void;
   onDragEnd?: () => void;
   onStart?: () => void;
+  /** Lane 2 → 3: the finished ID posted to the office. */
+  onShip?: () => void;
+  /** Lane 3 → 2: taking that back. */
+  onBringBack?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const docs = row.items.map((i) => i.service_name).join(", ");
@@ -484,7 +581,11 @@ function Card({
         ))}
 
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          {lane === "started" ? (
+          {lane === "sent" ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-800">
+              <Send className="h-3 w-3" /> Posted {ageLabel(row.supplier_shipped_at)}
+            </span>
+          ) : lane === "started" ? (
             <span
               className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${agingPill[age]}`}
             >
@@ -531,17 +632,58 @@ function Card({
         )}
 
         {lane === "started" && (
-          <div className="mt-3">
-            <DelayPanel
-              orderId={row.order_id}
-              delayedAt={row.delayed_at}
-              reason={row.delay_reason}
-              files={row.delay_files ?? []}
-            />
+          <>
+            <div className="mt-3">
+              <DelayPanel
+                orderId={row.order_id}
+                delayedAt={row.delayed_at}
+                reason={row.delay_reason}
+                files={row.delay_files ?? []}
+              />
+            </div>
+            {/* Finished → posted to Jobani. Drag to the last lane, or press. */}
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-3 w-full border-violet-300 text-violet-800 hover:bg-violet-50"
+              disabled={busy}
+              onClick={onShip}
+            >
+              {busy ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Sending…
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4" /> Ship to Jobani
+                </>
+              )}
+            </Button>
+          </>
+        )}
+
+        {lane === "sent" && (
+          <div className="mt-3 rounded-lg border border-violet-200 bg-violet-50 p-2.5">
+            <p className="text-[11px] text-violet-800">
+              With the office now. It drops off here once they mark it Released.
+            </p>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onBringBack}
+              className="mt-1.5 inline-flex items-center gap-1 rounded-md border border-violet-300 bg-white px-2 py-1 text-[11px] font-medium text-violet-800 hover:bg-violet-100 disabled:opacity-60"
+            >
+              {busy ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Undo2 className="h-3 w-3" />
+              )}
+              Not sent yet — bring back
+            </button>
           </div>
         )}
 
-        {/* A short-a-detail note to the office, on either lane — the gap is
+        {/* A short-a-detail note to the office, on any lane — the gap is
             often spotted before the job is even started. */}
         <SupplierNotesPanel orderId={row.order_id} notes={row.notes ?? []} />
 

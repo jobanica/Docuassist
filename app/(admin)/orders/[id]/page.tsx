@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowRight, Combine, IdCard, Printer } from "lucide-react";
+import { ArrowLeft, ArrowRight, Combine, IdCard, Printer, Send } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import {
   Card,
@@ -309,6 +309,26 @@ export default async function OrderDetailPage({
               >
                 Open {mergedInto.tracking_code} <ArrowRight className="h-3.5 w-3.5" />
               </Link>
+            </div>
+          )}
+
+          {/* The supplier has posted the finished ID to the office — a nudge to
+              mark Released once it arrives. Only while it is still Processing;
+              releasing it clears the flag. */}
+          {o.status === "processing" && o.supplier_shipped_at && (
+            <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
+              <p className="flex items-center gap-2 text-sm font-semibold text-violet-900">
+                <Send className="h-4 w-4" />
+                The supplier posted the finished ID
+                <span className="font-normal text-violet-700/80">
+                  · {fmtDate(o.supplier_shipped_at)}
+                </span>
+              </p>
+              <p className="mt-1 text-sm text-violet-900/90">
+                It&apos;s on its way to the office. Mark this order{" "}
+                <strong>Released</strong> once the ID is in your hands, then ship
+                it to the customer.
+              </p>
             </div>
           )}
 

@@ -28,7 +28,7 @@ export default async function OrdersPage() {
         .from("orders")
         .select(
           `id, tracking_code, status, total_amount, discount_amount, created_at, status_since,
-           delayed_at, delay_reason, delivery_attempts, source, created_by,
+           delayed_at, delay_reason, supplier_shipped_at, delivery_attempts, source, created_by,
            customers ( id, full_name, phone, customer_tags ( tag_id ) ),
            staff_users ( name ),
            supplier_notes ( id, addressed_at ),
@@ -100,6 +100,10 @@ export default async function OrdersPage() {
       status_since: o.status_since,
       delayed_at: o.delayed_at ?? null,
       delay_reason: o.delay_reason ?? null,
+      // The supplier has posted the finished ID and it is on its way to the
+      // office — a nudge to release once it lands.
+      id_posted:
+        o.status === "processing" && Boolean(o.supplier_shipped_at),
       // Any supplier note nobody has marked handled — the board flags it so
       // the TIN/PhilHealth staff can find the ones still waiting on them.
       open_supplier_notes: (o.supplier_notes ?? []).filter(
