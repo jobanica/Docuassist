@@ -711,6 +711,8 @@ export async function markDelivered(
         status: "delivered",
         delivered_at: new Date().toISOString(),
         payment_status: codCollected ? "paid" : "unpaid",
+        // It arrived, so any pending reship request is moot.
+        reship_requested_at: null,
       })
       .eq("id", orderId);
     if (upErr) throw new Error(upErr.message);
@@ -808,6 +810,82 @@ export async function markReturned(
 }
 
 /**
+ * Flag that the customer wants a reship, before the parcel is back (§4).
+ *
+ * The call often comes while the failed parcel is still in transit to the
+ * office — the customer just wants it sent again. Recorded here as an intent,
+ * not an act: it can be set while the order is still Shipped or already
+ * Returned, and it survives Mark as Returned so that whoever opens the box days
+ * later sees the reship is waiting and sends it straight back out. Passing a
+ * reship (reshipOrder) or the order being delivered/cancelled clears it.
+ */
+export async function requestReship(
+  orderId: string,
+  note?: string
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    const supabase = createClient();
+
+    const { data: order, error } = await supabase
+      .from("orders")
+      .select("status")
+      .eq("id", orderId)
+      .single();
+    if (error) throw new Error(error.message);
+    if (order.status !== "shipped" && order.status !== "returned") {
+      throw new Error(
+        "A reship can only be requested on an order that is out for delivery or has come back."
+      );
+    }
+
+    const { error: upErr } = await supabase
+      .from("orders")
+      .update({ reship_requested_at: new Date().toISOString() })
+      .eq("id", orderId);
+    if (upErr) throw new Error(upErr.message);
+
+    await supabase.from("order_status_history").insert({
+      order_id: orderId,
+      event_type: "note",
+      note:
+        `Customer requested a reship` +
+        (note?.trim() ? ` — ${note.trim()}` : ""),
+      changed_by: staff.id,
+    });
+
+    revalidatePath(`/orders/${orderId}`);
+    revalidatePath("/orders");
+  });
+}
+
+/** Take back a reship request — a mis-click, or the customer changed their mind. */
+export async function cancelReshipRequest(
+  orderId: string
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    const supabase = createClient();
+
+    const { error: upErr } = await supabase
+      .from("orders")
+      .update({ reship_requested_at: null })
+      .eq("id", orderId);
+    if (upErr) throw new Error(upErr.message);
+
+    await supabase.from("order_status_history").insert({
+      order_id: orderId,
+      event_type: "note",
+      note: "Reship request cancelled",
+      changed_by: staff.id,
+    });
+
+    revalidatePath(`/orders/${orderId}`);
+    revalidatePath("/orders");
+  });
+}
+
+/**
  * Send a returned parcel back out (§4). The customer got in touch after the
  * return and wants it delivered again; the parcel is still on the shelf, so
  * nothing is remade — it just goes back to Released, ready for a fresh courier
@@ -817,8 +895,9 @@ export async function markReturned(
  * counting as a lost sale on the §11 ledger), the old courier and ship stamps
  * are wiped so the released order is clean, and delivery_attempts resets to 0
  * so the three-attempt cap starts fresh — otherwise "Log failed attempt" would
- * be dead on arrival at 3/3. reshipped_at/reship_count record that it happened,
- * for the board's filter and badge; the earlier attempts survive in history.
+ * be dead on arrival at 3/3. A pending reship request is cleared (it has now
+ * been acted on). reshipped_at/reship_count record that it happened, for the
+ * board's filter and badge; the earlier attempts survive in history.
  */
 export async function reshipOrder(
   orderId: string,
@@ -848,6 +927,7 @@ export async function reshipOrder(
         courier_tracking_number: null,
         shipped_at: null,
         delivery_attempts: 0,
+        reship_requested_at: null,
         reshipped_at: new Date().toISOString(),
         reship_count: (order.reship_count ?? 0) + 1,
       })

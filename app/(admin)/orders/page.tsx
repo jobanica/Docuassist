@@ -28,7 +28,8 @@ export default async function OrdersPage() {
         .from("orders")
         .select(
           `id, tracking_code, status, total_amount, discount_amount, created_at, status_since,
-           delayed_at, delay_reason, supplier_shipped_at, reship_count, delivery_attempts, source, created_by,
+           delayed_at, delay_reason, supplier_shipped_at, reship_count, reship_requested_at,
+           delivery_attempts, source, created_by,
            customers ( id, full_name, phone, customer_tags ( tag_id ) ),
            staff_users ( name ),
            supplier_notes ( id, addressed_at ),
@@ -107,6 +108,9 @@ export default async function OrdersPage() {
       // Times this order has been sent back out after a return — the board
       // filters and badges on it so a reship can be found again later.
       reship_count: Number(o.reship_count ?? 0),
+      // The customer has asked for a reship that hasn't happened yet — the
+      // actionable ones to watch for when the returned parcel arrives.
+      reship_requested: Boolean(o.reship_requested_at),
       // Any supplier note nobody has marked handled — the board flags it so
       // the TIN/PhilHealth staff can find the ones still waiting on them.
       open_supplier_notes: (o.supplier_notes ?? []).filter(

@@ -11,6 +11,8 @@ import {
   PackageX,
   AlertTriangle,
   RefreshCw,
+  PackagePlus,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toMessage, type ActionResult, unwrap } from "@/lib/action-result";
@@ -26,7 +28,10 @@ import {
   markDelivered,
   markReturned,
   reshipOrder,
+  requestReship,
+  cancelReshipRequest,
 } from "@/lib/actions/orders";
+import { fmtDate } from "@/lib/dates";
 import {
   nextStatus,
   canCancel,
@@ -45,6 +50,7 @@ type Panel =
   | "deliver"
   | "return"
   | "reship"
+  | "request"
   | null;
 
 export function OrderActions({
@@ -54,6 +60,7 @@ export function OrderActions({
   couriers,
   deliveryAttempts,
   totalAmount,
+  reshipRequestedAt,
 }: {
   orderId: string;
   status: StatusCode;
@@ -61,6 +68,8 @@ export function OrderActions({
   couriers: Courier[];
   deliveryAttempts: number;
   totalAmount: number;
+  /** Set when the customer asked for a reship, maybe before the parcel is back. */
+  reshipRequestedAt: string | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -111,8 +120,37 @@ export function OrderActions({
     });
   }
 
+  const canRequestReship =
+    (status === "shipped" || status === "returned") && !reshipRequestedAt;
+
   return (
     <div className="space-y-3">
+      {/* Customer asked for a reship, maybe while the parcel was still on its
+          way back. Shown first so whoever receives the box acts on it. */}
+      {reshipRequestedAt && status !== "delivered" && status !== "cancelled" && (
+        <div className="flex items-start gap-2 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+          <div className="flex-1">
+            <p className="font-medium">
+              Customer requested a reship on {fmtDate(reshipRequestedAt)}.
+            </p>
+            <p className="mt-0.5 text-xs text-emerald-800">
+              {status === "returned"
+                ? "The parcel is back — press Reship to send it out again."
+                : "Once it comes back, mark it Returned and it's ready to reship."}
+            </p>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => run(() => cancelReshipRequest(orderId))}
+              className="mt-1 text-xs font-medium text-emerald-700 underline hover:text-emerald-900 disabled:opacity-50"
+            >
+              Cancel the request
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2">
         {/* Plain forward advance (up to released) */}
         {upcoming && upcoming !== "shipped" && upcoming !== "delivered" && (
@@ -151,6 +189,14 @@ export function OrderActions({
               <PackageX className="h-4 w-4" /> Mark as Returned
             </Button>
           </>
+        )}
+
+        {/* The customer can ask for a reship before the parcel is even back —
+            flag it now so it isn't forgotten by the time the box arrives. */}
+        {canRequestReship && (
+          <Button size="sm" variant="outline" onClick={() => toggle("request")}>
+            <PackagePlus className="h-4 w-4" /> Request reship
+          </Button>
         )}
 
         {/* Returned: the parcel came back but the customer now wants it sent
@@ -332,6 +378,33 @@ export function OrderActions({
             onClick={() => run(() => markReturned(orderId, reason))}
           >
             {pending ? "Saving…" : "Confirm return to sender"}
+          </Button>
+        </Box>
+      )}
+
+      {/* --- Request reship --- */}
+      {panel === "request" && (
+        <Box>
+          <p className="text-sm text-muted-foreground">
+            Flags that the customer wants this sent again. Nothing moves yet —
+            {status === "shipped"
+              ? " the parcel is still on its way back."
+              : " use Reship when you're ready to send it out."}{" "}
+            When it's received, the order will show the request so it can be
+            reshipped straight away.
+          </p>
+          <Label>Optional note</Label>
+          <Textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="e.g. Customer confirmed the same address by phone"
+          />
+          <Button
+            size="sm"
+            disabled={pending}
+            onClick={() => run(() => requestReship(orderId, note))}
+          >
+            {pending ? "Saving…" : "Flag reship request"}
           </Button>
         </Box>
       )}

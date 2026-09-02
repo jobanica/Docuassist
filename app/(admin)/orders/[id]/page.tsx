@@ -180,13 +180,22 @@ export default async function OrderDetailPage({
         </Card>
       )}
       {o.status === "returned" && (
-        <Card className="border-red-300">
+        <Card className={o.reship_requested_at ? "border-emerald-300" : "border-red-300"}>
           <CardContent className="py-3 text-sm">
             <span className="font-medium text-red-700">Returned (RTS):</span>{" "}
             {o.return_reason || "No reason recorded."}
-            <span className="mt-1 block text-xs text-muted-foreground">
-              If the customer asks for it again, use <strong>Reship</strong>{" "}
-              below — it goes back out for delivery.
+            <span className="mt-1 block text-xs">
+              {o.reship_requested_at ? (
+                <span className="font-medium text-emerald-800">
+                  ✅ Customer requested a reship — press{" "}
+                  <strong>Reship</strong> below to send it out again.
+                </span>
+              ) : (
+                <span className="text-muted-foreground">
+                  If the customer asks for it again, use <strong>Reship</strong>{" "}
+                  below — it goes back out for delivery.
+                </span>
+              )}
             </span>
           </CardContent>
         </Card>
@@ -213,6 +222,7 @@ export default async function OrderDetailPage({
                   couriers={(couriers ?? []) as Courier[]}
                   deliveryAttempts={o.delivery_attempts}
                   totalAmount={Number(o.total_amount)}
+                  reshipRequestedAt={o.reship_requested_at ?? null}
                 />
               </div>
             </CardContent>

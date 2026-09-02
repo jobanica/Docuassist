@@ -67,6 +67,8 @@ export interface OrderRow {
   id_posted: boolean;
   /** Times this order has been reshipped after a return. 0 = never. */
   reship_count: number;
+  /** The customer has asked for a reship that hasn't been done yet. */
+  reship_requested: boolean;
   /** Parents'-surname warnings on this order's documents, if any. */
   name_issues: string[];
   /** Supplier notes the office hasn't marked handled — a flag to act on. */
@@ -99,6 +101,13 @@ export const SUPPLIER_NOTE = "__supplier_note";
  * status no longer says it was ever returned; this is how those are found.
  */
 export const RESHIP = "__reship";
+
+/**
+ * Also not a status — orders the customer has asked to have reshipped, which
+ * hasn't happened yet. These are the ones to act on: some are still coming
+ * back, so watch for the parcel and send it straight out when it lands.
+ */
+export const RESHIP_REQUESTED = "__reship_requested";
 
 function needsCall(o: OrderRow): boolean {
   return o.status === "shipped" && o.delivery_attempts > 0;
@@ -161,6 +170,10 @@ export function OrdersTable({
     () => orders.filter((o) => o.reship_count > 0),
     [orders]
   );
+  const reshipReqList = useMemo(
+    () => orders.filter((o) => o.reship_requested),
+    [orders]
+  );
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -173,6 +186,8 @@ export function OrdersTable({
         if (o.open_supplier_notes === 0) return false;
       } else if (status === RESHIP) {
         if (o.reship_count === 0) return false;
+      } else if (status === RESHIP_REQUESTED) {
+        if (!o.reship_requested) return false;
       } else if (status !== "all" && o.status !== status) return false;
       if (service !== "all" && !o.service_codes.includes(service)) return false;
       if (tagFilter === "untagged" && o.tag_ids.length > 0) return false;
@@ -504,6 +519,9 @@ export function OrdersTable({
           </option>
           <option value={SUPPLIER_NOTE}>
             💬 Supplier flagged{noteList.length ? ` (${noteList.length})` : ""}
+          </option>
+          <option value={RESHIP_REQUESTED}>
+            📮 Reship requested{reshipReqList.length ? ` (${reshipReqList.length})` : ""}
           </option>
           <option value={RESHIP}>
             🔁 Reshipped{reshipList.length ? ` (${reshipList.length})` : ""}
@@ -970,6 +988,14 @@ export function OrdersTable({
                           title="The supplier posted the finished ID — release it once it arrives"
                         >
                           ID posted
+                        </Badge>
+                      )}
+                      {o.reship_requested && (
+                        <Badge
+                          className="bg-emerald-100 text-emerald-800"
+                          title="Customer asked for a reship — send it out when the parcel is back"
+                        >
+                          Reship requested
                         </Badge>
                       )}
                       {o.reship_count > 0 && (
