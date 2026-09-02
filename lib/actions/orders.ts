@@ -808,6 +808,68 @@ export async function markReturned(
 }
 
 /**
+ * Send a returned parcel back out (§4). The customer got in touch after the
+ * return and wants it delivered again; the parcel is still on the shelf, so
+ * nothing is remade — it just goes back to Released, ready for a fresh courier
+ * and tracking number through the normal "Mark as Shipped" flow.
+ *
+ * The return is undone: returned_at/return_reason are cleared (so it stops
+ * counting as a lost sale on the §11 ledger), the old courier and ship stamps
+ * are wiped so the released order is clean, and delivery_attempts resets to 0
+ * so the three-attempt cap starts fresh — otherwise "Log failed attempt" would
+ * be dead on arrival at 3/3. reshipped_at/reship_count record that it happened,
+ * for the board's filter and badge; the earlier attempts survive in history.
+ */
+export async function reshipOrder(
+  orderId: string,
+  note?: string
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    const supabase = createClient();
+
+    const { data: order, error } = await supabase
+      .from("orders")
+      .select("status, reship_count")
+      .eq("id", orderId)
+      .single();
+    if (error) throw new Error(error.message);
+    if (order.status !== "returned") {
+      throw new Error("Only a returned order can be reshipped.");
+    }
+
+    const { error: upErr } = await supabase
+      .from("orders")
+      .update({
+        status: "released",
+        returned_at: null,
+        return_reason: null,
+        courier_id: null,
+        courier_tracking_number: null,
+        shipped_at: null,
+        delivery_attempts: 0,
+        reshipped_at: new Date().toISOString(),
+        reship_count: (order.reship_count ?? 0) + 1,
+      })
+      .eq("id", orderId);
+    if (upErr) throw new Error(upErr.message);
+
+    await supabase.from("order_status_history").insert({
+      order_id: orderId,
+      status: "released",
+      event_type: "status_change",
+      note:
+        note?.trim() ||
+        "Reship — customer asked for the returned parcel to be sent again",
+      changed_by: staff.id,
+    });
+
+    revalidatePath(`/orders/${orderId}`);
+    revalidatePath("/orders");
+  });
+}
+
+/**
  * Edit one item's details after the order exists.
  *
  * Staff intake stores the customer's reply verbatim, so the boxes on the

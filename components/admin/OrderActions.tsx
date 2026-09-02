@@ -10,6 +10,7 @@ import {
   PackageCheck,
   PackageX,
   AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toMessage, type ActionResult, unwrap } from "@/lib/action-result";
@@ -24,6 +25,7 @@ import {
   logFailedAttempt,
   markDelivered,
   markReturned,
+  reshipOrder,
 } from "@/lib/actions/orders";
 import {
   nextStatus,
@@ -42,6 +44,7 @@ type Panel =
   | "attempt"
   | "deliver"
   | "return"
+  | "reship"
   | null;
 
 export function OrderActions({
@@ -148,6 +151,14 @@ export function OrderActions({
               <PackageX className="h-4 w-4" /> Mark as Returned
             </Button>
           </>
+        )}
+
+        {/* Returned: the parcel came back but the customer now wants it sent
+            again. Puts it back to Released for a fresh courier and tracking. */}
+        {status === "returned" && (
+          <Button size="sm" onClick={() => toggle("reship")}>
+            <RefreshCw className="h-4 w-4" /> Reship
+          </Button>
         )}
 
         {earlier.length > 0 && (
@@ -321,6 +332,32 @@ export function OrderActions({
             onClick={() => run(() => markReturned(orderId, reason))}
           >
             {pending ? "Saving…" : "Confirm return to sender"}
+          </Button>
+        </Box>
+      )}
+
+      {/* --- Reship --- */}
+      {panel === "reship" && (
+        <Box>
+          <p className="text-sm text-muted-foreground">
+            Sends this returned parcel back out. It goes to{" "}
+            <strong>Released</strong>, the three failed attempts reset, and the
+            old tracking number is cleared — hand it to a courier again and use{" "}
+            <strong>Mark as Shipped</strong> with the new tracking number. The
+            return is undone, so it no longer counts as a lost sale.
+          </p>
+          <Label>Optional note</Label>
+          <Textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="e.g. Customer confirmed the address and asked to resend"
+          />
+          <Button
+            size="sm"
+            disabled={pending}
+            onClick={() => run(() => reshipOrder(orderId, note))}
+          >
+            {pending ? "Saving…" : "Confirm reship → Released"}
           </Button>
         </Box>
       )}

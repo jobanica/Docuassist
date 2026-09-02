@@ -179,11 +179,15 @@ export default async function OrderDetailPage({
           </CardContent>
         </Card>
       )}
-      {o.status === "returned" && o.return_reason && (
+      {o.status === "returned" && (
         <Card className="border-red-300">
           <CardContent className="py-3 text-sm">
             <span className="font-medium text-red-700">Returned (RTS):</span>{" "}
-            {o.return_reason}
+            {o.return_reason || "No reason recorded."}
+            <span className="mt-1 block text-xs text-muted-foreground">
+              If the customer asks for it again, use <strong>Reship</strong>{" "}
+              below — it goes back out for delivery.
+            </span>
           </CardContent>
         </Card>
       )}

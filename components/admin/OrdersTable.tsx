@@ -65,6 +65,8 @@ export interface OrderRow {
   delay_reason: string | null;
   /** The supplier has posted the finished ID; the office should release it. */
   id_posted: boolean;
+  /** Times this order has been reshipped after a return. 0 = never. */
+  reship_count: number;
   /** Parents'-surname warnings on this order's documents, if any. */
   name_issues: string[];
   /** Supplier notes the office hasn't marked handled — a flag to act on. */
@@ -90,6 +92,13 @@ export const NAME_MISMATCH = "__name_mismatch";
 
 /** Also not a status — orders the supplier has flagged and nobody has cleared. */
 export const SUPPLIER_NOTE = "__supplier_note";
+
+/**
+ * Also not a status — orders sent back out after a return. A reshipped order
+ * moves on through Released, Shipped and Delivered like any other, so its
+ * status no longer says it was ever returned; this is how those are found.
+ */
+export const RESHIP = "__reship";
 
 function needsCall(o: OrderRow): boolean {
   return o.status === "shipped" && o.delivery_attempts > 0;
@@ -148,6 +157,10 @@ export function OrdersTable({
     () => orders.filter((o) => o.open_supplier_notes > 0),
     [orders]
   );
+  const reshipList = useMemo(
+    () => orders.filter((o) => o.reship_count > 0),
+    [orders]
+  );
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -158,6 +171,8 @@ export function OrdersTable({
         if (o.name_issues.length === 0) return false;
       } else if (status === SUPPLIER_NOTE) {
         if (o.open_supplier_notes === 0) return false;
+      } else if (status === RESHIP) {
+        if (o.reship_count === 0) return false;
       } else if (status !== "all" && o.status !== status) return false;
       if (service !== "all" && !o.service_codes.includes(service)) return false;
       if (tagFilter === "untagged" && o.tag_ids.length > 0) return false;
@@ -489,6 +504,9 @@ export function OrdersTable({
           </option>
           <option value={SUPPLIER_NOTE}>
             💬 Supplier flagged{noteList.length ? ` (${noteList.length})` : ""}
+          </option>
+          <option value={RESHIP}>
+            🔁 Reshipped{reshipList.length ? ` (${reshipList.length})` : ""}
           </option>
           {statuses.map((s) => (
             <option key={s.code} value={s.code}>
@@ -952,6 +970,14 @@ export function OrdersTable({
                           title="The supplier posted the finished ID — release it once it arrives"
                         >
                           ID posted
+                        </Badge>
+                      )}
+                      {o.reship_count > 0 && (
+                        <Badge
+                          className="bg-teal-100 text-teal-800"
+                          title="Sent back out after a return"
+                        >
+                          Reship{o.reship_count > 1 ? ` ×${o.reship_count}` : ""}
                         </Badge>
                       )}
                     </div>
