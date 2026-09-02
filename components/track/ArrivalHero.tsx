@@ -48,7 +48,7 @@ export function ArrivalHero({ info }: { info: TrackingInfo }) {
     const rel =
       d === 0 ? "today" : d === -1 ? "yesterday" : d !== null && d < 0 ? `${-d} days ago` : "";
     return card(
-      "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white",
+      "bg-gradient-to-br from-[#6DBE45] to-[#3F8F2B] text-white",
       "Delivered",
       PackageCheck,
       when ? fmtDate(when) : "Delivered",
@@ -81,7 +81,7 @@ export function ArrivalHero({ info }: { info: TrackingInfo }) {
     // Before processing starts there is no honest date to give, and inventing
     // one is worse than saying so.
     return card(
-      "bg-gradient-to-br from-[#1e3a5f] to-[#2a5480] text-white",
+      "bg-gradient-to-br from-[#0F3A66] to-[#1E6FA8] text-white",
       "Estimated arrival",
       Clock,
       "Being confirmed",
@@ -102,7 +102,7 @@ export function ArrivalHero({ info }: { info: TrackingInfo }) {
             : "arriving soon";
 
   return card(
-    "bg-gradient-to-br from-[#1e3a5f] to-[#2a5480] text-white",
+    "bg-gradient-to-br from-[#0F3A66] to-[#1E6FA8] text-white",
     "Estimated arrival",
     CalendarCheck,
     fmtDate(eta),

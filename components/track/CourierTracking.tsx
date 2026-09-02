@@ -68,8 +68,8 @@ export function CourierTracking({
               aria-live="polite"
               className={`flex h-[52px] shrink-0 items-center gap-1.5 rounded-lg px-4 text-sm font-medium transition-colors ${
                 copied
-                  ? "bg-emerald-500 text-white"
-                  : "bg-slate-900 text-white active:bg-slate-700"
+                  ? "bg-[#6DBE45] text-white"
+                  : "bg-[#14406F] text-white active:bg-[#0F3A66]"
               }`}
             >
               {copied ? (
@@ -89,7 +89,7 @@ export function CourierTracking({
               href={trackingPageUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#2a78d6] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#2467b8]"
+              className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#1E86C7] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1a72aa]"
             >
               <ExternalLink className="h-4 w-4" /> Track Delivery
             </a>

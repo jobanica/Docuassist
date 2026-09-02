@@ -49,9 +49,9 @@ export function PublicStepper({
               <span
                 className={cn(
                   "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold transition",
-                  done && "bg-emerald-500 text-white",
+                  done && "bg-[#6DBE45] text-white",
                   active &&
-                    "bg-[#1e3a5f] text-white ring-4 ring-[#1e3a5f]/15",
+                    "bg-[#14406F] text-white ring-4 ring-[#14406F]/15",
                   !done && !active && "bg-slate-100 text-slate-400"
                 )}
               >
@@ -61,7 +61,7 @@ export function PublicStepper({
                 <span
                   className={cn(
                     "my-1 w-0.5 flex-1 rounded-full",
-                    done ? "bg-emerald-500" : "bg-slate-200"
+                    done ? "bg-[#6DBE45]" : "bg-slate-200"
                   )}
                 />
               )}
@@ -71,7 +71,7 @@ export function PublicStepper({
                 className={cn(
                   "text-[15px]",
                   active
-                    ? "font-bold text-[#1e3a5f]"
+                    ? "font-bold text-[#14406F]"
                     : done
                       ? "font-semibold text-slate-800"
                       : "font-medium text-slate-400"
@@ -79,7 +79,7 @@ export function PublicStepper({
               >
                 {stage.label}
                 {active && (
-                  <span className="ml-2 inline-flex items-center rounded-full bg-[#eda100]/20 px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-[#8a6100]">
+                  <span className="ml-2 inline-flex items-center rounded-full bg-[#6DBE45]/20 px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-[#3B7C21]">
                     Now
                   </span>
                 )}

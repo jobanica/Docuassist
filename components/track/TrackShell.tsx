@@ -27,9 +27,14 @@ export function TrackShell({
 }) {
   return (
     <main className="min-h-screen bg-slate-100">
+      {/* The logo's blue-to-green run, as a hairline across the top. It is the
+          one place the full brand gradient appears, so the palette below reads
+          as deliberate rather than as two unrelated colours. */}
+      <div className="h-1.5 bg-gradient-to-r from-[#14406F] via-[#1E86C7] to-[#6DBE45]" />
+
       {/* Brand band. The content below overlaps it, so the first card reads as
           part of the header rather than floating under a coloured strip. */}
-      <div className="bg-gradient-to-b from-[#1e3a5f] to-[#25496f] pb-16 pt-8">
+      <div className="bg-gradient-to-br from-[#0F3A66] to-[#1E6FA8] pb-16 pt-8">
         <div className="mx-auto flex max-w-md flex-col items-center gap-3 px-4 text-center">
           <BrandLogo src={business.logo_url} name={business.business_name} />
           <div>
@@ -52,7 +57,7 @@ export function TrackShell({
                 href={messengerUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-2 inline-flex items-center gap-2 rounded-full bg-[#2a78d6] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#2467b8]"
+                className="mt-2 inline-flex items-center gap-2 rounded-full bg-[#1E86C7] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1a72aa]"
               >
                 <MessageCircle className="h-4 w-4" />
                 {messengerName ? `Message ${messengerName}` : "Message us on Facebook"}

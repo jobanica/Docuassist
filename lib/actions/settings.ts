@@ -4,6 +4,7 @@ import { run, type ActionResult } from "@/lib/action-result";
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireStaff } from "@/lib/auth";
 
 /** Admin-only guard for settings mutations (§13). */
@@ -93,6 +94,70 @@ export async function updateBusinessInfo(input: {
     if (error) throw new Error(error.message);
 
     revalidatePath("/settings/business");
+  });
+}
+
+/**
+ * Upload the business logo and point the settings at it.
+ *
+ * The logo used to be whatever URL someone pasted, which in practice was a
+ * Facebook CDN link — those expire, and the customer-facing tracking pages
+ * ended up showing a broken image. Holding the file ourselves in a public
+ * bucket is the only version of this that keeps working: the tracking pages
+ * are opened by customers who are not logged in, so a signed URL would expire
+ * the same way.
+ *
+ * The stored name is never used as a path — a stray "/" or two people sending
+ * "logo.png" would collide or escape — and each upload gets its own filename
+ * so a replacement is never served from a stale cache.
+ */
+export async function uploadBusinessLogo(
+  fileName: string,
+  mimeType: string,
+  /** Base64, no data: prefix. */
+  data: string
+): Promise<ActionResult<{ url: string }>> {
+  return run(async () => {
+    await requireAdmin();
+
+    const allowed = new Set([
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+      "image/svg+xml",
+    ]);
+    if (!allowed.has(mimeType)) {
+      throw new Error("Use a PNG, JPG, WebP or SVG file for the logo.");
+    }
+
+    const bytes = Buffer.from(data, "base64");
+    if (bytes.length === 0) throw new Error("That file came through empty.");
+    if (bytes.length > 2 * 1024 * 1024) {
+      throw new Error("That logo is over 2MB — save a smaller copy and retry.");
+    }
+
+    const ext =
+      (fileName.match(/\.([a-z0-9]{1,5})$/i)?.[1] ?? "png").toLowerCase();
+    const path = `logo-${Date.now()}.${ext}`;
+
+    const admin = createAdminClient();
+    const { error: upErr } = await admin.storage
+      .from("branding")
+      .upload(path, bytes, { contentType: mimeType, upsert: true });
+    if (upErr) throw new Error(upErr.message);
+
+    const {
+      data: { publicUrl },
+    } = admin.storage.from("branding").getPublicUrl(path);
+
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("app_settings")
+      .upsert([{ key: "logo_url", value: publicUrl }], { onConflict: "key" });
+    if (error) throw new Error(error.message);
+
+    revalidatePath("/settings/business");
+    return { url: publicUrl };
   });
 }
 

@@ -71,7 +71,7 @@ export function TrackingSearch() {
               onChange={(e) => setPhone(e.target.value)}
               placeholder="0917 123 4567"
               autoComplete="tel"
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-[15px] text-slate-900 transition placeholder:text-slate-400 focus:border-[#2a78d6] focus:bg-white focus:outline-none focus:ring-4 focus:ring-[#2a78d6]/12"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-[15px] text-slate-900 transition placeholder:text-slate-400 focus:border-[#1E86C7] focus:bg-white focus:outline-none focus:ring-4 focus:ring-[#1E86C7]/15"
             />
           </div>
 
@@ -90,14 +90,14 @@ export function TrackingSearch() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Only if you have many orders"
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-[15px] text-slate-900 transition placeholder:text-slate-400 focus:border-[#2a78d6] focus:bg-white focus:outline-none focus:ring-4 focus:ring-[#2a78d6]/12"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-[15px] text-slate-900 transition placeholder:text-slate-400 focus:border-[#1E86C7] focus:bg-white focus:outline-none focus:ring-4 focus:ring-[#1E86C7]/15"
             />
           </div>
 
           <button
             type="submit"
             disabled={pending}
-            className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#1e3a5f] py-3.5 text-[15px] font-semibold text-white shadow-sm transition hover:bg-[#16304f] active:scale-[0.99] disabled:opacity-60"
+            className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#14406F] to-[#1E86C7] py-3.5 text-[15px] font-semibold text-white shadow-sm transition hover:from-[#0F3A66] hover:to-[#1a72aa] active:scale-[0.99] disabled:opacity-60"
           >
             {pending ? (
               <>
@@ -154,7 +154,7 @@ function Instructions() {
       <ol className="mt-4 space-y-4">
         {steps.map((s, i) => (
           <li key={s.title} className="flex gap-3">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#1e3a5f] text-xs font-bold text-white">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#14406F] text-xs font-bold text-white">
               {i + 1}
             </span>
             <div className="pt-0.5">
@@ -169,7 +169,7 @@ function Instructions() {
 
       <div className="mt-5 space-y-2.5 border-t border-slate-100 pt-4">
         <p className="flex items-start gap-2 text-[13px] leading-relaxed text-slate-500">
-          <Link2 className="mt-0.5 h-4 w-4 shrink-0 text-[#2a78d6]" />
+          <Link2 className="mt-0.5 h-4 w-4 shrink-0 text-[#1E86C7]" />
           <span>
             <span className="font-semibold text-slate-700">
               Have a tracking link from us?
@@ -179,7 +179,7 @@ function Instructions() {
           </span>
         </p>
         <p className="flex items-start gap-2 text-[13px] leading-relaxed text-slate-500">
-          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#4A9E2F]" />
           <span>
             We search by phone number, never by name alone, so nobody else can
             look up your documents.

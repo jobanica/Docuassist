@@ -44,8 +44,12 @@ export function BrandLogo({
 
   if (!src || broken) {
     return (
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-xl font-extrabold tracking-tight text-[#1e3a5f] shadow-sm">
-        {initials}
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm">
+        {/* The brand's blue-to-green run, so a missing logo still looks like
+            this company rather than a grey placeholder. */}
+        <span className="bg-gradient-to-br from-[#14406F] via-[#1E86C7] to-[#6DBE45] bg-clip-text text-xl font-extrabold tracking-tight text-transparent">
+          {initials}
+        </span>
       </div>
     );
   }

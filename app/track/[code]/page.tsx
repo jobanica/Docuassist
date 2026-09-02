@@ -94,7 +94,7 @@ export default async function TrackPage({
           </p>
           <a
             href="/track"
-            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#1e3a5f] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#16304f]"
+            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#14406F] to-[#1E86C7] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-[#0F3A66] hover:to-[#1a72aa]"
           >
             <Search className="h-4 w-4" />
             Search by phone number
@@ -298,7 +298,7 @@ export default async function TrackPage({
           too — this is the way across to them. */}
       <a
         href="/track"
-        className="mt-3 flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-[#1e3a5f] shadow-sm transition hover:bg-slate-50"
+        className="mt-3 flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-[#14406F] shadow-sm transition hover:bg-slate-50"
       >
         <Search className="h-4 w-4" />
         Track my other orders
