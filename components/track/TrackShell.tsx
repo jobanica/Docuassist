@@ -18,7 +18,11 @@ export function TrackShell({
   messengerUrl,
   messengerName,
 }: {
-  business: { business_name: string; logo_url: string | null };
+  business: {
+    business_name: string;
+    logo_url: string | null;
+    logo_includes_name?: boolean;
+  };
   subtitle: string;
   children: React.ReactNode;
   /** Footer "message us" target — the page named on the order, when there is one. */
@@ -36,11 +40,20 @@ export function TrackShell({
           part of the header rather than floating under a coloured strip. */}
       <div className="bg-gradient-to-br from-[#0F3A66] to-[#1E6FA8] pb-16 pt-8">
         <div className="mx-auto flex max-w-md flex-col items-center gap-3 px-4 text-center">
-          <BrandLogo src={business.logo_url} name={business.business_name} />
+          {/* A logo that already sets the business name is shown large and on
+              its own; printing the name again underneath would say it twice and
+              squeeze the wordmark down to something unreadable. */}
+          <BrandLogo
+            src={business.logo_url}
+            name={business.business_name}
+            lockup={business.logo_includes_name ?? false}
+          />
           <div>
-            <p className="text-lg font-bold tracking-tight text-white">
-              {business.business_name}
-            </p>
+            {!(business.logo_includes_name && business.logo_url) && (
+              <p className="text-lg font-bold tracking-tight text-white">
+                {business.business_name}
+              </p>
+            )}
             <p className="mt-0.5 text-sm text-white/70">{subtitle}</p>
           </div>
         </div>

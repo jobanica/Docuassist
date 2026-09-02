@@ -60,6 +60,7 @@ export async function setNotificationTemplate(
 export async function updateBusinessInfo(input: {
   business_name: string;
   logo_url: string;
+  logo_includes_name?: boolean;
 }): Promise<ActionResult<void>> {
   return run(async () => {
     await requireAdmin();
@@ -87,6 +88,10 @@ export async function updateBusinessInfo(input: {
     const rows = [
       { key: "business_name", value: name },
       { key: "logo_url", value: input.logo_url.trim() },
+      {
+        key: "logo_includes_name",
+        value: input.logo_includes_name ? "1" : "0",
+      },
     ];
     const { error } = await supabase
       .from("app_settings")

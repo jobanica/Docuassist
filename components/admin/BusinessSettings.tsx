@@ -16,7 +16,11 @@ export function BusinessSettings({
   initial,
   canEdit,
 }: {
-  initial: { business_name: string; logo_url: string };
+  initial: {
+    business_name: string;
+    logo_url: string;
+    logo_includes_name: boolean;
+  };
   canEdit: boolean;
 }) {
   const router = useRouter();
@@ -137,6 +141,29 @@ export function BusinessSettings({
               </p>
             </div>
           </div>
+
+          {/* Their logo sets "docuassist ph" under the mark. Without this the
+              tracking header would print the name a second time and shrink the
+              wordmark to something unreadable. */}
+          <label className="flex items-start gap-2 pt-1 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4"
+              disabled={!canEdit}
+              checked={v.logo_includes_name}
+              onChange={(e) =>
+                setV({ ...v, logo_includes_name: e.target.checked })
+              }
+            />
+            <span>
+              My logo already includes the business name
+              <span className="block text-xs text-slate-400">
+                Tick this if the words are part of the image. The tracking pages
+                then show the logo larger and won&apos;t repeat the name below
+                it.
+              </span>
+            </span>
+          </label>
 
           {/* Kept for an already-hosted logo, but uploading is the safe path:
               a pasted Facebook or Drive link expires and leaves the customer's

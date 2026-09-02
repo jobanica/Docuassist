@@ -28,6 +28,7 @@ export default async function BusinessSettingsPage() {
         initial={{
           business_name: map.get("business_name") ?? "DocuAssist PH",
           logo_url: map.get("logo_url") ?? "",
+          logo_includes_name: map.get("logo_includes_name") === "1",
         }}
       />
       <MessengerPagesEditor pages={pages} canEdit={staff.role === "admin"} />

@@ -20,11 +20,12 @@ import { useEffect, useRef, useState } from "react";
 export function BrandLogo({
   src,
   name,
-  className = "h-14 w-auto",
+  lockup = false,
 }: {
   src: string | null;
   name: string;
-  className?: string;
+  /** The image already sets the business name, so give it room to be read. */
+  lockup?: boolean;
 }) {
   const [broken, setBroken] = useState(false);
   const ref = useRef<HTMLImageElement>(null);
@@ -61,7 +62,11 @@ export function BrandLogo({
       src={src}
       alt={name}
       onError={() => setBroken(true)}
-      className={`${className} max-h-14 rounded-2xl bg-white object-contain p-1.5 shadow-sm`}
+      className={
+        lockup
+          ? "max-h-24 w-auto max-w-[240px] rounded-2xl bg-white object-contain px-4 py-3 shadow-sm"
+          : "h-14 max-h-14 w-auto rounded-2xl bg-white object-contain p-1.5 shadow-sm"
+      }
     />
   );
 }

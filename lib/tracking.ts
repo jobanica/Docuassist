@@ -58,6 +58,9 @@ export interface BusinessInfo {
   business_name: string;
   messenger_url: string | null;
   logo_url: string | null;
+  /** The logo image already carries the business name, so the header shows it
+   *  larger and doesn't repeat the name as text underneath. */
+  logo_includes_name: boolean;
 }
 
 export type LookupResult =
@@ -109,7 +112,21 @@ function publicClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { auth: { persistSession: false, autoRefreshToken: false } }
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+      // Never let Next's data cache answer for these.
+      //
+      // Everything a customer sees comes through here: their order status, the
+      // business name, the logo. Cached, the tracking page happily serves an
+      // answer from days ago — an order that has since shipped still reading as
+      // Processing, or a logo that has since been replaced. These calls are
+      // cheap and always want to be live, so they opt out explicitly rather
+      // than relying on the page's rendering mode to do it for them.
+      global: {
+        fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+          fetch(input, { ...init, cache: "no-store" }),
+      },
+    }
   );
 }
 
@@ -181,6 +198,7 @@ export async function getBusinessInfo(): Promise<BusinessInfo> {
       business_name: "DocuAssist PH",
       messenger_url: null,
       logo_url: null,
+      logo_includes_name: false,
     }
   );
 }
