@@ -28,13 +28,17 @@ export function ArrivalHero({ info }: { info: TrackingInfo }) {
     big: string,
     sub: string
   ) => (
-    <section className={`rounded-2xl px-5 py-6 text-center shadow-sm ${tone}`}>
-      <p className="flex items-center justify-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] opacity-80">
+    <section
+      className={`rounded-2xl px-5 py-7 text-center shadow-[0_8px_28px_rgba(16,24,40,0.16)] ${tone}`}
+    >
+      <p className="flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.16em] opacity-75">
         <Icon className="h-3.5 w-3.5" />
         {eyebrow}
       </p>
-      <p className="mt-2 text-3xl font-bold leading-tight sm:text-4xl">{big}</p>
-      {sub && <p className="mt-1.5 text-sm opacity-80">{sub}</p>}
+      <p className="mt-2.5 text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">
+        {big}
+      </p>
+      {sub && <p className="mt-2 text-sm font-medium opacity-85">{sub}</p>}
     </section>
   );
 
@@ -44,7 +48,7 @@ export function ArrivalHero({ info }: { info: TrackingInfo }) {
     const rel =
       d === 0 ? "today" : d === -1 ? "yesterday" : d !== null && d < 0 ? `${-d} days ago` : "";
     return card(
-      "bg-emerald-600 text-white",
+      "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white",
       "Delivered",
       PackageCheck,
       when ? fmtDate(when) : "Delivered",
@@ -54,7 +58,7 @@ export function ArrivalHero({ info }: { info: TrackingInfo }) {
 
   if (info.status === "returned") {
     return card(
-      "bg-rose-600 text-white",
+      "bg-gradient-to-br from-rose-500 to-rose-600 text-white",
       "Returned to sender",
       Undo2,
       info.returned_at ? fmtDate(info.returned_at) : "Returned",
@@ -64,7 +68,7 @@ export function ArrivalHero({ info }: { info: TrackingInfo }) {
 
   if (info.status === "cancelled") {
     return card(
-      "bg-slate-600 text-white",
+      "bg-gradient-to-br from-slate-500 to-slate-600 text-white",
       "Order cancelled",
       Undo2,
       "Cancelled",
@@ -77,7 +81,7 @@ export function ArrivalHero({ info }: { info: TrackingInfo }) {
     // Before processing starts there is no honest date to give, and inventing
     // one is worse than saying so.
     return card(
-      "bg-[#1e3a5f] text-white",
+      "bg-gradient-to-br from-[#1e3a5f] to-[#2a5480] text-white",
       "Estimated arrival",
       Clock,
       "Being confirmed",
@@ -98,7 +102,7 @@ export function ArrivalHero({ info }: { info: TrackingInfo }) {
             : "arriving soon";
 
   return card(
-    "bg-[#1e3a5f] text-white",
+    "bg-gradient-to-br from-[#1e3a5f] to-[#2a5480] text-white",
     "Estimated arrival",
     CalendarCheck,
     fmtDate(eta),

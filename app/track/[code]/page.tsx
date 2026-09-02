@@ -4,10 +4,9 @@ import {
   AlertTriangle,
   Ban,
   FileText,
-  MessageCircle,
   PackageX,
   Search,
-  ShieldCheck,
+  Clock,
 } from "lucide-react";
 import {
   lookupTracking,
@@ -15,6 +14,7 @@ import {
   getPublicPipeline,
   clientIp,
 } from "@/lib/tracking";
+import { TrackShell } from "@/components/track/TrackShell";
 import { PublicStepper } from "@/components/track/PublicStepper";
 import { ArrivalHero } from "@/components/track/ArrivalHero";
 import { CourierTracking } from "@/components/track/CourierTracking";
@@ -41,6 +41,9 @@ const OWNER_MARK =
   "box-decoration-clone rounded bg-[#eda100]/25 px-1.5 py-0.5 " +
   "font-bold text-slate-900";
 
+/** One consistent card, so every block on the page reads as the same system. */
+const CARD = "rounded-2xl bg-white shadow-[0_4px_20px_rgba(16,24,40,0.08)]";
+
 export const metadata: Metadata = {
   title: "Track your order · DocuAssist PH",
   robots: { index: false, follow: false },
@@ -57,65 +60,47 @@ export default async function TrackPage({
     getBusinessInfo(),
   ]);
 
-  const Shell = ({ children }: { children: React.ReactNode }) => (
-    <main className="mx-auto min-h-screen max-w-md bg-slate-50 px-4 pb-10">
-      <header className="flex flex-col items-center gap-2 py-6 text-center">
-        {business.logo_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={business.logo_url}
-            alt={business.business_name}
-            className="h-12 w-auto"
-          />
-        ) : (
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 text-lg font-bold text-white">
-            DA
-          </div>
-        )}
-        <div>
-          <p className="text-lg font-bold text-slate-900">
-            {business.business_name}
-          </p>
-          <p className="text-sm text-slate-500">Track your order</p>
-        </div>
-      </header>
-      {children}
-    </main>
-  );
-
   if (result.kind === "rate_limited") {
     return (
-      <Shell>
-        <div className="rounded-2xl bg-white p-6 text-center shadow-sm">
-          <p className="font-semibold text-slate-900">Sandali lang po 🙏</p>
+      <TrackShell business={business} subtitle="Track your order">
+        <div className={`${CARD} p-6 text-center`}>
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-100">
+            <Clock className="h-7 w-7 text-amber-600" />
+          </div>
+          <p className="mt-3 font-bold text-slate-900">Sandali lang po 🙏</p>
           <p className="mt-1 text-sm text-slate-500">
             Too many requests right now. Please wait a minute and refresh.
           </p>
         </div>
-      </Shell>
+      </TrackShell>
     );
   }
 
   if (result.kind === "not_found") {
     return (
-      <Shell>
-        <div className="rounded-2xl bg-white p-6 text-center shadow-sm">
-          <PackageX className="mx-auto h-10 w-10 text-slate-300" />
-          <p className="mt-3 font-semibold text-slate-900">Order not found</p>
-          <p className="mt-1 text-sm text-slate-500">
-            Double-check your link, or search by phone number instead.
+      <TrackShell
+        business={business}
+        subtitle="Track your order"
+        messengerUrl={business.messenger_url}
+      >
+        <div className={`${CARD} p-6 text-center`}>
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
+            <PackageX className="h-7 w-7 text-slate-400" />
+          </div>
+          <p className="mt-3 font-bold text-slate-900">Order not found</p>
+          <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
+            Double-check your link, or search using the mobile number you
+            ordered with.
           </p>
           <a
             href="/track"
-            className="mt-3 inline-flex items-center gap-2 rounded-full border border-blue-600 px-5 py-2.5 text-sm font-medium text-blue-700 hover:bg-blue-50"
+            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#1e3a5f] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#16304f]"
           >
             <Search className="h-4 w-4" />
             Search by phone number
           </a>
-          <MessengerButton url={business.messenger_url} />
         </div>
-        <PrivacyNote />
-      </Shell>
+      </TrackShell>
     );
   }
 
@@ -128,7 +113,12 @@ export default async function TrackPage({
     info.payment_status !== "paid";
 
   return (
-    <Shell>
+    <TrackShell
+      business={business}
+      subtitle="Track your order"
+      messengerUrl={info.messenger?.url ?? business.messenger_url}
+      messengerName={info.messenger?.name ?? null}
+    >
       {/* The answer they came for, before anything else. */}
       <ArrivalHero info={info} />
 
@@ -136,8 +126,8 @@ export default async function TrackPage({
           arrival date means. The reason is the supplier's own words — the
           person who actually knows — so it is shown rather than paraphrased. */}
       {info.is_delayed && (
-        <section className="mt-4 rounded-2xl border border-amber-300 bg-amber-50 p-5">
-          <p className="flex items-center gap-2 font-semibold text-amber-900">
+        <section className="mt-3 rounded-2xl border border-amber-300 bg-amber-50 p-5 shadow-sm">
+          <p className="flex items-center gap-2 font-bold text-amber-900">
             <AlertTriangle className="h-5 w-5 shrink-0" />
             There&apos;s a delay on this one
           </p>
@@ -156,9 +146,9 @@ export default async function TrackPage({
       {/* Summary. Centred so the status badge lands in the middle of the
           card — after the arrival date it is the thing being looked for, and
           left-aligned at 14px it read as a label rather than an answer. */}
-      <section className="mt-4 rounded-2xl bg-white p-5 text-center shadow-sm">
-        <p className="text-slate-900">
-          Hi <span className="font-semibold">{info.first_name ?? "there"}</span>!
+      <section className={`mt-3 ${CARD} p-5 text-center`}>
+        <p className="leading-relaxed text-slate-900">
+          Hi <span className="font-bold">{info.first_name ?? "there"}</span>!
           Here&apos;s the status of your{" "}
           {info.documents.length === 1 ? (
             <>
@@ -196,15 +186,15 @@ export default async function TrackPage({
             birth certificates the person is the only thing telling them
             apart, and a sentence listing both reads as a run-on. */}
         {info.documents.length > 1 && (
-          <ul className="mx-auto mt-3 max-w-sm space-y-1.5 text-left">
+          <ul className="mx-auto mt-4 max-w-sm space-y-1.5 text-left">
             {info.documents.map((d, n) => (
               <li
                 key={n}
-                className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700"
+                className="flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-2.5 text-sm text-slate-700"
               >
                 <FileText className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
                 <span>
-                  <span className="font-medium text-slate-900">
+                  <span className="font-semibold text-slate-900">
                     {d.service_name}
                   </span>
                   {d.owner_name && (
@@ -218,47 +208,52 @@ export default async function TrackPage({
             ))}
           </ul>
         )}
+
         {/* Coloured by stage rather than always blue, so the badge agrees with
             the stepper below and the arrival card above. */}
         <p
-          className={`mt-3 inline-flex items-center rounded-full px-5 py-2 text-lg font-bold ring-4 ${statusPillClasses(
+          className={`mt-4 inline-flex items-center rounded-full px-5 py-2 text-lg font-bold ring-4 ${statusPillClasses(
             info.status
           )}`}
         >
           {info.status_label}
         </p>
-        {helper && <p className="mt-3 text-sm text-slate-600">{helper}</p>}
+        {helper && (
+          <p className="mt-3 text-sm leading-relaxed text-slate-600">{helper}</p>
+        )}
       </section>
 
       {/* Failed-attempt / RTS notice */}
       {notice && (
         <section
-          className={`mt-4 rounded-2xl p-4 text-sm shadow-sm ${
+          className={`mt-3 rounded-2xl border p-4 text-sm leading-relaxed shadow-sm ${
             notice.strong
-              ? "bg-red-50 text-red-800"
-              : "bg-amber-50 text-amber-800"
+              ? "border-red-200 bg-red-50 text-red-800"
+              : "border-amber-200 bg-amber-50 text-amber-800"
           }`}
         >
           {notice.text}
         </section>
       )}
       {info.status === "returned" && (
-        <section className="mt-4 rounded-2xl bg-red-50 p-4 text-sm text-red-800 shadow-sm">
+        <section className="mt-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm leading-relaxed text-red-800 shadow-sm">
           {helper}
         </section>
       )}
 
       {/* COD reminder */}
       {showCod && (
-        <section className="mt-4 rounded-2xl bg-emerald-50 p-4 text-center shadow-sm">
-          <p className="text-sm text-emerald-800">Prepare for cash on delivery</p>
-          <p className="text-2xl font-bold text-emerald-700">
+        <section className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-center shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-700">
+            Prepare for cash on delivery
+          </p>
+          <p className="mt-1 text-3xl font-extrabold text-emerald-700">
             {peso(info.total_amount)}
           </p>
           {/* Someone promised ₱100 off should see the ₱100, not just a
               smaller number than the one they were quoted. */}
           {info.discount_amount > 0 && (
-            <p className="mt-0.5 text-xs text-emerald-700">
+            <p className="mt-1 text-xs font-medium text-emerald-700">
               {peso(info.discount_amount)} discount already applied
             </p>
           )}
@@ -276,7 +271,10 @@ export default async function TrackPage({
       )}
 
       {/* Stepper */}
-      <section className="mt-4 rounded-2xl bg-white p-5 shadow-sm">
+      <section className={`mt-3 ${CARD} p-5`}>
+        <h2 className="mb-4 text-xs font-bold uppercase tracking-[0.14em] text-slate-400">
+          Progress
+        </h2>
         <PublicStepper pipeline={pipeline} info={info} />
       </section>
 
@@ -285,7 +283,7 @@ export default async function TrackPage({
           telling someone they may not cancel means anything — on a cancelled
           one it would be pointed. */}
       {!info.is_terminal && (
-        <section className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4">
+        <section className="mt-3 rounded-2xl border border-red-200 bg-red-50 p-4">
           <p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-red-800">
             <Ban className="h-4 w-4 shrink-0" />
             {NO_CANCELLATION.heading}
@@ -296,61 +294,15 @@ export default async function TrackPage({
         </section>
       )}
 
-      {/* Footer — the page named on this order, not one global link, so the
-          customer reaches the staff who actually handle their document. */}
-      <section className="mt-6 text-center">
-        <p className="text-sm text-slate-500">May tanong po kayo?</p>
-        <MessengerButton
-          url={info.messenger?.url ?? business.messenger_url}
-          name={info.messenger?.name ?? null}
-        />
-      </section>
-      <PrivacyNote />
-    </Shell>
-  );
-}
-
-function MessengerButton({
-  url,
-  name,
-}: {
-  url: string | null;
-  /** Named when the order points at a page other than the main one, so the
-   *  customer isn't surprised by which inbox opens. */
-  name?: string | null;
-}) {
-  if (!url) return null;
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="mt-3 inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
-    >
-      <MessageCircle className="h-4 w-4" />
-      {name ? `Message ${name}` : "Message us on Facebook"}
-    </a>
-  );
-}
-
-/**
- * What this page actually discloses, said accurately.
- *
- * It used to promise "only your first name and order status", which stopped
- * being true the moment each document started naming the person it is for. A
- * privacy notice that overstates what is withheld is worse than none: it is
- * the one line a customer is entitled to rely on.
- */
-function PrivacyNote() {
-  return (
-    <p className="mt-8 flex items-start gap-2 px-2 text-center text-xs text-slate-400">
-      <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-      <span>
-        We protect your personal data under the Data Privacy Act of 2012. This
-        page shows the name on each document you requested and where your order
-        has reached — never your address, contact number, or anything else on
-        your form. Share the link only with people you want to see it.
-      </span>
-    </p>
+      {/* A customer who lands here from an old link often has other orders
+          too — this is the way across to them. */}
+      <a
+        href="/track"
+        className="mt-3 flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-[#1e3a5f] shadow-sm transition hover:bg-slate-50"
+      >
+        <Search className="h-4 w-4" />
+        Track my other orders
+      </a>
+    </TrackShell>
   );
 }

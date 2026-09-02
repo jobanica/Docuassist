@@ -48,10 +48,10 @@ export function PublicStepper({
             <div className="flex flex-col items-center">
               <span
                 className={cn(
-                  "flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold",
+                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold transition",
                   done && "bg-emerald-500 text-white",
                   active &&
-                    "bg-blue-600 text-white ring-4 ring-blue-600/20 animate-pulse",
+                    "bg-[#1e3a5f] text-white ring-4 ring-[#1e3a5f]/15",
                   !done && !active && "bg-slate-100 text-slate-400"
                 )}
               >
@@ -60,29 +60,38 @@ export function PublicStepper({
               {i < pipeline.length - 1 && (
                 <span
                   className={cn(
-                    "my-1 w-1 flex-1 rounded",
+                    "my-1 w-0.5 flex-1 rounded-full",
                     done ? "bg-emerald-500" : "bg-slate-200"
                   )}
                 />
               )}
             </div>
-            <div className="pb-7 pt-1.5">
+            <div className="pb-6 pt-1.5">
               <p
                 className={cn(
-                  "font-medium",
+                  "text-[15px]",
                   active
-                    ? "text-blue-700"
+                    ? "font-bold text-[#1e3a5f]"
                     : done
-                      ? "text-slate-800"
-                      : "text-slate-400"
+                      ? "font-semibold text-slate-800"
+                      : "font-medium text-slate-400"
                 )}
               >
                 {stage.label}
+                {active && (
+                  <span className="ml-2 inline-flex items-center rounded-full bg-[#eda100]/20 px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-[#8a6100]">
+                    Now
+                  </span>
+                )}
               </p>
               {reached ? (
-                <p className="text-xs text-slate-500">{fmtDate(reached)}</p>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {fmtDate(reached)}
+                </p>
               ) : est ? (
-                <p className="text-xs text-slate-400">Expected {fmtEstimate(est)}</p>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  Expected {fmtEstimate(est)}
+                </p>
               ) : null}
             </div>
           </li>

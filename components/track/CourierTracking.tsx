@@ -45,9 +45,13 @@ export function CourierTracking({
   }
 
   return (
-    <section className="mt-4 rounded-2xl bg-white p-4 shadow-sm">
-      <p className="text-xs uppercase tracking-wide text-slate-400">Courier</p>
-      <p className="font-semibold text-slate-900">{courierName}</p>
+    <section className="mt-3 rounded-2xl bg-white p-5 shadow-[0_4px_20px_rgba(16,24,40,0.08)]">
+      <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">
+        Courier
+      </p>
+      <p className="mt-0.5 text-[15px] font-bold text-slate-900">
+        {courierName}
+      </p>
 
       {trackingNumber && (
         <>
@@ -85,7 +89,7 @@ export function CourierTracking({
               href={trackingPageUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white active:bg-blue-700"
+              className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#2a78d6] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#2467b8]"
             >
               <ExternalLink className="h-4 w-4" /> Track Delivery
             </a>
