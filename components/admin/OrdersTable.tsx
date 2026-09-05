@@ -135,7 +135,9 @@ export function OrdersTable({
 }) {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<string>("all");
-  const [service, setService] = useState<string>("all");
+  // Ticked document types. Empty means "every document" — the same thing the
+  // old single-select "All services" meant, without needing an entry for it.
+  const [svcCodes, setSvcCodes] = useState<string[]>([]);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const router = useRouter();
@@ -189,7 +191,12 @@ export function OrdersTable({
       } else if (status === RESHIP_REQUESTED) {
         if (!o.reship_requested) return false;
       } else if (status !== "all" && o.status !== status) return false;
-      if (service !== "all" && !o.service_codes.includes(service)) return false;
+      if (
+        svcCodes.length > 0 &&
+        !o.service_codes.some((c) => svcCodes.includes(c))
+      ) {
+        return false;
+      }
       if (tagFilter === "untagged" && o.tag_ids.length > 0) return false;
       if (tagFilter !== "all" && tagFilter !== "untagged" &&
           !o.tag_ids.includes(tagFilter)) return false;
@@ -222,7 +229,7 @@ export function OrdersTable({
       );
     }
     return rows;
-  }, [orders, q, status, service, from, to, tagFilter, byFilter]);
+  }, [orders, q, status, svcCodes, from, to, tagFilter, byFilter]);
 
   const onCallList = status === FAILED_ATTEMPTS;
 
@@ -532,18 +539,6 @@ export function OrdersTable({
             </option>
           ))}
         </select>
-        <select
-          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-          value={service}
-          onChange={(e) => setService(e.target.value)}
-        >
-          <option value="all">All services</option>
-          {services.map((s) => (
-            <option key={s.code} value={s.code}>
-              {s.name}
-            </option>
-          ))}
-        </select>
         {encoders.length > 0 && (
           <select
             className="h-10 rounded-md border border-input bg-background px-3 text-sm"
@@ -592,6 +587,67 @@ export function OrdersTable({
           />
         </div>
       </div>
+
+      {/* Document types, ticked rather than picked one at a time.
+          A counter run is several document types at once — every birth,
+          CENOMAR, marriage and death going to the PSA on the same trip — and a
+          single-select meant filtering and printing each type separately. Tick
+          the ones going together, select all shown, print once. */}
+      {services.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card px-3 py-2.5">
+          <span className="mr-0.5 text-xs font-medium text-muted-foreground">
+            Documents
+          </span>
+          {services.map((s) => {
+            const on = svcCodes.includes(s.code);
+            return (
+              <label
+                key={s.code}
+                className={cn(
+                  "inline-flex cursor-pointer select-none items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                  on
+                    ? "border-[#1e3a5f] bg-[#1e3a5f] text-white"
+                    : "border-input bg-background hover:bg-accent/50"
+                )}
+              >
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 cursor-pointer accent-[#eda100]"
+                  checked={on}
+                  onChange={() =>
+                    setSvcCodes((prev) =>
+                      prev.includes(s.code)
+                        ? prev.filter((c) => c !== s.code)
+                        : [...prev, s.code]
+                    )
+                  }
+                />
+                {s.name}
+              </label>
+            );
+          })}
+
+          <span className="flex-1" />
+
+          {svcCodes.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setSvcCodes([])}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent/50"
+            >
+              <X className="h-3.5 w-3.5" /> Clear ({svcCodes.length})
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setSvcCodes(services.map((s) => s.code))}
+              className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent/50"
+            >
+              Tick all
+            </button>
+          )}
+        </div>
+      )}
 
       {picked.size > 0 && (
         <div className="space-y-2 rounded-lg border border-[#eda100]/40 bg-[#eda100]/10 px-4 py-3">
