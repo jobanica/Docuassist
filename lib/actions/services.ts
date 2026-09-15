@@ -41,6 +41,11 @@ const serviceSchema = z.object({
     .regex(/^[a-z0-9_]+$/, "Code must be lowercase letters, numbers or underscores"),
   name: z.string().trim().min(1, "Name is required"),
   price: z.coerce.number().min(0, "Price cannot be negative"),
+  /** What the public order form charges. Blank means "same as the COD price". */
+  online_price: z
+    .union([z.literal(""), z.coerce.number().min(0)])
+    .optional()
+    .transform((v) => (v === "" || v === undefined ? null : Number(v))),
   processing_days_min: z.coerce.number().int().min(0),
   processing_days_max: z.coerce.number().int().min(0),
   shipping_days_estimate: z.coerce.number().int().min(0),

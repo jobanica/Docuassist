@@ -38,6 +38,8 @@ export interface Service {
   code: string;
   name: string;
   price: number;
+  /** What the public order form charges. Null = same as the COD price. */
+  online_price?: number | null;
   processing_days_min: number;
   processing_days_max: number;
   shipping_days_estimate: number;

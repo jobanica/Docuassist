@@ -20,9 +20,15 @@ export const MESSENGER_URL = "https://m.me/docuassistphil";
 export const FACEBOOK_URL = "https://www.facebook.com/docuassistphil";
 
 /* --- Prices ---------------------------------------------------------------
-   ⚠️ These are the ad prices. Your CRM currently charges ₱685 for
-   birth/marriage/death and ₱735 for CENOMAR. Make these two agree before the
-   ads run, or customers arrive quoting a price your staff can't honour. */
+   These are the ONLINE prices — what someone pays on this site, before
+   anything is filed. They must match the "Price — online, paid upfront"
+   column in Settings → Services, which is what the order form actually
+   charges; these constants only paint the page.
+
+   The cash-on-delivery price staff quote when they encode an order by hand is
+   a separate, higher figure (Settings → Services, "Price — cash on delivery"),
+   because a COD order carries the risk of a parcel that is never accepted.
+   Do not put the COD figure here — this page sells the prepaid one. */
 export const PRICE_STANDARD = 365;
 export const PRICE_CENOMAR = 420;
 /** TIN ID and PhilHealth ID — no PSA fee behind these, so they cost less. */

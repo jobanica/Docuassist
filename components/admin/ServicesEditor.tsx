@@ -34,6 +34,7 @@ type FormState = {
   code: string;
   name: string;
   price: string;
+  online_price: string;
   processing_days_min: string;
   processing_days_max: string;
   shipping_days_estimate: string;
@@ -45,6 +46,7 @@ const BLANK: FormState = {
   code: "",
   name: "",
   price: "0",
+  online_price: "",
   processing_days_min: "7",
   processing_days_max: "14",
   shipping_days_estimate: "7",
@@ -57,6 +59,7 @@ function toInput(f: FormState): ServiceInput {
     code: f.code,
     name: f.name,
     price: Number(f.price || 0),
+    online_price: f.online_price === "" ? "" : Number(f.online_price),
     processing_days_min: Number(f.processing_days_min || 0),
     processing_days_max: Number(f.processing_days_max || 0),
     shipping_days_estimate: Number(f.shipping_days_estimate || 0),
@@ -147,6 +150,10 @@ function ServiceRow({
           code: service.code,
           name: service.name,
           price: String(service.price),
+          online_price:
+            service.online_price === null || service.online_price === undefined
+              ? ""
+              : String(service.online_price),
           processing_days_min: String(service.processing_days_min),
           processing_days_max: String(service.processing_days_max),
           shipping_days_estimate: String(service.shipping_days_estimate),
@@ -187,8 +194,18 @@ function ServiceRow({
         </p>
       </div>
       <div className="flex items-center gap-3">
-        <span className="text-lg font-semibold text-slate-900">
-          {peso(service.price)}
+        <span className="text-right">
+          <span className="block text-lg font-semibold text-slate-900">
+            {peso(service.price)}
+          </span>
+          <span className="block text-[11px] text-slate-400">COD</span>
+          {service.online_price !== null &&
+            service.online_price !== undefined &&
+            Number(service.online_price) !== Number(service.price) && (
+              <span className="mt-0.5 block text-[11px] font-medium text-[#1E86C7]">
+                {peso(Number(service.online_price))} online
+              </span>
+            )}
         </span>
         {canEdit && (
           <>
@@ -300,13 +317,26 @@ function ServiceForm({
             className="font-mono"
           />
         </Fld>
-        <Fld label="Price (₱)">
+        <Fld label="Price — cash on delivery (₱)">
           <Input
             type="number"
             min={0}
             step="0.01"
             value={v.price}
             onChange={(e) => set({ price: e.target.value })}
+          />
+        </Fld>
+        {/* Two channels, two prices. A website order is paid before anything is
+            filed; a staff-encoded one is COD and carries the risk of a parcel
+            that is never accepted, which is what the higher figure covers. */}
+        <Fld label="Price — online, paid upfront (₱)">
+          <Input
+            type="number"
+            min={0}
+            step="0.01"
+            placeholder="same as COD"
+            value={v.online_price}
+            onChange={(e) => set({ online_price: e.target.value })}
           />
         </Fld>
         <Fld label="Shipping days (estimate)">

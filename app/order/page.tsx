@@ -18,7 +18,7 @@ export default async function PublicOrderPage() {
   const [{ data: services }, { data: settings }, { data: page }] = await Promise.all([
     db
       .from("services")
-      .select("id, code, name, price, form_fields, processing_days_max, shipping_days_estimate")
+      .select("id, code, name, price, online_price, form_fields, processing_days_max, shipping_days_estimate")
       .eq("active", true)
       .order("sort_order")
       .order("name"),
@@ -42,7 +42,9 @@ export default async function PublicOrderPage() {
     paymentNote: map.get("payment_note") || null,
     services: (services ?? []).map((s) => ({
       ...s,
-      price: Number(s.price),
+      // The form quotes the prepaid price, which is what submit.ts will
+      // actually charge — the two must never disagree on screen.
+      price: Number(s.online_price ?? s.price),
       form_fields: (s.form_fields ?? []) as FormFieldDef[],
     })),
   };

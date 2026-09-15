@@ -61,7 +61,7 @@ export async function submitPublicOrder(
   const ids = Array.from(new Set(input.items.map((i) => i.service_id)));
   const { data: services, error: svcErr } = await db
     .from("services")
-    .select("id, name, price, form_fields, active")
+    .select("id, name, price, online_price, form_fields, active")
     .in("id", ids);
   if (svcErr) return { ok: false, error: "Could not load the document list." };
 
@@ -160,7 +160,9 @@ export async function submitPublicOrder(
       order_id: order.id,
       service_id: item.service_id,
       quantity: item.quantity,
-      price_at_order: svc.price, // authoritative, from the DB
+      // Authoritative, from the DB, and from the channel's own column: this
+      // order is paid before processing, so it takes the prepaid price.
+      price_at_order: svc.online_price ?? svc.price,
       form_details: details,
     };
   });
