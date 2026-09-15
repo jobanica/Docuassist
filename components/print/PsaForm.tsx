@@ -13,14 +13,17 @@ import { PSA_FORMS, splitDate, type FormRow } from "@/lib/psa-forms";
    both sheets are measured against those limits before this ships.          */
 const S = 1.2;
 
-/* The encoded characters get the full 1.3. They are the only thing on the
-   sheet a PSA clerk actually reads off our copy — the labels and the
-   boilerplate around them are already on the form the clerk knows — and a
-   letter needs no more room than the box already gives it, where a label at
-   1.3 would wrap in the narrowed gutter and push the last section off the
-   page. Measured: at 1.3 throughout, the birth form runs 1141px in a 990px
-   space; this way it comes in at 984px.                                    */
-const T = 1.3;
+/* The encoded characters get their own multiplier, now 1.2x the 1.3 they
+   started at. They are the only thing on the sheet a PSA clerk actually reads
+   off our copy — the labels and the boilerplate around them are already on the
+   form the clerk knows — and a letter needs no more room than the box already
+   gives it, where a label this size would wrap in the narrowed gutter and push
+   the last section off the page. Measured: at 1.3 throughout, the birth form
+   runs 1141px in a 990px space; keeping the growth to the characters holds it
+   under the sheet, because the box height is fixed by z() and the type sits
+   inside it on leading-none — a bigger character costs width inside its own
+   box, not height down the page.                                           */
+const T = 1.3 * 1.2;
 
 /** A drawn box or gap, scaled. */
 const z = (n: number) => `${Math.round(n * S * 10) / 10}px`;
@@ -34,6 +37,25 @@ const FORM_W = 760;
 // bought the width, so the gutter is wide enough that "Middle Name" and
 // "Place of Birth" sit on one line instead of wrapping.
 const GUTTER = 140;
+
+/* Which form this is, readable across a room.
+   A batch print is a stack of mixed forms that then has to be sorted by hand
+   before anything is filled in, and the title line — set at the same weight as
+   three other lines of letterhead — was the only thing telling them apart. PSA
+   already colour-codes these on paper (CENOMAR green, marriage pink, death
+   yellow, birth white), so the highlight borrows that same code rather than
+   inventing a second one: the printed sheet matches the paper it belongs on.
+   Backgrounds survive printing because globals.css forces print-color-adjust
+   in @media print; on a mono printer these fall back to distinguishable greys
+   and the border keeps the box readable either way. */
+const PAPER_TINT: Record<string, { bg: string; border: string }> = {
+  Green: { bg: "#86EFAC", border: "#15803D" },
+  Yellow: { bg: "#FDE047", border: "#A16207" },
+  Pink: { bg: "#F9A8D4", border: "#BE185D" },
+  // Birth is issued on white, so it takes the box without the colour — the
+  // shape stays identical across the four so nothing looks out of place.
+  White: { bg: "#FFFFFF", border: "#000000" },
+};
 
 /**
  * Values longer than their box count get cut off on the form. Silently
@@ -200,6 +222,7 @@ export function PsaForm({
   details: Record<string, string>;
 }) {
   const tpl = PSA_FORMS[serviceCode];
+  const tint = PAPER_TINT[tpl?.paper ?? ""] ?? PAPER_TINT.White;
 
   if (!tpl) {
     return (
@@ -253,7 +276,21 @@ export function PsaForm({
           <p className="font-semibold" style={{ fontSize: z(9) }}>
             OFFICE OF THE CIVIL REGISTRAR GENERAL
           </p>
-          <p className="mt-0.5 font-bold" style={{ fontSize: z(11) }}>
+          {/* Boxed and tinted to the form's own paper colour, so a sorted
+              stack can be split by eye without reading a word of it. */}
+          <p
+            className="mt-0.5 inline-block font-bold leading-tight"
+            style={{
+              fontSize: z(13),
+              backgroundColor: tint.bg,
+              border: `1.5px solid ${tint.border}`,
+              borderRadius: z(3),
+              paddingInline: z(8),
+              paddingBlock: z(2),
+              WebkitPrintColorAdjust: "exact",
+              printColorAdjust: "exact",
+            }}
+          >
             {tpl.title}
           </p>
         </div>
