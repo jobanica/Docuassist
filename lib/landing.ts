@@ -7,8 +7,13 @@
  */
 
 /* --- Where every button goes ---------------------------------------------
-   One page, one action: every CTA opens the same Messenger thread.
-   NOTE: taken from the Facebook page already saved in your business settings
+   One page, one action. The CTA now opens the order form rather than a chat:
+   the visitor picks their document, fills it in, checks it back, pays, and
+   leaves with a tracking link — without anyone having to answer a message.
+   Messenger stays on the page as the way to ask a question, not to order. */
+export const ORDER_URL = "/order";
+
+/* NOTE: taken from the Facebook page already saved in your business settings
    (facebook.com/docuassistphil). m.me uses the page's username, so this should
    be right — but open it once on a phone to confirm before you spend on ads. */
 export const MESSENGER_URL = "https://m.me/docuassistphil";
@@ -20,6 +25,8 @@ export const FACEBOOK_URL = "https://www.facebook.com/docuassistphil";
    ads run, or customers arrive quoting a price your staff can't honour. */
 export const PRICE_STANDARD = 365;
 export const PRICE_CENOMAR = 420;
+/** TIN ID and PhilHealth ID — no PSA fee behind these, so they cost less. */
+export const PRICE_ID = 275;
 
 /** "from ₱365" — used in the headline, buttons, title tag and OG card. */
 export const PRICE_FROM = `₱${PRICE_STANDARD}`;
@@ -95,14 +102,14 @@ export const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Anong documents ang kaya niyo iprocess?",
-    a: "PSA Birth Certificate, CENOMAR, Marriage Certificate, Death Certificate. We also assist with TIN ID and PhilHealth ID — chat us.",
+    a: `PSA Birth Certificate, CENOMAR, Marriage Certificate, Death Certificate, plus TIN ID and PhilHealth ID assistance at ₱${PRICE_ID}. Lahat po ay maoorder dito sa website.`,
   },
   {
     q: "Paano ako makakabayad?",
-    a: "GCash or bank transfer. Receipt provided right after payment.",
+    a: "GCash or bank transfer — we show you a QR to scan at the last step of the order form, after you've checked your details. Receipt provided right after payment.",
   },
   {
     q: "Paano ko matratrack ang order ko?",
-    a: "After ordering, you'll get a personal tracking link (and QR code). Click it anytime to see your document's status — no account or app needed.",
+    a: "Right after you pay, your personal tracking link appears — save it po. Click it anytime to see your document's status; no account or app needed. If you lose it, search your mobile number at /track.",
   },
 ];

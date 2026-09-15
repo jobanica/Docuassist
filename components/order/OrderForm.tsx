@@ -16,10 +16,22 @@ interface Service {
 interface Config {
   enabled: boolean; otpRequired: boolean;
   businessName: string; messengerUrl: string | null;
+  /** Uploaded in Settings → Business. Empty means no QR is set up yet. */
+  paymentQrUrl: string | null;
+  paymentNote: string | null;
   services: Service[];
 }
 
-type Step = "docs" | "details" | "delivery" | "verify" | "done";
+type Step =
+  | "docs"
+  | "details"
+  | "delivery"
+  /** Read your answers back before any money moves. */
+  | "review"
+  | "verify"
+  /** Scan the QR, then say you have paid. */
+  | "pay"
+  | "done";
 
 const emptyDelivery = {
   full_name: "", phone: "", messenger_name: "",
@@ -41,6 +53,7 @@ export function OrderForm({ config }: { config: Config }) {
   const [cooldown, setCooldown] = useState(0);
 
   const [trackingCode, setTrackingCode] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -140,13 +153,23 @@ export function OrderForm({ config }: { config: Config }) {
       const j = await r.json();
       if (!r.ok) { setError(j.error ?? "Could not submit your order."); return; }
       setTrackingCode(j.trackingCode);
-      setStep("done");
+      // Created, unpaid. Payment comes next; the office sees the order either
+      // way, so someone who drops out at the QR can still be followed up.
+      setStep("pay");
     } catch { setError("Network problem. Please try again."); }
     finally { setBusy(false); }
   }
 
   // ---------- done ----------
+  // The tracking link is the customer's only way back in — there is no account
+  // and no password — so this screen's whole job is to get it saved. Said
+  // plainly and twice, with the code shown as text for anyone who screenshots
+  // rather than taps.
   if (step === "done" && trackingCode) {
+    const url =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/track/${trackingCode}`
+        : `/track/${trackingCode}`;
     return (
       <div className="rounded-2xl bg-white p-6 text-center shadow-sm">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100">
@@ -154,23 +177,59 @@ export function OrderForm({ config }: { config: Config }) {
         </div>
         <h2 className="mt-4 text-lg font-bold text-slate-900">Salamat po! 🎉</h2>
         <p className="mt-1 text-sm text-slate-600">
-          We received your request. Save this link to check your order any time:
+          Your order is in. We&apos;ll start once your payment lands.
         </p>
+
+        <div className="mt-5 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4 text-left">
+          <p className="flex items-start gap-2 text-sm font-bold text-amber-900">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            I-save po ninyo ang link na ito
+          </p>
+          <p className="mt-1.5 text-[13px] leading-relaxed text-amber-900/90">
+            This is how you check your order — walang account, walang app.
+            Screenshot it, or send it to yourself on Messenger. If you lose it,
+            you can still find your order by your mobile number at{" "}
+            <strong>/track</strong>.
+          </p>
+        </div>
+
         <a
           href={`/track/${trackingCode}`}
           className="mt-4 block rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white"
         >
-          Track my order
+          Open my tracking page
         </a>
-        <p className="mt-3 font-mono text-sm text-slate-500">{trackingCode}</p>
+
+        <button
+          type="button"
+          onClick={() => {
+            navigator.clipboard?.writeText(url).then(
+              () => setCopied(true),
+              () => setCopied(false)
+            );
+            setTimeout(() => setCopied(false), 2000);
+          }}
+          className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700"
+        >
+          {copied ? "Copied!" : "Copy my tracking link"}
+        </button>
+
+        <p className="mt-3 break-all font-mono text-xs text-slate-500">{url}</p>
         <p className="mt-4 text-xs text-slate-500">
-          Total to prepare for cash on delivery: <strong>{peso(total)}</strong>
+          Total: <strong>{peso(total)}</strong>
         </p>
       </div>
     );
   }
 
-  const steps: Step[] = ["docs", "details", "delivery", ...(config.otpRequired ? (["verify"] as Step[]) : [])];
+  const steps: Step[] = [
+    "docs",
+    "details",
+    "delivery",
+    "review",
+    ...(config.otpRequired ? (["verify"] as Step[]) : []),
+    "pay",
+  ];
   const idx = steps.indexOf(step);
 
   return (
@@ -277,6 +336,152 @@ export function OrderForm({ config }: { config: Config }) {
         </section>
       )}
 
+      {/* ---------- 4. review — read it back before any money moves ------- */}
+      {step === "review" && (
+        <section className="rounded-2xl bg-white p-5 shadow-sm">
+          <h2 className="font-bold text-slate-900">
+            Tama po ba lahat? Pakicheck muna.
+          </h2>
+          <p className="mt-0.5 text-sm text-slate-500">
+            A PSA request is filed exactly as written here. A wrong letter means
+            a wrong certificate, so please read it once before paying.
+          </p>
+
+          <div className="mt-4 space-y-3">
+            {chosen.map((s2) => (
+              <div key={s2.id} className="rounded-xl border border-slate-200 p-3.5">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="font-semibold text-slate-900">
+                    {s2.name}
+                    {picked[s2.id].quantity > 1 && ` × ${picked[s2.id].quantity}`}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => { setError(null); setStep("details"); }}
+                    className="shrink-0 text-xs font-medium text-blue-600 underline"
+                  >
+                    Edit
+                  </button>
+                </div>
+                <dl className="mt-2 space-y-1">
+                  {s2.form_fields
+                    .filter((f) => (picked[s2.id].form_details[f.key] ?? "").trim())
+                    .map((f) => (
+                      <div key={f.key} className="flex gap-2 text-[13px]">
+                        <dt className="w-32 shrink-0 text-slate-500">{f.label}</dt>
+                        <dd className="min-w-0 flex-1 break-words font-medium text-slate-900">
+                          {picked[s2.id].form_details[f.key]}
+                        </dd>
+                      </div>
+                    ))}
+                </dl>
+              </div>
+            ))}
+
+            <div className="rounded-xl border border-slate-200 p-3.5">
+              <div className="flex items-start justify-between gap-3">
+                <p className="font-semibold text-slate-900">Delivery details</p>
+                <button
+                  type="button"
+                  onClick={() => { setError(null); setStep("delivery"); }}
+                  className="shrink-0 text-xs font-medium text-blue-600 underline"
+                >
+                  Edit
+                </button>
+              </div>
+              <dl className="mt-2 space-y-1">
+                {[
+                  ["Name", delivery.full_name],
+                  ["Mobile", delivery.phone],
+                  ["Messenger", delivery.messenger_name],
+                  [
+                    "Address",
+                    [delivery.address_line, delivery.barangay, delivery.city,
+                     delivery.province, delivery.zip].filter(Boolean).join(", "),
+                  ],
+                  ["Notes", delivery.notes],
+                ]
+                  .filter(([, v]) => String(v ?? "").trim())
+                  .map(([k, v]) => (
+                    <div key={k as string} className="flex gap-2 text-[13px]">
+                      <dt className="w-32 shrink-0 text-slate-500">{k}</dt>
+                      <dd className="min-w-0 flex-1 break-words font-medium text-slate-900">
+                        {v}
+                      </dd>
+                    </div>
+                  ))}
+              </dl>
+            </div>
+          </div>
+
+          <p className="mt-4 flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-[13px] leading-relaxed text-amber-900">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            Once filed with the PSA, a request can no longer be cancelled or
+            changed — kaya pakisiguro po na tama ang spelling ng pangalan at
+            petsa.
+          </p>
+        </section>
+      )}
+
+      {/* ---------- 5. payment ---------- */}
+      {step === "pay" && (
+        <section className="rounded-2xl bg-white p-5 shadow-sm">
+          <h2 className="font-bold text-slate-900">Bayad po — {peso(total)}</h2>
+          <p className="mt-0.5 text-sm text-slate-500">
+            Scan the QR with GCash or your banking app, then tap the button
+            below. We start processing the same day we see it.
+          </p>
+
+          {config.paymentQrUrl ? (
+            <div className="mt-4 flex flex-col items-center">
+              <div className="rounded-2xl border-2 border-slate-200 bg-white p-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={config.paymentQrUrl}
+                  alt="Payment QR code"
+                  className="h-56 w-56 object-contain"
+                />
+              </div>
+              <p className="mt-3 text-center text-2xl font-extrabold text-slate-900">
+                {peso(total)}
+              </p>
+              {config.paymentNote && (
+                <p className="mt-1 text-center text-sm text-slate-600">
+                  {config.paymentNote}
+                </p>
+              )}
+            </div>
+          ) : (
+            // No QR configured yet — say so instead of showing an empty frame.
+            <div className="mt-4 rounded-xl bg-slate-50 p-4 text-center text-sm text-slate-600">
+              Message us for the payment details and we&apos;ll send them right
+              away.
+              {config.paymentNote && (
+                <span className="mt-1 block font-medium text-slate-800">
+                  {config.paymentNote}
+                </span>
+              )}
+            </div>
+          )}
+
+          <p className="mt-4 rounded-xl bg-slate-50 p-3 text-[13px] leading-relaxed text-slate-600">
+            Keep your proof of payment — screenshot po ng receipt. Send it to us
+            on Messenger so we can match it to your order faster.
+          </p>
+
+          <button
+            onClick={() => setStep("done")}
+            className="mt-4 w-full rounded-xl bg-emerald-600 px-4 py-3.5 font-semibold text-white active:scale-[0.99]"
+          >
+            I&apos;ve paid — show my tracking link
+          </button>
+          <p className="mt-2 text-center text-xs text-slate-400">
+            Your order is already saved. You can come back and pay later, but we
+            only begin once payment lands.
+          </p>
+        </section>
+      )}
+
       {/* ---------- 4. OTP ---------- */}
       {step === "verify" && (
         <section className="rounded-2xl bg-white p-5 shadow-sm">
@@ -337,18 +542,20 @@ export function OrderForm({ config }: { config: Config }) {
             </span>
             <span className="text-lg font-bold text-slate-900">{peso(total)}</span>
           </div>
-          <p className="mt-0.5 text-xs text-slate-400">Cash on delivery</p>
+          <p className="mt-0.5 text-xs text-slate-400">
+            All-in — paid before processing
+          </p>
         </div>
       )}
 
       <div className="flex gap-2">
-        {idx > 0 && (
+        {idx > 0 && step !== "pay" && (
           <button onClick={() => { setError(null); setStep(steps[idx - 1]); }}
             className="flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-4 py-3 font-medium text-slate-700">
             <ChevronLeft className="h-4 w-4" /> Back
           </button>
         )}
-        {step !== "verify" && (
+        {step !== "verify" && step !== "pay" && (
           <button
             disabled={busy}
             onClick={() => {
@@ -365,6 +572,9 @@ export function OrderForm({ config }: { config: Config }) {
               if (step === "delivery") {
                 const m = missingDelivery();
                 if (m) return setError(m);
+                return setStep("review");
+              }
+              if (step === "review") {
                 if (config.otpRequired) return setStep("verify");
                 return submit(null);
               }
@@ -372,8 +582,10 @@ export function OrderForm({ config }: { config: Config }) {
             className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white disabled:opacity-60"
           >
             {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-            {step === "delivery" && !config.otpRequired ? "Submit order" : "Continue"}
-            {!(step === "delivery" && !config.otpRequired) && <ChevronRight className="h-4 w-4" />}
+            {step === "review"
+              ? "Confirm — continue to payment"
+              : "Continue"}
+            {step !== "review" && <ChevronRight className="h-4 w-4" />}
           </button>
         )}
       </div>

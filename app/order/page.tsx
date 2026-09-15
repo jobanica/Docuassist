@@ -38,6 +38,8 @@ export default async function PublicOrderPage() {
     otpRequired: (map.get("otp_required") ?? "true") !== "false",
     businessName: map.get("business_name") || "DocuAssist PH",
     messengerUrl: page?.url || map.get("messenger_url") || null,
+    paymentQrUrl: map.get("payment_qr_url") || null,
+    paymentNote: map.get("payment_note") || null,
     services: (services ?? []).map((s) => ({
       ...s,
       price: Number(s.price),

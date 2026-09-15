@@ -21,11 +21,15 @@ export function BrandLogo({
   src,
   name,
   lockup = false,
+  bare = false,
 }: {
   src: string | null;
   name: string;
   /** The image already sets the business name, so give it room to be read. */
   lockup?: boolean;
+  /** Drawn straight onto a light surface (the landing nav) rather than on the
+   *  white tile the navy tracking header needs. */
+  bare?: boolean;
 }) {
   const [broken, setBroken] = useState(false);
   const ref = useRef<HTMLImageElement>(null);
@@ -45,7 +49,11 @@ export function BrandLogo({
 
   if (!src || broken) {
     return (
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm">
+      <div
+        className={`flex h-14 w-14 items-center justify-center rounded-2xl ${
+          bare ? "" : "bg-white shadow-sm"
+        }`}
+      >
         {/* The brand's blue-to-green run, so a missing logo still looks like
             this company rather than a grey placeholder. */}
         <span className="bg-gradient-to-br from-[#14406F] via-[#1E86C7] to-[#6DBE45] bg-clip-text text-xl font-extrabold tracking-tight text-transparent">
@@ -63,9 +71,11 @@ export function BrandLogo({
       alt={name}
       onError={() => setBroken(true)}
       className={
-        lockup
-          ? "max-h-24 w-auto max-w-[240px] rounded-2xl bg-white object-contain px-4 py-3 shadow-sm"
-          : "h-14 max-h-14 w-auto rounded-2xl bg-white object-contain p-1.5 shadow-sm"
+        bare
+          ? "h-12 max-h-12 w-auto max-w-[190px] object-contain"
+          : lockup
+            ? "max-h-24 w-auto max-w-[240px] rounded-2xl bg-white object-contain px-4 py-3 shadow-sm"
+            : "h-14 max-h-14 w-auto rounded-2xl bg-white object-contain p-1.5 shadow-sm"
       }
     />
   );

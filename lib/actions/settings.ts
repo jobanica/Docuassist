@@ -122,6 +122,56 @@ export async function uploadBusinessLogo(
   /** Base64, no data: prefix. */
   data: string
 ): Promise<ActionResult<{ url: string }>> {
+  return uploadBrandingImage("logo_url", "logo", fileName, mimeType, data);
+}
+
+/**
+ * The GCash / bank QR a customer scans to pay.
+ *
+ * Same bucket and the same reasoning as the logo: the checkout step is opened
+ * by someone who is not logged in, so the image has to be publicly readable or
+ * it simply will not load for them. A QR code is meant to be shown to
+ * customers — there is nothing here that is not already on the screen they are
+ * about to look at.
+ */
+export async function uploadPaymentQr(
+  fileName: string,
+  mimeType: string,
+  data: string
+): Promise<ActionResult<{ url: string }>> {
+  return uploadBrandingImage("payment_qr_url", "payment-qr", fileName, mimeType, data);
+}
+
+/** The payment instructions shown beside the QR (account name, number, notes). */
+export async function updatePaymentInfo(input: {
+  payment_note: string;
+  payment_qr_url: string;
+}): Promise<ActionResult<void>> {
+  return run(async () => {
+    await requireAdmin();
+    const supabase = createClient();
+    const { error } = await supabase.from("app_settings").upsert(
+      [
+        { key: "payment_note", value: input.payment_note.trim() },
+        { key: "payment_qr_url", value: input.payment_qr_url.trim() },
+      ],
+      { onConflict: "key" }
+    );
+    if (error) throw new Error(error.message);
+    revalidatePath("/settings/business");
+    revalidatePath("/order");
+  });
+}
+
+/** Shared uploader for the public branding bucket. */
+async function uploadBrandingImage(
+  settingKey: string,
+  prefix: string,
+  fileName: string,
+  mimeType: string,
+  /** Base64, no data: prefix. */
+  data: string
+): Promise<ActionResult<{ url: string }>> {
   return run(async () => {
     await requireAdmin();
 
@@ -132,18 +182,18 @@ export async function uploadBusinessLogo(
       "image/svg+xml",
     ]);
     if (!allowed.has(mimeType)) {
-      throw new Error("Use a PNG, JPG, WebP or SVG file for the logo.");
+      throw new Error("Use a PNG, JPG, WebP or SVG image.");
     }
 
     const bytes = Buffer.from(data, "base64");
     if (bytes.length === 0) throw new Error("That file came through empty.");
     if (bytes.length > 2 * 1024 * 1024) {
-      throw new Error("That logo is over 2MB — save a smaller copy and retry.");
+      throw new Error("That image is over 2MB — save a smaller copy and retry.");
     }
 
     const ext =
       (fileName.match(/\.([a-z0-9]{1,5})$/i)?.[1] ?? "png").toLowerCase();
-    const path = `logo-${Date.now()}.${ext}`;
+    const path = `${prefix}-${Date.now()}.${ext}`;
 
     const admin = createAdminClient();
     const { error: upErr } = await admin.storage
@@ -158,10 +208,12 @@ export async function uploadBusinessLogo(
     const supabase = createClient();
     const { error } = await supabase
       .from("app_settings")
-      .upsert([{ key: "logo_url", value: publicUrl }], { onConflict: "key" });
+      .upsert([{ key: settingKey, value: publicUrl }], { onConflict: "key" });
     if (error) throw new Error(error.message);
 
     revalidatePath("/settings/business");
+    revalidatePath("/order");
+    revalidatePath("/");
     return { url: publicUrl };
   });
 }

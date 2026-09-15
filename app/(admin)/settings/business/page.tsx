@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getStaff } from "@/lib/auth";
 import { BusinessSettings } from "@/components/admin/BusinessSettings";
+import { PaymentSettings } from "@/components/admin/PaymentSettings";
 import { MessengerPagesEditor } from "@/components/admin/MessengerPagesEditor";
 import { listMessengerPages } from "@/lib/actions/messenger-pages";
 
@@ -29,6 +30,13 @@ export default async function BusinessSettingsPage() {
           business_name: map.get("business_name") ?? "DocuAssist PH",
           logo_url: map.get("logo_url") ?? "",
           logo_includes_name: map.get("logo_includes_name") === "1",
+        }}
+      />
+      <PaymentSettings
+        canEdit={staff.role === "admin"}
+        initial={{
+          payment_qr_url: map.get("payment_qr_url") ?? "",
+          payment_note: map.get("payment_note") ?? "",
         }}
       />
       <MessengerPagesEditor pages={pages} canEdit={staff.role === "admin"} />
