@@ -37,6 +37,14 @@ export async function updateSession(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const isPublic =
+    // The marketing landing page, which is the point of the whole site
+    // being public at all — Facebook ad traffic lands here logged out.
+    path === "/" ||
+    // The generated OG card. Facebook's crawler is not logged in, so left
+    // protected this 307s to /login and the ad preview ships with no image.
+    path.startsWith("/opengraph-image") ||
+    path === "/robots.txt" ||
+    path === "/sitemap.xml" ||
     path === "/login" ||
     path.startsWith("/track") ||
     path.startsWith("/api/track") ||

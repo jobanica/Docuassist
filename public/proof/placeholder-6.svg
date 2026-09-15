@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400" role="img" aria-label="Video poster placeholder">
+  <rect width="400" height="400" fill="#E9EEF4"/>
+  <rect x="12" y="12" width="376" height="376" rx="18" fill="none" stroke="#C3D0DE" stroke-width="3" stroke-dasharray="12 10"/>
+  <g transform="translate(200 172)" fill="none" stroke="#9FB3C8" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="-52" y="-40" width="104" height="80" rx="9"/>
+    <path d="M-52 18 L-18 -12 L6 10 L24 -4 L52 20"/>
+    <circle cx="20" cy="-18" r="9"/>
+  </g>
+  <text x="200" y="272" text-anchor="middle" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="21" font-weight="600" fill="#6B8199">Video poster</text>
+  <text x="200" y="300" text-anchor="middle" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="16" fill="#93A7BA">placeholder</text>
+</svg>
