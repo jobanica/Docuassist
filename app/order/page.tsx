@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { MessageCircle } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { OrderForm } from "@/components/order/OrderForm";
+import { BrandLogo } from "@/components/track/BrandLogo";
 import type { FormFieldDef } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +41,10 @@ export default async function PublicOrderPage() {
     messengerUrl: page?.url || map.get("messenger_url") || null,
     paymentQrUrl: map.get("payment_qr_url") || null,
     paymentNote: map.get("payment_note") || null,
+    logoUrl: map.get("logo_url") || null,
+    // A logo that already spells out the business name is given room to be
+    // read, instead of being shrunk into a square and repeated as text below.
+    logoIncludesName: map.get("logo_includes_name") === "1",
     services: (services ?? []).map((s) => ({
       ...s,
       // The form quotes the prepaid price, which is what submit.ts will
@@ -51,12 +56,23 @@ export default async function PublicOrderPage() {
 
   return (
     <main className="mx-auto min-h-screen max-w-md bg-slate-50 px-4 pb-10">
+      {/* The real mark, not the "DA" placeholder this shipped with. This page
+          asks a stranger for their mother's maiden name and then for money —
+          it has to look like the business whose ad they just tapped, and the
+          landing page they came from shows the logo two seconds earlier. */}
       <header className="flex flex-col items-center gap-2 py-6 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 text-lg font-bold text-white">
-          DA
-        </div>
+        <BrandLogo
+          src={config.logoUrl}
+          name={config.businessName}
+          lockup={config.logoIncludesName}
+        />
         <div>
-          <p className="text-lg font-bold text-slate-900">{config.businessName}</p>
+          {/* A logo that already carries the name doesn't need it again. */}
+          {!config.logoIncludesName && (
+            <p className="text-lg font-bold text-slate-900">
+              {config.businessName}
+            </p>
+          )}
           <p className="text-sm text-slate-500">Request a document online</p>
         </div>
       </header>
