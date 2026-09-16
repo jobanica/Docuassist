@@ -104,10 +104,6 @@ export const PROOF_SCREENSHOT_FILES: ProofShot[] = [
     alt: "A customer's message about the document we delivered",
   },
   {
-    src: "/proof/screenshots/681226310_870889392688192_5150470391410283185_n.png",
-    alt: "A customer's message about the document we delivered",
-  },
-  {
     src: "/proof/screenshots/681278651_1361967199090762_5146281668418961606_n.png",
     alt: "A customer's message about the document we delivered",
   },
