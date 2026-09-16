@@ -50,6 +50,8 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/api/track") ||
     path.startsWith("/order") ||
     path.startsWith("/api/order") ||
+    // The province / city / barangay lists the public order form picks from.
+    path.startsWith("/api/psgc") ||
     path.startsWith("/auth");
 
   // Not signed in and trying to reach a protected page → send to login.

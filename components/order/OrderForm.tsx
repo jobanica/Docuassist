@@ -6,6 +6,7 @@ import {
   ShieldCheck, AlertCircle, Phone,
 } from "lucide-react";
 import { peso } from "@/lib/money";
+import { PlacePicker } from "./PlacePicker";
 import type { FormFieldDef } from "@/lib/types";
 
 interface Service {
@@ -32,6 +33,62 @@ type Step =
   /** Scan the QR, then say you have paid. */
   | "pay"
   | "done";
+
+/**
+ * The place fields on each document, grouped so they can be asked as one
+ * question instead of three free-text boxes.
+ *
+ * A PSA request is searched on the place of the event: get the municipality
+ * wrong and the record simply is not found, and the fee is spent either way.
+ * These keys come from the services' own form_fields (Settings → Services); a
+ * service without them is untouched and renders as before.
+ */
+const PLACE_GROUPS: {
+  province: string;
+  city: string;
+  barangay?: string;
+  labels?: { province?: string; city?: string; barangay?: string };
+}[] = [
+  { province: "birth_province", city: "birth_city",
+    labels: { province: "Place of Birth — Province", city: "Place of Birth — City / Municipality" } },
+  { province: "marriage_province", city: "marriage_city",
+    labels: { province: "Place of Marriage — Province", city: "Place of Marriage — City / Municipality" } },
+  { province: "death_province", city: "death_city",
+    labels: { province: "Place of Death — Province", city: "Place of Death — City / Municipality" } },
+  { province: "address_province", city: "address_city", barangay: "address_barangay" },
+];
+
+/**
+ * Where each place group should be drawn, and which of its fields the plain
+ * field loop must then skip. The picker takes the position of whichever of its
+ * fields comes first, so it stays where the office put it in the form order.
+ */
+function placeLayout(fields: FormFieldDef[]) {
+  const anchors = new Map<string, (typeof PLACE_GROUPS)[number]>();
+  const absorbed = new Set<string>();
+  const present = new Set(fields.map((f) => f.key));
+  for (const g of PLACE_GROUPS) {
+    const keys = [g.province, g.city, ...(g.barangay ? [g.barangay] : [])]
+      .filter((k) => present.has(k));
+    if (keys.length < 2) continue;
+    const first = fields.find((f) => keys.includes(f.key))!;
+    anchors.set(first.key, g);
+    for (const k of keys) absorbed.add(k);
+  }
+  return { anchors, absorbed };
+}
+
+/** Named so the back arrow has something to sit beside — a bare progress bar
+ *  tells you how far along you are but never what you are looking at. */
+const STEP_TITLES: Record<Step, string> = {
+  docs: "Choose documents",
+  details: "Document details",
+  delivery: "Delivery details",
+  review: "Check your answers",
+  verify: "Confirm your number",
+  pay: "Payment",
+  done: "Done",
+};
 
 const emptyDelivery = {
   full_name: "", phone: "", messenger_name: "",
@@ -278,13 +335,40 @@ export function OrderForm({ config }: { config: Config }) {
   ];
   const idx = steps.indexOf(step);
 
+  // Going back past the payment step would mean editing an order that already
+  // exists and may already be paid — the Edit links on the review step are the
+  // way back, and they stop there.
+  const canGoBack = idx > 0 && step !== "pay";
+  function goBack() {
+    setError(null);
+    setStep(steps[idx - 1]);
+  }
+
   return (
     <div className="space-y-4">
-      {/* progress */}
-      <div className="flex items-center gap-1.5">
-        {steps.map((s, i) => (
-          <div key={s} className={`h-1.5 flex-1 rounded-full ${i <= idx ? "bg-blue-600" : "bg-slate-200"}`} />
-        ))}
+      {/* Where they are, and the way back — at the top, where a back control
+          is looked for, rather than only under a screenful of fields. */}
+      <div className="flex items-center gap-3">
+        {canGoBack && (
+          <button
+            type="button"
+            onClick={goBack}
+            aria-label="Go back to the previous step"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-600 shadow-sm active:scale-95"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium text-slate-500">
+            Step {idx + 1} of {steps.length} · {STEP_TITLES[step]}
+          </p>
+          <div className="mt-1.5 flex items-center gap-1.5">
+            {steps.map((s, i) => (
+              <div key={s} className={`h-1.5 flex-1 rounded-full ${i <= idx ? "bg-blue-600" : "bg-slate-200"}`} />
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* ---------- 1. documents ---------- */}
@@ -317,14 +401,46 @@ export function OrderForm({ config }: { config: Config }) {
       {/* ---------- 2. per-document details ---------- */}
       {step === "details" && (
         <section className="space-y-4">
-          {chosen.map((s) => (
+          {chosen.map((s) => {
+            const place = placeLayout(s.form_fields ?? []);
+            return (
             <div key={s.id} className="rounded-2xl bg-white p-5 shadow-sm">
               <h2 className="font-bold text-slate-900">{s.name}</h2>
               <p className="mt-0.5 text-xs text-slate-500">
                 Please copy the details exactly as they appear on the record.
               </p>
               <div className="mt-3 space-y-3">
-                {(s.form_fields ?? []).map((f) => (
+                {(s.form_fields ?? []).map((f) => {
+                  const group = place.anchors.get(f.key);
+                  if (group) {
+                    const req = (s.form_fields ?? []).some(
+                      (x) => x.required && (x.key === group.province || x.key === group.city)
+                    );
+                    return (
+                      <PlacePicker
+                        key={f.key}
+                        required={req}
+                        labels={group.labels}
+                        withBarangay={Boolean(group.barangay)}
+                        province={picked[s.id].form_details[group.province] ?? ""}
+                        city={picked[s.id].form_details[group.city] ?? ""}
+                        barangay={
+                          group.barangay
+                            ? picked[s.id].form_details[group.barangay] ?? ""
+                            : undefined
+                        }
+                        onChange={(next) => {
+                          if (next.province !== undefined) setField(s.id, group.province, next.province);
+                          if (next.city !== undefined) setField(s.id, group.city, next.city);
+                          if (next.barangay !== undefined && group.barangay)
+                            setField(s.id, group.barangay, next.barangay);
+                        }}
+                      />
+                    );
+                  }
+                  // The other two fields of a group are already drawn above.
+                  if (place.absorbed.has(f.key)) return null;
+                  return (
                   <div key={f.key}>
                     <label className="text-xs font-medium text-slate-600">
                       {f.label} {f.required && <span className="text-red-500">*</span>}
@@ -351,10 +467,12 @@ export function OrderForm({ config }: { config: Config }) {
                       />
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
-          ))}
+            );
+          })}
         </section>
       )}
 
@@ -363,7 +481,10 @@ export function OrderForm({ config }: { config: Config }) {
         <section className="rounded-2xl bg-white p-5 shadow-sm">
           <h2 className="font-bold text-slate-900">Saan po namin ipapadala?</h2>
           <p className="mt-0.5 text-sm text-slate-500">
-            Cash on delivery — bayad po pagdating ng dokumento.
+            {/* This route is paid up front — the card below and the pay step
+                both say so, and a stray "cash on delivery" here is the kind of
+                contradiction that costs an order. */}
+            Ipapadala po namin ito sa inyong address — libre ang delivery.
           </p>
           <div className="mt-4 space-y-3">
             <Field label="Full name *" value={delivery.full_name} onChange={(v) => setDelivery({ ...delivery, full_name: v })} />
@@ -371,11 +492,17 @@ export function OrderForm({ config }: { config: Config }) {
                    onChange={(v) => setDelivery({ ...delivery, phone: v })} />
             <Field label="Facebook / Messenger name" value={delivery.messenger_name} onChange={(v) => setDelivery({ ...delivery, messenger_name: v })} />
             <Field label="House no. & street *" value={delivery.address_line} onChange={(v) => setDelivery({ ...delivery, address_line: v })} />
-            <Field label="Barangay *" value={delivery.barangay} onChange={(v) => setDelivery({ ...delivery, barangay: v })} />
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="City / Municipality *" value={delivery.city} onChange={(v) => setDelivery({ ...delivery, city: v })} />
-              <Field label="Province *" value={delivery.province} onChange={(v) => setDelivery({ ...delivery, province: v })} />
-            </div>
+            {/* Picked, not typed. A courier sorts on the barangay and the
+                municipality — one wrong letter there is a parcel that comes
+                back to us three attempts later. */}
+            <PlacePicker
+              required
+              withBarangay
+              province={delivery.province}
+              city={delivery.city}
+              barangay={delivery.barangay}
+              onChange={(next) => setDelivery((d) => ({ ...d, ...next }))}
+            />
             <Field label="ZIP code" value={delivery.zip} inputMode="numeric" onChange={(v) => setDelivery({ ...delivery, zip: v })} />
             <Field label="Notes for us (optional)" value={delivery.notes} onChange={(v) => setDelivery({ ...delivery, notes: v })} />
           </div>
