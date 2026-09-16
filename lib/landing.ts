@@ -129,13 +129,102 @@ export const PROOF_ITEMS: ProofItem[] = [
   },
 ];
 
-/* --- Short quotes mixed into the gallery ---------------------------------
-   Empty on purpose. What was here were invented quotes with invented names,
-   written as filler while the page was being built — and an invented customer
-   review on a live page is a fake review, whoever wrote it. Put real Messenger
-   feedback here (first name + city, with their permission) or leave it empty:
-   the five videos above are real, and real is the whole point. */
-export const PROOF_QUOTES: { quote: string; name: string }[] = [];
+/* --- The wall of thanks -------------------------------------------------
+   Real messages, from the page's own inbox and from public comments on the
+   Facebook page. Two rules they are held to:
+
+     1. First name + last initial, never the full name. These were sent to a
+        business, not published by the sender — except the Facebook ones,
+        which were already public and could carry full names if their authors
+        are asked. Consistency wins; "Celestino T." reads as a person either
+        way, and nobody is identifiable from it.
+     2. No city, no order number, no invented detail. Only what was actually
+        written, with obvious typos tidied so the line is readable — the
+        voice is left alone, because the voice is the proof.
+
+   `source` is shown on the card. Saying which of the two it came from is a
+   small honesty that costs nothing and is worth more than a star rating. */
+export type ProofQuote = {
+  quote: string;
+  name: string;
+  source: "messenger" | "facebook";
+};
+
+export const PROOF_QUOTES: ProofQuote[] = [
+  {
+    quote:
+      "Thank you po ma'am/sir, dumating na po yong PSA ko. Legit po, maraming-maraming salamat po. Godbless po ❤️🙏",
+    name: "Celestino T.",
+    source: "messenger",
+  },
+  {
+    quote:
+      "Salamat sir, dumating na po yung negative birth ng anak ko. Maraming salamat po sa iyo — maasahan talaga ang serbisyo mo sir.",
+    name: "Anghel G.",
+    source: "facebook",
+  },
+  {
+    quote: "Salamat po ng marami… proven and tested po, super legit ❤️❤️",
+    name: "Ethan G.",
+    source: "facebook",
+  },
+  {
+    quote:
+      "Maraming salamat po sir, natanggap ko na ang death certificate na ipinadala nyo po sa akin. God bless 🙏❤️",
+    name: "Sansue A.",
+    source: "messenger",
+  },
+  {
+    quote: "Super legit po, worth it pag-aantay.",
+    name: "Vicay C.",
+    source: "facebook",
+  },
+  {
+    quote: "Thank you so much po, na-received ko na ang PSA ng anak ko.",
+    name: "Airah V.",
+    source: "facebook",
+  },
+  {
+    quote: "Ma'am, ok na po. Thank you very much — legit oo talaga kayo.",
+    name: "Hemk O.",
+    source: "messenger",
+  },
+  {
+    quote: "Salamat po sir, legit. Sana marami pa kayong matulungan.",
+    name: "Bryan V.",
+    source: "messenger",
+  },
+  {
+    quote: "Na-receive na namin sir/ma'am, thank you so much. God bless.",
+    name: "Mike S.",
+    source: "messenger",
+  },
+  {
+    quote: "Dumating na sir ang PSA. Thank you!",
+    name: "Lailyn R.",
+    source: "messenger",
+  },
+  {
+    quote: "Dumating na po yung PSA. Salamat po.",
+    name: "Marjorie M.",
+    source: "messenger",
+  },
+  {
+    quote: "Maraming salamat. Dumating na po. Salamat po, God bless.",
+    name: "Muhammad K.",
+    source: "messenger",
+  },
+  {
+    quote: "Na-receive ko na po sir. Maraming salamat po sir 😊",
+    name: "Maricel S.",
+    source: "messenger",
+  },
+  {
+    quote: "Na-received ko na po ma'am/sir. Salamat po.",
+    name: "Loyloy A.",
+    source: "messenger",
+  },
+];
 
 /* --- FAQ ------------------------------------------------------------------ */
 export const FAQ: { q: string; a: string }[] = [

@@ -72,29 +72,13 @@ export function ProofGallery() {
           </button>
         ))}
 
-        {/* A couple of written ones among the photos — same card, no media. */}
-        {PROOF_QUOTES.map((q, i) => (
-          <figure
-            key={`q-${i}`}
-            className="
-              flex w-[78%] shrink-0 snap-start flex-col justify-center rounded-2xl
-              border border-slate-200 bg-[#14406F] p-5 text-white shadow-sm md:w-auto
-            "
-          >
-            <Quote className="h-6 w-6 text-white/40" aria-hidden />
-            <blockquote className="mt-3 text-[15px] leading-relaxed">
-              {q.quote}
-            </blockquote>
-            <figcaption className="mt-3 text-[13px] font-medium text-white/60">
-              {q.name}
-            </figcaption>
-          </figure>
-        ))}
       </div>
 
       <p className="mt-1 text-center text-xs text-slate-400 md:hidden">
         Swipe to see more →
       </p>
+
+      <QuoteWall />
 
       {lightbox !== null && (
         <Lightbox
@@ -105,6 +89,53 @@ export function ProofGallery() {
         />
       )}
     </>
+  );
+}
+
+/**
+ * The messages, as messages.
+ *
+ * Kept out of the video carousel on purpose. Fourteen of these swiped one at a
+ * time is a chore; read as a wall they do the thing a wall of thanks does —
+ * nobody counts them, they just register that there are a lot. Masonry columns
+ * because the lines are wildly different lengths and a grid would leave each
+ * short one sitting in a tall empty box.
+ */
+function QuoteWall() {
+  if (PROOF_QUOTES.length === 0) return null;
+  return (
+    <div className="mt-12">
+      <h3 className="text-center text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
+        Diretso sa aming inbox
+      </h3>
+      <div className="mt-6 gap-4 [column-fill:_balance] sm:columns-2 lg:columns-3">
+        {PROOF_QUOTES.map((q, i) => (
+          <figure
+            key={i}
+            className="mb-4 break-inside-avoid rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_2px_10px_rgba(16,24,40,0.05)]"
+          >
+            <Quote className="h-4 w-4 text-[#6DBE45]" aria-hidden />
+            <blockquote className="mt-2 text-[15px] leading-relaxed text-slate-700">
+              {q.quote}
+            </blockquote>
+            <figcaption className="mt-3 flex items-center gap-1.5 text-[12px] text-slate-400">
+              <span className="font-semibold text-slate-600">{q.name}</span>
+              <span aria-hidden>·</span>
+              <span>
+                {q.source === "facebook"
+                  ? "Facebook comment"
+                  : "Messenger"}
+              </span>
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+      {/* Said plainly, because the alternative reading is that we wrote them. */}
+      <p className="mt-6 text-center text-xs text-slate-400">
+        Totoong mensahe mula sa aming customers. Surnames shortened to an
+        initial — privacy po nila.
+      </p>
+    </div>
   );
 }
 
