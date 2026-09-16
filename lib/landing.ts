@@ -1,3 +1,5 @@
+import { PROOF_SCREENSHOT_FILES } from "@/lib/data/proof-screenshots";
+
 /**
  * Everything on the landing page you are likely to edit, in one file.
  *
@@ -245,7 +247,9 @@ export type ProofShot = {
   caption?: string;
 };
 
-export const PROOF_SCREENSHOTS: ProofShot[] = [];
+/** Whatever is in /public/proof/screenshots/, indexed at build time. Adding
+ *  one is a file upload — see scripts/index-screenshots.mjs. */
+export const PROOF_SCREENSHOTS: ProofShot[] = PROOF_SCREENSHOT_FILES;
 
 /* --- FAQ ------------------------------------------------------------------ */
 export const FAQ: { q: string; a: string }[] = [
