@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Play, X, Quote, ChevronLeft, ChevronRight } from "lucide-react";
-import { PROOF_ITEMS, PROOF_QUOTES, type ProofItem } from "@/lib/landing";
+import {
+  PROOF_ITEMS,
+  PROOF_QUOTES,
+  PROOF_SCREENSHOTS,
+  type ProofItem,
+} from "@/lib/landing";
 
 /**
  * Real deliveries, shown rather than claimed.
@@ -78,6 +83,8 @@ export function ProofGallery() {
         Swipe to see more →
       </p>
 
+      <ScreenshotWall />
+
       <QuoteWall />
 
       {lightbox !== null && (
@@ -89,6 +96,106 @@ export function ProofGallery() {
         />
       )}
     </>
+  );
+}
+
+/**
+ * The screenshots, whole.
+ *
+ * Shown at their own aspect ratio rather than cropped to a tile: a phone
+ * screenshot and a desktop inbox are nothing like the same shape, and the
+ * thing that makes a screenshot convincing is that it plainly has not been
+ * tidied up. Cropping it to a neat square is the one edit that makes it look
+ * staged.
+ *
+ * Masonry columns, so a tall thread and a wide inbox sit side by side without
+ * either leaving a hole. Tapping one opens it full size — on a phone the text
+ * in a desktop screenshot is unreadable otherwise.
+ */
+function ScreenshotWall() {
+  const [zoom, setZoom] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (zoom === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setZoom(null);
+      if (e.key === "ArrowRight")
+        setZoom((i) => (i === null ? null : (i + 1) % PROOF_SCREENSHOTS.length));
+      if (e.key === "ArrowLeft")
+        setZoom((i) =>
+          i === null
+            ? null
+            : (i - 1 + PROOF_SCREENSHOTS.length) % PROOF_SCREENSHOTS.length
+        );
+    };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [zoom]);
+
+  if (PROOF_SCREENSHOTS.length === 0) return null;
+
+  return (
+    <div className="mt-12">
+      <h3 className="text-center text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
+        Screenshots, hindi na in-edit
+      </h3>
+      <div className="mt-6 gap-4 [column-fill:_balance] sm:columns-2 lg:columns-3">
+        {PROOF_SCREENSHOTS.map((shot, i) => (
+          <figure key={shot.src} className="mb-4 break-inside-avoid">
+            <button
+              type="button"
+              onClick={() => setZoom(i)}
+              className="block w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={shot.src}
+                alt={shot.alt}
+                loading="lazy"
+                decoding="async"
+                className="block h-auto w-full"
+              />
+            </button>
+            {shot.caption && (
+              <figcaption className="mt-1.5 px-1 text-[12px] leading-snug text-slate-500">
+                {shot.caption}
+              </figcaption>
+            )}
+          </figure>
+        ))}
+      </div>
+
+      {zoom !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center overflow-auto bg-black/85 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={PROOF_SCREENSHOTS[zoom].alt}
+          onClick={() => setZoom(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setZoom(null)}
+            aria-label="Close"
+            className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+          >
+            <X className="h-6 w-6" />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={PROOF_SCREENSHOTS[zoom].src}
+            alt={PROOF_SCREENSHOTS[zoom].alt}
+            onClick={(e) => e.stopPropagation()}
+            className="max-w-full rounded-lg"
+          />
+        </div>
+      )}
+    </div>
   );
 }
 

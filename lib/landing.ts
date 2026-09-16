@@ -226,6 +226,27 @@ export const PROOF_QUOTES: ProofQuote[] = [
   },
 ];
 
+/* --- Raw screenshots ------------------------------------------------------
+   Whole, uncropped screenshots of Messenger threads and Facebook comments,
+   shown at their own aspect ratio and openable full-size.
+
+   These are published EXACTLY as supplied — that is the point of them, and it
+   is what makes them read as unstaged. Which also means whatever is in the
+   frame goes on a public, indexed page: the sender's full name and profile
+   photo, any certificate legible in their photo, and any of our own tooling
+   caught in the shot. Crop before you add one, not after.
+
+   To add: drop the file in /public/proof/screenshots/ and add an entry. Any
+   aspect ratio is fine — the wall lays them out in masonry columns. */
+export type ProofShot = {
+  src: string;
+  alt: string;
+  /** Optional line under the image. Leave out and the image stands alone. */
+  caption?: string;
+};
+
+export const PROOF_SCREENSHOTS: ProofShot[] = [];
+
 /* --- FAQ ------------------------------------------------------------------ */
 export const FAQ: { q: string; a: string }[] = [
   {
