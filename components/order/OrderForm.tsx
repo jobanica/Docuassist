@@ -115,6 +115,11 @@ export function OrderForm({ config }: { config: Config }) {
   // money before anything is filed.
   const [receipts, setReceipts] = useState(0);
   const [uploading, setUploading] = useState(false);
+  // Read and agreed, on the screen where the order becomes real. Two separate
+  // ticks because they are two different agreements — the terms of the service,
+  // and permission to hold their personal data at all.
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [acceptPrivacy, setAcceptPrivacy] = useState(false);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -242,6 +247,10 @@ export function OrderForm({ config }: { config: Config }) {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           otpToken: token ?? otpToken,
+          // Sent, not assumed: the server re-checks these before it writes an
+          // order, so a payload that skipped the form cannot skip the consent.
+          acceptTerms,
+          acceptPrivacy,
           order: {
             ...delivery,
             items: chosen.map((s) => ({
@@ -394,6 +403,89 @@ export function OrderForm({ config }: { config: Config }) {
                 <span className="font-semibold text-slate-900">{peso(s.price)}</span>
               </label>
             ))}
+          </div>
+          {/* Before the form, not after it. Asked here, the question — is this
+              document yours to request — is one someone can still answer by
+              stopping. Asked at the end, after they have typed a name, a birth
+              date and their mother's maiden name, the honest answer costs them
+              everything they have already filled in, and the tickbox becomes a
+              formality they click past. It is also the right order under the
+              Data Privacy Act: consent comes before collection, not after. */}
+          <section className="mt-5 rounded-2xl border-2 border-amber-400 bg-amber-50/70 p-5">
+            <h3 className="text-[13px] font-bold uppercase tracking-[0.12em] text-amber-800">
+              Official warning to all applicants
+            </h3>
+            <p className="mt-2.5 text-[14px] font-semibold leading-relaxed text-amber-900">
+              Giving false information, or requesting a document you have no
+              right to request, is a serious crime.
+            </p>
+
+            <p className="mt-4 font-bold text-amber-900">
+              1. A fraudulent request is punishable by law
+            </p>
+            <p className="mt-1 text-[14px] leading-relaxed text-amber-900/90">
+              Using {config.businessName} to request a civil registry document
+              with false details, or for a person you have no authority to act
+              for, is an intentional act of fraud. Obtaining another person&apos;s
+              record without their authority is also a violation of the Data
+              Privacy Act of 2012 (Republic Act 10173). Offenders face criminal
+              prosecution.
+            </p>
+
+            <p className="mt-4 font-bold text-amber-900">
+              2. Claiming a document that is not yours is a criminal offence
+            </p>
+            <p className="mt-1 text-[14px] leading-relaxed text-amber-900/90">
+              It is illegal to present an ID to our courier to claim a document
+              without the owner&apos;s knowledge and consent. Doing so will
+              result in legal action.
+            </p>
+
+            <p className="mt-4 font-bold text-amber-900">
+              Take this warning seriously po.
+            </p>
+            <p className="mt-1 text-[14px] leading-relaxed text-amber-900/90">
+              Huwag po kayong magpatuloy kung hindi ninyo tiyak na tama ang mga
+              detalyeng ilalagay ninyo, o kung wala kayong karapatan sa
+              dokumentong hinihingi.
+            </p>
+          </section>
+
+          {/* Two ticks, two agreements — and the button below stays dead until
+              both are made. An agreement nobody had to reach for is not one. */}
+          <div className="mt-4 space-y-3">
+            <Consent
+              checked={acceptTerms}
+              onChange={setAcceptTerms}
+              id="accept-terms"
+            >
+              I accept the{" "}
+              <a
+                href="/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-emerald-700 underline"
+              >
+                Terms and Conditions
+              </a>{" "}
+              of the User Agreement and{" "}
+              <a
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-emerald-700 underline"
+              >
+                Privacy Policy
+              </a>
+            </Consent>
+            <Consent
+              checked={acceptPrivacy}
+              onChange={setAcceptPrivacy}
+              id="accept-privacy"
+            >
+              I consent to the processing of my personal data in accordance with
+              the Data Privacy Act of 2012
+            </Consent>
           </div>
         </section>
       )}
@@ -593,6 +685,7 @@ export function OrderForm({ config }: { config: Config }) {
             changed — kaya pakisiguro po na tama ang spelling ng pangalan at
             petsa.
           </p>
+
         </section>
       )}
 
@@ -782,11 +875,18 @@ export function OrderForm({ config }: { config: Config }) {
         )}
         {step !== "verify" && step !== "pay" && (
           <button
-            disabled={busy}
+            // Visibly dead until both boxes are ticked, rather than failing on
+            // tap — being shown what is still outstanding beats being told no.
+            disabled={busy || (step === "docs" && (!acceptTerms || !acceptPrivacy))}
             onClick={() => {
               setError(null);
               if (step === "docs") {
                 if (chosen.length === 0) return setError("Please choose at least one document.");
+                if (!acceptTerms || !acceptPrivacy) {
+                  return setError(
+                    "Pakitick po ang dalawang kahon sa ibaba bago magpatuloy."
+                  );
+                }
                 return setStep("details");
               }
               if (step === "details") {
@@ -830,6 +930,45 @@ export function OrderForm({ config }: { config: Config }) {
         </a>
       )}
     </div>
+  );
+}
+
+/**
+ * One agreement, with the whole line clickable.
+ *
+ * A 16px box is a hard target on a phone, and someone who mis-taps three times
+ * on the last screen before paying simply leaves. The <label> wrapping makes
+ * the text itself the target, which is also what tells a screen reader which
+ * words this checkbox is agreeing to.
+ */
+function Consent({
+  checked, onChange, id, children,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  id: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label
+      htmlFor={id}
+      className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition ${
+        checked
+          ? "border-emerald-300 bg-emerald-50/60"
+          : "border-slate-200 bg-white"
+      }`}
+    >
+      <input
+        id={id}
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-0.5 h-5 w-5 shrink-0 accent-emerald-600"
+      />
+      <span className="text-[14px] leading-relaxed text-slate-700">
+        {children}
+      </span>
+    </label>
   );
 }
 

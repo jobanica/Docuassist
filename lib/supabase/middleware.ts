@@ -49,6 +49,11 @@ export async function updateSession(request: NextRequest) {
     path.startsWith("/track") ||
     path.startsWith("/api/track") ||
     path.startsWith("/order") ||
+    // Linked from the consent tickboxes on the order form. Behind a login
+    // they would 307 to /login from a new tab — someone being asked to accept
+    // terms they cannot open does not accept them, they leave.
+    path === "/terms" ||
+    path === "/privacy" ||
     path.startsWith("/api/order") ||
     // The province / city / barangay lists the public order form picks from.
     path.startsWith("/api/psgc") ||

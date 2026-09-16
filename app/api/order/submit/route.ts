@@ -67,7 +67,10 @@ export async function POST(request: Request) {
     }
   }
 
-  const result = await submitPublicOrder(parsed.data);
+  const result = await submitPublicOrder(parsed.data, {
+    acceptTerms: body?.acceptTerms === true,
+    acceptPrivacy: body?.acceptPrivacy === true,
+  });
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }

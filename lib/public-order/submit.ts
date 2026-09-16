@@ -41,6 +41,12 @@ export const publicOrderSchema = z.object({
 
 export type PublicOrderInput = z.infer<typeof publicOrderSchema>;
 
+/** What the customer agreed to on the review screen, timestamped on write. */
+export interface ConsentInput {
+  acceptTerms: boolean;
+  acceptPrivacy: boolean;
+}
+
 export type SubmitResult =
   | { ok: true; trackingCode: string }
   | { ok: false; error: string };
@@ -48,9 +54,22 @@ export type SubmitResult =
 const MAX_FIELD_LEN = 200;
 
 export async function submitPublicOrder(
-  input: PublicOrderInput
+  input: PublicOrderInput,
+  consent: ConsentInput
 ): Promise<SubmitResult> {
   const db = createAdminClient();
+
+  // Checked here and not only in the browser. The tick is the lawful basis for
+  // holding any of what follows, so an order that reaches this function
+  // without it must not be written at all — a disabled button is a courtesy,
+  // not a control.
+  if (!consent.acceptTerms || !consent.acceptPrivacy) {
+    return {
+      ok: false,
+      error:
+        "Please accept the Terms and Conditions and the data privacy consent.",
+    };
+  }
 
   const phone = normalizePhPhone(input.phone);
   if (!phone) {
@@ -137,6 +156,11 @@ export async function submitPublicOrder(
       customer_id: customer.id,
       status: "details_received",
       source: "public",
+      // Stamped on the order itself, not on the customer: consent was given
+      // for this request, and a person who orders again next year gives it
+      // again. The row is the record of what they agreed to and when.
+      terms_accepted_at: new Date().toISOString(),
+      privacy_consent_at: new Date().toISOString(),
     })
     .select("id, tracking_code")
     .single();
