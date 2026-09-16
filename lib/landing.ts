@@ -69,6 +69,14 @@ export const PROOF_ITEMS: ProofItem[] = [
   // Real customers, filmed by themselves. Faces are already blurred in the
   // source — do not upload an unblurred re-cut of any of these.
   //
+  // NOT LISTED: testimonial 07. It is 23 seconds of a Certificate of Live
+  // Birth filling the frame, and at web resolution the registry number, the
+  // child's date and place of birth, both parents' full names, the mother's
+  // age at the birth, and "marriage of parents: not applicable" are all
+  // readable. That is a minor's sensitive personal information, and this page
+  // is public and indexed. It is deliberately absent, not forgotten — do not
+  // add it back without the document itself obscured.
+  //
   // Captions: the wording below says only what the footage actually shows.
   // If you know the customer's first name and city AND they are happy to be
   // named, put it here — "Aileen — Cebu City" carries far more weight than
@@ -93,6 +101,13 @@ export const PROOF_ITEMS: ProofItem[] = [
     poster: "/proof/testimonial-06.jpg",
     caption: "Documents received — “thank you so much”",
     alt: "A customer showing the documents that arrived",
+  },
+  {
+    type: "video",
+    src: "/proof/testimonial-08.mp4",
+    poster: "/proof/testimonial-08.jpg",
+    caption: "Delivered to the store — “thank you so much”",
+    alt: "A customer at his sari-sari store with the parcel that arrived",
   },
   {
     type: "video",
