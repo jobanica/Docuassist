@@ -14,6 +14,7 @@ import {
   Tags,
   Combine,
   MessageSquare,
+  BadgeCheck,
 } from "lucide-react";
 import { bulkAdvanceStatus, combineOrders } from "@/lib/actions/orders";
 import { tagCustomers } from "@/lib/actions/tags";
@@ -69,6 +70,8 @@ export interface OrderRow {
   reship_count: number;
   /** The customer has asked for a reship that hasn't been done yet. */
   reship_requested: boolean;
+  /** Paid online, receipt waiting to be checked before the work starts. */
+  payment_to_verify: boolean;
   /** Parents'-surname warnings on this order's documents, if any. */
   name_issues: string[];
   /** Supplier notes the office hasn't marked handled — a flag to act on. */
@@ -108,6 +111,13 @@ export const RESHIP = "__reship";
  * back, so watch for the parcel and send it straight out when it lands.
  */
 export const RESHIP_REQUESTED = "__reship_requested";
+
+/**
+ * Also not a status — prepaid orders whose receipt nobody has checked yet.
+ * These block themselves: the money is claimed but not confirmed, so the
+ * document should not be filed until someone has looked.
+ */
+export const PAYMENT_TO_VERIFY = "__payment_to_verify";
 
 function needsCall(o: OrderRow): boolean {
   return o.status === "shipped" && o.delivery_attempts > 0;
@@ -176,6 +186,10 @@ export function OrdersTable({
     () => orders.filter((o) => o.reship_requested),
     [orders]
   );
+  const payList = useMemo(
+    () => orders.filter((o) => o.payment_to_verify),
+    [orders]
+  );
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -190,6 +204,8 @@ export function OrdersTable({
         if (o.reship_count === 0) return false;
       } else if (status === RESHIP_REQUESTED) {
         if (!o.reship_requested) return false;
+      } else if (status === PAYMENT_TO_VERIFY) {
+        if (!o.payment_to_verify) return false;
       } else if (status !== "all" && o.status !== status) return false;
       if (
         svcCodes.length > 0 &&
@@ -484,6 +500,25 @@ export function OrdersTable({
         </button>
       )}
 
+      {payList.length > 0 && status !== PAYMENT_TO_VERIFY && (
+        <button
+          type="button"
+          onClick={() => setStatus(PAYMENT_TO_VERIFY)}
+          className="flex w-full items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-left text-sm text-amber-900 hover:bg-amber-100"
+        >
+          <BadgeCheck className="h-4 w-4 shrink-0" />
+          <span className="flex-1">
+            <strong>
+              {payList.length} order{payList.length === 1 ? "" : "s"} paid online,
+              waiting on you
+            </strong>{" "}
+            — check the receipt, then verify the payment. Nothing should be filed
+            with the PSA until the money is confirmed.
+          </span>
+          <span className="shrink-0 font-medium underline">Show them</span>
+        </button>
+      )}
+
       {callList.length > 0 && !onCallList && (
         <button
           type="button"
@@ -526,6 +561,9 @@ export function OrdersTable({
           </option>
           <option value={SUPPLIER_NOTE}>
             💬 Supplier flagged{noteList.length ? ` (${noteList.length})` : ""}
+          </option>
+          <option value={PAYMENT_TO_VERIFY}>
+            💸 Payment to verify{payList.length ? ` (${payList.length})` : ""}
           </option>
           <option value={RESHIP_REQUESTED}>
             📮 Reship requested{reshipReqList.length ? ` (${reshipReqList.length})` : ""}
@@ -1044,6 +1082,14 @@ export function OrdersTable({
                           title="The supplier posted the finished ID — release it once it arrives"
                         >
                           ID posted
+                        </Badge>
+                      )}
+                      {o.payment_to_verify && (
+                        <Badge
+                          className="bg-amber-100 text-amber-900"
+                          title="Customer paid online — check the receipt before filing"
+                        >
+                          Verify payment
                         </Badge>
                       )}
                       {o.reship_requested && (

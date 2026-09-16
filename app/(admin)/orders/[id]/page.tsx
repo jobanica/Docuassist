@@ -24,6 +24,8 @@ import { peso } from "@/lib/money";
 import { idVerificationFee } from "@/lib/actions/settings";
 import { verificationCount } from "@/lib/id-verification";
 import { supplierNotesForOrder } from "@/lib/actions/supplier";
+import { receiptsForOrder } from "@/lib/actions/payments";
+import { PaymentVerification } from "@/components/admin/PaymentVerification";
 import { fmtDate, fmtDateTime, daysSince } from "@/lib/dates";
 import { aging, attemptBadgeClasses } from "@/lib/status";
 import type {
@@ -50,11 +52,15 @@ export default async function OrderDetailPage({
 }) {
   const supabase = createClient();
 
+  // The staff_users embed names its foreign key: orders points at staff_users
+  // twice (who encoded it, who verified its payment), and left ambiguous
+  // PostgREST refuses the whole query rather than picking one.
   const { data: order } = await supabase
     .from("orders")
     .select(
       `*,
        customers (*),
+       staff_users!orders_payment_verified_by_fkey ( name ),
        couriers ( id, name, tracking_page_url ),
        order_items ( id, service_id, quantity, price_at_order, form_details,
                      pasted_details, name_check_ack_key, name_check_ack_reason,
@@ -88,6 +94,8 @@ export default async function OrderDetailPage({
   const verifying = verificationCount(order.order_items ?? []);
   // Supplier's own notes on this job — office-only, never on the tracking page.
   const supplierNotes = await supplierNotesForOrder(order.id);
+  // Proof the customer attached on the prepaid route, for someone to check.
+  const receipts = await receiptsForOrder(order.id);
   const subtotal =
     (order.order_items ?? []).reduce(
       (sum: number, it: any) => sum + Number(it.price_at_order) * it.quantity,
@@ -200,6 +208,19 @@ export default async function OrderDetailPage({
           </CardContent>
         </Card>
       )}
+
+      {/* Money first on a prepaid order: nothing should be worked until
+          someone has looked at what the customer says they sent. */}
+      <PaymentVerification
+        orderId={o.id}
+        receipts={receipts}
+        paid={o.payment_status === "paid"}
+        totalAmount={Number(o.total_amount)}
+        submittedAt={o.payment_submitted_at ?? null}
+        verifiedAt={o.payment_verified_at ?? null}
+        verifiedByName={o.staff_users?.name ?? null}
+        rejectedReason={o.payment_rejected_reason ?? null}
+      />
 
       <div className="grid gap-6 md:grid-cols-[1fr_1.4fr]">
         {/* Left: pipeline + actions */}

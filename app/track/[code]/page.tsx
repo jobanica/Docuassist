@@ -223,6 +223,33 @@ export default async function TrackPage({
         )}
       </section>
 
+      {/* Where the money stands. A prepaid customer has handed over cash and
+          is waiting to hear it landed — silence there reads as a scam far
+          faster than a slow parcel does. */}
+      {info.payment_rejected_reason ? (
+        <section className="mt-3 rounded-2xl border border-red-300 bg-red-50 p-5 shadow-sm">
+          <p className="font-bold text-red-800">
+            We couldn&apos;t confirm your payment
+          </p>
+          <p className="mt-1.5 text-sm leading-relaxed text-red-900">
+            {info.payment_rejected_reason}
+          </p>
+          <p className="mt-3 text-xs text-red-800/80">
+            Message us with the correct proof and we&apos;ll start right away.
+          </p>
+        </section>
+      ) : info.payment_verified_at ? (
+        <section className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 shadow-sm">
+          ✅ Payment confirmed — salamat po! Your document is being processed.
+        </section>
+      ) : info.payment_submitted_at ? (
+        <section className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-sm">
+          We&apos;ve received your payment details and are checking them now.
+          You&apos;ll see this update as soon as it&apos;s confirmed — usually
+          within the day.
+        </section>
+      ) : null}
+
       {/* Failed-attempt / RTS notice */}
       {notice && (
         <section

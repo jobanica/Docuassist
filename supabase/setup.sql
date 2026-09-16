@@ -1,6 +1,6 @@
 -- =============================================================================
 -- DocuAssist PH — full schema setup for a fresh Supabase project.
--- Migrations 0001–0048 concatenated in order. Run once on a fresh project.
+-- Migrations 0001–0050 concatenated in order. Run once on a fresh project.
 -- =============================================================================
 
 
@@ -4882,3 +4882,215 @@ update services set online_price = 420 where code = 'cenomar';
 -- as a certificate, while prepaid does not.
 update services set online_price = 275 where code in ('tin_id', 'philhealth_id');
 update services set price = 685 where code in ('tin_id', 'philhealth_id');
+
+
+-- >>> 0049_payment_receipts.sql <<<
+
+-- =============================================================================
+-- 0049_payment_receipts.sql — proof of payment, and the state it puts an order
+-- into while someone checks it
+--
+-- On the prepaid route the customer pays before anything is filed, so the
+-- money arrives as a screenshot rather than as cash at the door. The order is
+-- created first either way — an abandoned one is still a lead — and only
+-- becomes 'paid' when a person has looked at the proof and said so.
+-- =============================================================================
+
+-- A private bucket: a receipt screenshot carries a name, an amount and a
+-- reference number. Unlike the logo and the payment QR, none of that belongs
+-- on a public URL, so staff read it through short-lived signed links exactly
+-- as they do the identity papers in `requirements`.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'receipts', 'receipts', false, 8 * 1024 * 1024,
+  array['image/jpeg','image/png','image/webp','image/heic','image/heif','application/pdf']
+)
+on conflict (id) do update
+  set public = false,
+      file_size_limit = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+create table if not exists payment_receipts (
+  id           uuid primary key default gen_random_uuid(),
+  order_id     uuid not null references orders(id) on delete cascade,
+  -- Path inside the private bucket. The row is the index; deleting it is what
+  -- the app treats as deleting the file.
+  storage_path text not null unique,
+  file_name    text not null,
+  mime_type    text,
+  size_bytes   bigint,
+  created_at   timestamptz not null default now()
+);
+
+create index if not exists payment_receipts_order_idx
+  on payment_receipts (order_id, created_at);
+
+alter table payment_receipts enable row level security;
+
+-- Same scope as the order it belongs to. There is deliberately no public
+-- policy: the customer uploads through a server route holding the service
+-- key, which checks their tracking code first.
+drop policy if exists payment_receipts_staff_select on payment_receipts;
+create policy payment_receipts_staff_select on payment_receipts
+  for select using (is_staff() and staff_can_see_order(order_id));
+
+drop policy if exists payment_receipts_staff_delete on payment_receipts;
+create policy payment_receipts_staff_delete on payment_receipts
+  for delete using (is_staff() and staff_can_see_order(order_id));
+
+-- --- Where a prepaid order sits while the money is being checked -----------
+-- payment_status stays the truth ('paid' once accepted). These record how it
+-- got there, and let the board show the ones still waiting on someone.
+alter table orders
+  add column if not exists payment_submitted_at   timestamptz,
+  add column if not exists payment_verified_at    timestamptz,
+  add column if not exists payment_verified_by    uuid references staff_users(id) on delete set null,
+  add column if not exists payment_rejected_at    timestamptz,
+  add column if not exists payment_rejected_reason text;
+
+comment on column orders.payment_submitted_at is
+  'When the customer said they had paid (and usually attached a receipt). '
+  'Set on the public order flow; means "waiting for someone to check it".';
+comment on column orders.payment_rejected_reason is
+  'Why a submitted payment was not accepted. Shown to the customer so they '
+  'know what to re-send.';
+
+
+-- >>> 0050_tracking_payment_state.sql <<<
+
+-- =============================================================================
+-- 0050_tracking_payment_state.sql — tell the customer where their money stands
+--
+-- Someone who has already handed over money and hears nothing back reads it as
+-- a scam far faster than they read a slow parcel that way. The tracking page
+-- now answers the payment question too.
+-- =============================================================================
+
+-- The customer needs to know where their money stands, not just their parcel.
+-- Three answers: nothing sent yet, sent and being checked, or turned down with
+-- a reason they can act on. Whitelisted like everything else this returns —
+-- no amounts beyond the total already shown, no receipt files.
+create or replace function public.get_tracking_info(p_code text)
+returns json
+language plpgsql
+stable security definer
+set search_path to 'public'
+as $function$
+declare
+  o             orders%rowtype;
+  first_name    text;
+  service_names text[];
+  documents_json json;
+  courier_json  json;
+  history_json  json;
+  messenger_json json;
+  st            order_statuses%rowtype;
+  base          json;
+begin
+  select * into o from orders where tracking_code = p_code;
+  if not found then
+    return null;
+  end if;
+
+  if o.merged_into is not null then
+    select * into o from orders where id = o.merged_into;
+    if not found then
+      return null;
+    end if;
+  end if;
+
+  select * into st from order_statuses where code = o.status;
+
+  select split_part(trim(c.full_name), ' ', 1) into first_name
+    from customers c where c.id = o.customer_id;
+
+  select array_agg(s.name order by s.name) into service_names
+    from order_items oi
+    join services s on s.id = oi.service_id
+   where oi.order_id = o.id;
+
+  select json_agg(json_build_object(
+           'service_name', s.name,
+           'quantity',     oi.quantity,
+           'owner_name', nullif(
+             case
+               when coalesce(oi.form_details->>'husband_last', '') <> ''
+                 or coalesce(oi.form_details->>'wife_last', '') <> ''
+               then concat_ws(' & ',
+                      nullif(concat_ws(' ',
+                        nullif(trim(oi.form_details->>'husband_first'), ''),
+                        nullif(trim(oi.form_details->>'husband_last'),  '')), ''),
+                      nullif(concat_ws(' ',
+                        nullif(trim(oi.form_details->>'wife_first'), ''),
+                        nullif(trim(oi.form_details->>'wife_last'),  '')), ''))
+               else concat_ws(' ',
+                      nullif(trim(oi.form_details->>'first_name'),  ''),
+                      nullif(trim(oi.form_details->>'middle_name'), ''),
+                      nullif(trim(oi.form_details->>'last_name'),   ''))
+             end, '')
+         ) order by s.name)
+    into documents_json
+    from order_items oi
+    join services s on s.id = oi.service_id
+   where oi.order_id = o.id;
+
+  if o.courier_id is not null then
+    select json_build_object(
+      'name', cr.name,
+      'tracking_page_url', cr.tracking_page_url,
+      'tracking_number', o.courier_tracking_number
+    ) into courier_json
+    from couriers cr where cr.id = o.courier_id;
+  else
+    courier_json := null;
+  end if;
+
+  messenger_json := resolve_messenger_page(o.messenger_page_id);
+
+  select json_agg(json_build_object(
+           'status', h.status,
+           'label', hs.label,
+           'event_type', h.event_type,
+           'attempt_number', h.attempt_number,
+           'note', h.note,
+           'date', h.created_at
+         ) order by h.created_at)
+    into history_json
+    from order_status_history h
+    left join order_statuses hs on hs.code = h.status
+   where h.order_id = o.id
+     and h.event_type <> 'note';
+
+  return json_build_object(
+    'tracking_code', o.tracking_code,
+    'first_name', first_name,
+    'service_names', coalesce(service_names, array[]::text[]),
+    'documents', coalesce(documents_json, '[]'::json),
+    'status', o.status,
+    'status_label', st.label,
+    'status_sort_order', st.sort_order,
+    'is_terminal', st.is_terminal,
+    'public_helper', st.public_helper,
+    'total_amount', o.total_amount,
+    'discount_amount', o.discount_amount,
+    'payment_method', o.payment_method,
+    'payment_status', o.payment_status,
+    'payment_submitted_at', o.payment_submitted_at,
+    'payment_verified_at', o.payment_verified_at,
+    'payment_rejected_reason', o.payment_rejected_reason,
+    'courier', courier_json,
+    'delivery_attempts', o.delivery_attempts,
+    'expected_release_date', o.expected_release_date,
+    'expected_delivery_date', o.expected_delivery_date,
+    'shipped_at', o.shipped_at,
+    'delivered_at', o.delivered_at,
+    'returned_at', o.returned_at,
+    'return_reason', o.return_reason,
+    'is_delayed', o.delayed_at is not null,
+    'delayed_at', o.delayed_at,
+    'delay_reason', o.delay_reason,
+    'messenger', messenger_json,
+    'history', coalesce(history_json, '[]'::json)
+  );
+end;
+$function$;

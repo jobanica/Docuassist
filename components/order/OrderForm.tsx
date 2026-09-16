@@ -54,6 +54,10 @@ export function OrderForm({ config }: { config: Config }) {
 
   const [trackingCode, setTrackingCode] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  // Proof of payment: the customer attaches it here so the office can check the
+  // money before anything is filed.
+  const [receipts, setReceipts] = useState(0);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -133,6 +137,47 @@ export function OrderForm({ config }: { config: Config }) {
     finally { setBusy(false); }
   }
 
+  /**
+   * Send the receipt straight up, keyed by the tracking code.
+   *
+   * The code is the customer's own secret — the same one that opens their
+   * whole order — so it is what authorises the upload. Nothing here marks the
+   * payment good; it only hands the office something to look at.
+   */
+  async function sendReceipt(file: File) {
+    if (!trackingCode) return;
+    setError(null);
+    setUploading(true);
+    try {
+      const buf = new Uint8Array(await file.arrayBuffer());
+      let binary = "";
+      const chunk = 0x8000;
+      for (let i = 0; i < buf.length; i += chunk) {
+        binary += String.fromCharCode(...buf.subarray(i, i + chunk));
+      }
+      const r = await fetch("/api/order/receipt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          trackingCode,
+          fileName: file.name,
+          mimeType: file.type,
+          data: btoa(binary),
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        setError(j.error ?? "Could not upload that file.");
+        return;
+      }
+      setReceipts(j.count ?? receipts + 1);
+    } catch {
+      setError("Network problem. Please try again.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function submit(token?: string | null) {
     setError(null); setBusy(true);
     try {
@@ -177,7 +222,8 @@ export function OrderForm({ config }: { config: Config }) {
         </div>
         <h2 className="mt-4 text-lg font-bold text-slate-900">Salamat po! 🎉</h2>
         <p className="mt-1 text-sm text-slate-600">
-          Your order is in. We&apos;ll start once your payment lands.
+          Your order is in. We&apos;ll check your payment and start right
+          after — makikita ninyo ang status sa link na ito.
         </p>
 
         <div className="mt-5 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4 text-left">
@@ -464,20 +510,72 @@ export function OrderForm({ config }: { config: Config }) {
             </div>
           )}
 
-          <p className="mt-4 rounded-xl bg-slate-50 p-3 text-[13px] leading-relaxed text-slate-600">
-            Keep your proof of payment — screenshot po ng receipt. Send it to us
-            on Messenger so we can match it to your order faster.
-          </p>
+          {/* The proof, attached here rather than chased on Messenger. The
+              office checks it before the document is filed, so asking for it
+              at the moment they still have the screenshot open is the only
+              time it is easy for them. */}
+          <div className="mt-5 rounded-xl border-2 border-dashed border-slate-300 p-4">
+            <p className="text-sm font-semibold text-slate-900">
+              Upload your receipt
+            </p>
+            <p className="mt-0.5 text-[13px] leading-relaxed text-slate-500">
+              Screenshot po ng GCash or bank confirmation. We check it before we
+              file your document — mas mabilis kaysa habulin pa sa Messenger.
+            </p>
+
+            {receipts > 0 && (
+              <p className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-[13px] font-medium text-emerald-800">
+                <Check className="h-4 w-4 shrink-0" />
+                {receipts} file{receipts === 1 ? "" : "s"} received — salamat po!
+              </p>
+            )}
+
+            <label className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 active:scale-[0.99]">
+              {uploading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Uploading…
+                </>
+              ) : (
+                <>{receipts > 0 ? "Add another file" : "Choose a file or photo"}</>
+              )}
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                capture="environment"
+                className="hidden"
+                disabled={uploading}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (f) sendReceipt(f);
+                }}
+              />
+            </label>
+          </div>
 
           <button
             onClick={() => setStep("done")}
-            className="mt-4 w-full rounded-xl bg-emerald-600 px-4 py-3.5 font-semibold text-white active:scale-[0.99]"
+            disabled={receipts === 0 || uploading}
+            className="mt-4 w-full rounded-xl bg-emerald-600 px-4 py-3.5 font-semibold text-white active:scale-[0.99] disabled:opacity-50"
           >
             I&apos;ve paid — show my tracking link
           </button>
+
+          {receipts === 0 && (
+            // Never trap someone who genuinely cannot attach it right now: the
+            // order already exists, and a lost customer is worse than a
+            // receipt that arrives on Messenger ten minutes later.
+            <button
+              onClick={() => setStep("done")}
+              className="mt-2 w-full rounded-xl px-4 py-2 text-center text-xs text-slate-500 underline"
+            >
+              I&apos;ll send my receipt later
+            </button>
+          )}
+
           <p className="mt-2 text-center text-xs text-slate-400">
-            Your order is already saved. You can come back and pay later, but we
-            only begin once payment lands.
+            Your order is already saved. We begin once we&apos;ve checked your
+            payment.
           </p>
         </section>
       )}

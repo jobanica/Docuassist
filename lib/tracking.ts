@@ -24,6 +24,11 @@ export interface TrackingInfo {
   discount_amount: number;
   payment_method: string;
   payment_status: "unpaid" | "paid";
+  /** Set when the customer said they had paid and attached proof. */
+  payment_submitted_at: string | null;
+  payment_verified_at: string | null;
+  /** Why a payment was turned down — the customer can act on this. */
+  payment_rejected_reason: string | null;
   courier: {
     name: string;
     tracking_page_url: string | null;

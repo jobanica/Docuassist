@@ -19,19 +19,32 @@ export const dynamic = "force-dynamic";
 export default async function OrdersPage() {
   const supabase = createClient();
 
-  const [staff, { data: statuses }, { data: services }, { data: orders }, { data: attempts }, tags, fee] =
+  const [
+    staff,
+    { data: statuses },
+    { data: services },
+    { data: orders, error: ordersError },
+    { data: attempts },
+    tags,
+    fee,
+  ] =
     await Promise.all([
       getStaff(),
       supabase.from("order_statuses").select("*").order("sort_order"),
       supabase.from("services").select("*").order("sort_order").order("name"),
+      // The staff_users embed names its foreign key: orders points at
+      // staff_users twice (who encoded the order, and who verified its
+      // payment), and left ambiguous PostgREST refuses the whole query —
+      // which the page would quietly render as an empty board.
       supabase
         .from("orders")
         .select(
           `id, tracking_code, status, total_amount, discount_amount, created_at, status_since,
            delayed_at, delay_reason, supplier_shipped_at, reship_count, reship_requested_at,
+           payment_status, payment_submitted_at,
            delivery_attempts, source, created_by,
            customers ( id, full_name, phone, customer_tags ( tag_id ) ),
-           staff_users ( name ),
+           staff_users!orders_created_by_fkey ( name ),
            supplier_notes ( id, addressed_at ),
            order_items ( form_details, quantity, name_check_ack_key,
                          services ( code, name ) )`
@@ -50,6 +63,12 @@ export default async function OrdersPage() {
       listTags(),
       shippingFee(),
     ]);
+
+  // A failed query and a genuinely empty board both arrive here as no rows.
+  // Left unsaid, the second reading is the one staff take — and "all our
+  // orders are gone" is a far more alarming thing to be wrong about than a
+  // warning they can act on, so the failure says so out loud.
+  if (ordersError) console.error("orders board query failed", ordersError);
 
   const statusLabel = new Map(
     (statuses ?? []).map((s) => [s.code, s.label as string])
@@ -111,6 +130,10 @@ export default async function OrdersPage() {
       // The customer has asked for a reship that hasn't happened yet — the
       // actionable ones to watch for when the returned parcel arrives.
       reship_requested: Boolean(o.reship_requested_at),
+      // Paid online and waiting for someone to check the receipt. Nothing
+      // should be filed until this clears, so it is a queue, not a badge.
+      payment_to_verify:
+        Boolean(o.payment_submitted_at) && o.payment_status !== "paid",
       // Any supplier note nobody has marked handled — the board flags it so
       // the TIN/PhilHealth staff can find the ones still waiting on them.
       open_supplier_notes: (o.supplier_notes ?? []).filter(
@@ -162,6 +185,17 @@ export default async function OrdersPage() {
           <Plus className="h-4 w-4" /> New order
         </Link>
       </div>
+
+      {ordersError && (
+        <div className="rounded-md border border-red-300 bg-red-50 p-4 text-sm text-red-800">
+          <p className="font-semibold">Couldn&apos;t load the orders list.</p>
+          <p className="mt-1">
+            Nothing has been lost — this page failed to read them. Refresh, and
+            if it keeps happening send this to your developer:{" "}
+            <code className="rounded bg-red-100 px-1">{ordersError.message}</code>
+          </p>
+        </div>
+      )}
 
       <OrdersTable
         tags={tags}
