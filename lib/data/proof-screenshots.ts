@@ -3,4 +3,136 @@
 import type { ProofShot } from "@/lib/landing";
 
 export const PROOF_SCREENSHOT_FILES: ProofShot[] = [
+  {
+    src: "/proof/screenshots/668188348_2392938607873354_7646603037679287493_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/668454121_3452952564856575_2938477202080371471_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/670782741_1620459975840578_2512491050816260184_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/670881149_969597428775836_4323887486929495212_n.jpg",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/671681610_1691891058839690_4666726081658781183_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/672322635_1504641767732209_3207179755428204594_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/672699898_1469235738327360_6502865895408750673_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/672873467_1477846677037405_8723230674481783856_n.jpg",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/673327585_998391769362397_2948867695620771901_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/673363220_1446957593872302_3199483351748732052_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/673402779_984542394129007_1482706661057470701_n.jpg",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/673459474_1263789292507642_149276500708212936_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/674296404_1480055813580338_8690202754258336694_n.jpg",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/674599966_1971230876819515_6836046353009897784_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/674624872_1339227758046470_2565253296545777596_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/676887734_776397482072605_3784604773785322741_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/676909815_1262807786003387_2597449562389470688_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/677009396_1669298424416533_6766028531939008240_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/677026864_2397289944104825_2045364604695313448_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/677789093_5226860497600415_3905940982841530634_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/678140311_1561496699316662_5854202286049023773_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/678339358_779184991794659_4122227941512500849_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/678400844_1561344832659956_6361562059443441811_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/679074870_948247054472577_2950732889538907879_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/680450081_1536143418240267_6744937224362862598_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/681226310_870889392688192_5150470391410283185_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/681278651_1361967199090762_5146281668418961606_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/681398823_1679011926451825_7709722527579166366_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/681817799_1275029701480864_2626764148225020903_n.jpg",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/683994582_975535668521283_164966336418034939_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/684156002_1498985668263045_1088277102156164024_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/684209019_992450300026742_6070971095860500419_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
+  {
+    src: "/proof/screenshots/685144351_1596691644760884_628315932667414378_n.png",
+    alt: "A customer's message about the document we delivered",
+  },
 ];
