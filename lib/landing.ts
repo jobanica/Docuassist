@@ -66,27 +66,61 @@ export type ProofItem = {
 };
 
 export const PROOF_ITEMS: ProofItem[] = [
-  // PLACEHOLDER — replace with real delivery photos/videos
-  { type: "image", src: "/proof/placeholder-1.svg", caption: "PSA Birth Certificate → Cebu City ✓ Delivered", alt: "Delivered parcel placeholder" },
-  // PLACEHOLDER — replace with real delivery photos/videos
-  { type: "image", src: "/proof/placeholder-2.svg", caption: "CENOMAR → Davao City ✓ Delivered", alt: "Delivered parcel placeholder" },
-  // PLACEHOLDER — replace with real delivery photos/videos
-  { type: "image", src: "/proof/placeholder-3.svg", caption: "Marriage Certificate → Quezon City ✓ Delivered", alt: "Delivered parcel placeholder" },
-  // PLACEHOLDER — replace with real delivery photos/videos
-  { type: "image", src: "/proof/placeholder-4.svg", caption: "PSA Birth Certificate → Iloilo ✓ Delivered", alt: "Delivered parcel placeholder" },
-  // PLACEHOLDER — replace with real delivery photos/videos
-  { type: "image", src: "/proof/placeholder-5.svg", caption: "Death Certificate → Cagayan de Oro ✓ Delivered", alt: "Delivered parcel placeholder" },
-  // PLACEHOLDER — a video entry, wired and ready. Drop in an mp4 + a poster
-  // image and flip the src/poster; nothing else changes.
-  { type: "video", src: "", poster: "/proof/placeholder-6.svg", caption: "Unboxing from a customer in Baguio", alt: "Customer video placeholder" },
+  // Real customers, filmed by themselves. Faces are already blurred in the
+  // source — do not upload an unblurred re-cut of any of these.
+  //
+  // Captions: the wording below says only what the footage actually shows.
+  // If you know the customer's first name and city AND they are happy to be
+  // named, put it here — "Aileen — Cebu City" carries far more weight than
+  // "a customer". Never invent one.
+  {
+    type: "video",
+    src: "/proof/testimonial-02.mp4",
+    poster: "/proof/testimonial-02.jpg",
+    caption: "Unboxing on camera — the PSA certificate inside",
+    alt: "A customer opening their delivered parcel",
+  },
+  {
+    type: "video",
+    src: "/proof/testimonial-05.mp4",
+    poster: "/proof/testimonial-05.jpg",
+    caption: "Her PSA certificates, delivered to her door",
+    alt: "A customer holding the PSA certificates she received",
+  },
+  {
+    type: "video",
+    src: "/proof/testimonial-06.mp4",
+    poster: "/proof/testimonial-06.jpg",
+    caption: "Documents received — “thank you so much”",
+    alt: "A customer showing the documents that arrived",
+  },
+  {
+    type: "video",
+    src: "/proof/testimonial-03.mp4",
+    poster: "/proof/testimonial-03.jpg",
+    caption: "“Thank you so much” — a customer after hers arrived",
+    alt: "A customer thanking DocuAssist PH on camera",
+  },
+  {
+    type: "video",
+    src: "/proof/testimonial-01.mp4",
+    poster: "/proof/testimonial-01.jpg",
+    // Last on purpose: this one carries a burned-in "CASH ON DELIVERY"
+    // banner, and this page sells the prepaid route at a lower price. It is
+    // still a genuine testimonial, so it stays — but it should not be the
+    // first thing a visitor reads, and the caption says which route it was.
+    caption: "A cash-on-delivery order, before we opened online ordering",
+    alt: "A customer talking about her delivered document",
+  },
 ];
 
 /* --- Short quotes mixed into the gallery ---------------------------------
-   PLACEHOLDER — replace with real Messenger feedback (first name + city). */
-export const PROOF_QUOTES: { quote: string; name: string }[] = [
-  { quote: "Dumating na po kanina, salamat! Ang bilis, hindi pa ako umalis ng bahay.", name: "Marites — Cebu" },
-  { quote: "Legit po sila. May tracking link talaga, nakita ko bawat status.", name: "Jun — Davao" },
-];
+   Empty on purpose. What was here were invented quotes with invented names,
+   written as filler while the page was being built — and an invented customer
+   review on a live page is a fake review, whoever wrote it. Put real Messenger
+   feedback here (first name + city, with their permission) or leave it empty:
+   the five videos above are real, and real is the whole point. */
+export const PROOF_QUOTES: { quote: string; name: string }[] = [];
 
 /* --- FAQ ------------------------------------------------------------------ */
 export const FAQ: { q: string; a: string }[] = [

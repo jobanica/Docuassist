@@ -198,6 +198,14 @@ function Lightbox({
         )}
         <figcaption className="mt-3 text-center text-sm text-white/80">
           {item.caption}
+          {/* A testimonial is what the customer says, and a browser will not
+              let it start out loud. Without this line it plays as a silent
+              clip of someone talking, and the point of it is lost. */}
+          {item.type === "video" && item.src && (
+            <span className="mt-1 block text-xs text-white/50">
+              I-tap po ang 🔊 para sa boses — starts muted
+            </span>
+          )}
         </figcaption>
       </figure>
     </div>

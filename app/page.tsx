@@ -351,8 +351,8 @@ export default async function LandingPage() {
 
       {/* ---------- 7. Proof gallery ---------- */}
       <Section>
-        <Heading sub="Every parcel here is a real DocuAssist PH order — delivered, received, at masaya ang customer.">
-          Totoong deliveries, totoong customers.
+        <Heading sub="Sila mismo ang kumuha ng video — mula sa pagbukas ng parcel hanggang sa dokumentong hawak na nila. Tap any one to play.">
+          Totoong customers, totoong dokumento.
         </Heading>
         <div className="mt-12">
           <ProofGallery />
