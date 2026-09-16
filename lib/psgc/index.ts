@@ -1,45 +1,45 @@
-import provincesRaw from "./provinces.json";
-import citiesRaw from "./cities.json";
+import { CITIES, PROVINCES } from "@/lib/data/psgc";
 
 /**
- * Philippine places, from the PSA's own Philippine Standard Geographic Code.
+ * The public order form's view of the PSA's Philippine Standard Geographic Code.
  *
- * Why this exists: an address typed by hand is the single most common reason a
- * parcel comes back to us. "Paranaque", "Parañaque", "Paranaque City",
- * "Paranque" — the courier sorts on the barangay and the municipality, and it
- * only takes one of those to be wrong. Picking from a list removes the typo.
+ * The data itself lives in lib/data/psgc.ts, where it has been since the
+ * Messenger-paste parser started checking addresses against it — this module
+ * only reshapes it for a picker. There is one copy of the PSGC in this repo on
+ * purpose: two would drift, and then the address a customer picks on the site
+ * and the address the parser accepts in the office would disagree.
+ *
+ * Why a picker at all: an address typed by hand is the commonest reason a
+ * parcel comes back to us. "Paranaque", "Parañaque", "Paranque" — the courier
+ * sorts on the barangay and the municipality, and one wrong letter there is
+ * three failed attempts and a return. The same typo in a place of birth is
+ * worse: the PSA searches on it, the record is not found, and the fee is spent
+ * either way.
  *
  * Two deliberate choices:
  *
- *   1. Nothing here is a hard gate. Every picker also accepts what the customer
+ *   1. Nothing here is a hard gate. Every field also accepts what the customer
  *      typed. A new barangay, a renamed one, a spelling the list has not caught
- *      up with — none of those should stop someone ordering. The list makes the
- *      right answer easy, it does not make a wrong one impossible.
+ *      up with — none should stop someone ordering. The list makes the right
+ *      answer easy; it must not make a wrong one impossible.
  *
- *   2. Names are stored, not codes. They are what goes on a PSA request form
- *      and on a courier label, and they stay readable in the database years
- *      after a code has been retired.
+ *   2. Names are stored, not indexes. They are what goes on a PSA request form
+ *      and a courier label, and they stay readable years after an index has
+ *      shifted underneath them.
  *
- * Barangays (42,046 of them) are too large to send to a phone, so they live in
- * `barangays.json` and are served a city at a time by /api/psgc/barangays.
+ * Barangays (42,000 of them) are far too large to send to a phone, so they stay
+ * in lib/data/psgc-barangays.ts and are served a city at a time by
+ * /api/psgc/barangays.
  */
-export interface Place {
-  code: string;
+
+/** A city or municipality, with the index the barangay lookup is keyed on. */
+export interface City {
   name: string;
+  /** Position in CITIES — what barangaysOfCity() takes. */
+  index: number;
 }
 
-/** Metro Manila is not a province in the PSGC, but it is the answer people
- *  give when asked for one, so it is listed as though it were. */
-export const NCR_CODE = "__ncr";
-
-export const PROVINCES = provincesRaw as Place[];
-
-const CITIES = citiesRaw as Record<string, Place[]>;
-
-/** Cities and municipalities inside a province, already sorted by name. */
-export function citiesOf(provinceCode: string): Place[] {
-  return CITIES[provinceCode] ?? [];
-}
+export { PROVINCES };
 
 /**
  * Fold a place name down to something two spellings of it can agree on:
@@ -63,19 +63,21 @@ export function matches(name: string, query: string): boolean {
   return normalize(name).includes(q);
 }
 
-/** The province with this name, however it was spelled. */
-export function findProvince(name: string): Place | undefined {
-  const n = normalize(name);
-  if (!n) return undefined;
-  return PROVINCES.find((p) => normalize(p.name) === n);
+/** The cities and municipalities of one province, sorted by name. */
+export function citiesOf(province: string): City[] {
+  const p = normalize(province);
+  if (!p) return [];
+  const provinceIndex = PROVINCES.findIndex((n) => normalize(n) === p);
+  if (provinceIndex < 0) return [];
+  return CITIES.map((c, index) => ({ name: c[0], index, province: c[1] }))
+    .filter((c) => c.province === provinceIndex)
+    .map(({ name, index }) => ({ name, index }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** The city or municipality with this name inside a given province. */
-export function findCity(
-  provinceCode: string,
-  name: string
-): Place | undefined {
+/** The city with this name inside a province, however it was spelled. */
+export function findCity(province: string, name: string): City | undefined {
   const n = normalize(name);
   if (!n) return undefined;
-  return citiesOf(provinceCode).find((c) => normalize(c.name) === n);
+  return citiesOf(province).find((c) => normalize(c.name) === n);
 }

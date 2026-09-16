@@ -2,14 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, Loader2, Pencil } from "lucide-react";
-import {
-  PROVINCES,
-  citiesOf,
-  findCity,
-  findProvince,
-  matches,
-  type Place,
-} from "@/lib/psgc";
+import { PROVINCES, citiesOf, findCity, matches, type City } from "@/lib/psgc";
 
 /* ---------------------------------------------------------------------------
    One field: type to narrow, tap to choose, or keep what you typed.
@@ -212,21 +205,14 @@ export function PlacePicker({
 }) {
   const star = required ? " *" : "";
 
-  // The codes are worked back out from the stored names, so stepping back into
-  // this form finds the lists exactly as they were left.
-  const provincePlace: Place | undefined = useMemo(
-    () => findProvince(province),
-    [province]
+  // Worked back out from the stored names, so stepping back into this form
+  // finds the lists exactly as they were left.
+  const cityList = useMemo(() => citiesOf(province), [province]);
+  const cityPlace: City | undefined = useMemo(
+    () => findCity(province, city),
+    [province, city]
   );
-  const cityPlace: Place | undefined = useMemo(
-    () => (provincePlace ? findCity(provincePlace.code, city) : undefined),
-    [provincePlace, city]
-  );
-
-  const cityOptions = useMemo(
-    () => (provincePlace ? citiesOf(provincePlace.code).map((c) => c.name) : []),
-    [provincePlace]
-  );
+  const cityOptions = useMemo(() => cityList.map((c) => c.name), [cityList]);
 
   const [brgyOptions, setBrgyOptions] = useState<string[]>([]);
   const [loadingBrgy, setLoadingBrgy] = useState(false);
@@ -238,7 +224,7 @@ export function PlacePicker({
     }
     let live = true;
     setLoadingBrgy(true);
-    fetch(`/api/psgc/barangays?city=${encodeURIComponent(cityPlace.code)}`)
+    fetch(`/api/psgc/barangays?city=${cityPlace.index}`)
       .then((r) => (r.ok ? r.json() : { names: [] }))
       // A failed fetch is not a dead end: the field still takes what they type.
       .catch(() => ({ names: [] as string[] }))
@@ -258,7 +244,7 @@ export function PlacePicker({
       <Combo
         label={(labels?.province ?? "Province") + star}
         value={province}
-        options={PROVINCES.map((p) => p.name)}
+        options={PROVINCES}
         onChange={(v) =>
           // A new province makes the old city and barangay wrong, not just
           // stale — clearing them is the only honest thing to do.
