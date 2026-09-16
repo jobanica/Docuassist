@@ -27,5 +27,7 @@ comment on column services.online_price is
 -- Seed the prices advertised on the landing page.
 update services set online_price = 365 where code in ('psa_birth', 'psa_marriage', 'psa_death');
 update services set online_price = 420 where code = 'cenomar';
--- The IDs carry no PSA fee, so the two channels charge the same.
+-- The IDs are the widest gap of the three: COD carries the same delivery risk
+-- as a certificate, while prepaid does not.
 update services set online_price = 275 where code in ('tin_id', 'philhealth_id');
+update services set price = 685 where code in ('tin_id', 'philhealth_id');
