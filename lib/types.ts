@@ -6,6 +6,7 @@ export type StatusCode =
   | "processing"
   | "released"
   | "shipped"
+  | "out_for_delivery"
   | "delivered"
   | "cancelled"
   | "returned";

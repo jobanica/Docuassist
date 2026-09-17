@@ -16,7 +16,8 @@ import type { StatusCode } from "@/lib/types";
 export const dynamic = "force-dynamic";
 
 const PIPELINE_CODES = [
-  "new_inquiry", "details_received", "processing", "released", "shipped", "delivered",
+  "new_inquiry", "details_received", "processing", "released", "shipped",
+  "out_for_delivery", "delivered",
 ];
 
 export default async function DashboardPage({

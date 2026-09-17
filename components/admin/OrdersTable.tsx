@@ -26,7 +26,12 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { peso } from "@/lib/money";
 import { fmtDate, fmtDateTime } from "@/lib/dates";
-import { aging, attemptBadgeClasses, nextStatus } from "@/lib/status";
+import {
+  aging,
+  attemptBadgeClasses,
+  nextStatus,
+  withCourier,
+} from "@/lib/status";
 import type { OrderStatus, Service, StatusCode } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -120,7 +125,7 @@ export const RESHIP_REQUESTED = "__reship_requested";
 export const PAYMENT_TO_VERIFY = "__payment_to_verify";
 
 function needsCall(o: OrderRow): boolean {
-  return o.status === "shipped" && o.delivery_attempts > 0;
+  return withCourier(o.status) && o.delivery_attempts > 0;
 }
 
 const agingClasses: Record<string, string> = {
@@ -368,7 +373,9 @@ export function OrdersTable({
       } as const;
     }
     const gone = rows.filter((o) =>
-      ["shipped", "delivered", "returned", "cancelled"].includes(o.status)
+      ["shipped", "out_for_delivery", "delivered", "returned", "cancelled"].includes(
+        o.status
+      )
     );
     if (gone.length > 0) {
       return {
@@ -1041,7 +1048,7 @@ export function OrdersTable({
                           Online
                         </Badge>
                       )}
-                      {o.delivery_attempts > 0 && o.status === "shipped" && (
+                      {o.delivery_attempts > 0 && withCourier(o.status) && (
                         <Badge className={attemptBadgeClasses(o.delivery_attempts)}>
                           Attempt {o.delivery_attempts}/3
                         </Badge>

@@ -29,7 +29,7 @@ export function PublicStepper({
 
   const estimateFor = (code: StatusCode): string | null => {
     if (code === "released") return info.expected_release_date;
-    if (code === "shipped" || code === "delivered")
+    if (code === "shipped" || code === "out_for_delivery" || code === "delivered")
       return info.expected_delivery_date;
     return null;
   };

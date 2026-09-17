@@ -9,7 +9,13 @@ import { fmtDateTime } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
-const ORDER = ["details_received", "shipped", "failed_attempt", "delivered"];
+const ORDER = [
+  "details_received",
+  "shipped",
+  "out_for_delivery",
+  "failed_attempt",
+  "delivered",
+];
 
 const statusTone: Record<string, string> = {
   sent: "bg-emerald-100 text-emerald-700",

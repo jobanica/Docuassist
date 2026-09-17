@@ -1,5 +1,6 @@
 import { peso } from "./money";
 import type { TrackingInfo } from "./tracking";
+import { withCourier } from "./status";
 
 /** Replace {token} placeholders; unknown/empty tokens collapse cleanly. */
 export function interpolate(
@@ -47,7 +48,7 @@ export interface AttemptNotice {
  * least one failed attempt. Escalates at attempts 2–3.
  */
 export function attemptNotice(info: TrackingInfo): AttemptNotice | null {
-  if (info.status !== "shipped" || info.delivery_attempts <= 0) return null;
+  if (!withCourier(info.status) || info.delivery_attempts <= 0) return null;
   const n = info.delivery_attempts;
   const reason = latestFailedReason(info);
   const total = peso(info.total_amount);
@@ -74,6 +75,9 @@ export function statusPillClasses(code: string): string {
       return "bg-emerald-50 text-emerald-700 ring-emerald-100";
     case "shipped":
       return "bg-blue-50 text-blue-700 ring-blue-100";
+    // Nearly there — brighter than shipped, still not the green of arrived.
+    case "out_for_delivery":
+      return "bg-cyan-50 text-cyan-800 ring-cyan-100";
     case "released":
       return "bg-violet-50 text-violet-700 ring-violet-100";
     case "processing":

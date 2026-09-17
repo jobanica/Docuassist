@@ -15,7 +15,7 @@ import { shippingFee } from "@/lib/actions/settings";
 import { nameCheckKey } from "@/lib/parse/surname";
 import { missingIdNumber, verificationCount } from "@/lib/id-verification";
 import { idVerificationFee } from "@/lib/actions/settings";
-import { nextStatus, canCancel, PIPELINE } from "@/lib/status";
+import { nextStatus, canCancel, withCourier, PIPELINE } from "@/lib/status";
 import { addDaysISO } from "@/lib/dates";
 import { notifyOrder } from "@/lib/sms/notify";
 import type { StatusCode } from "@/lib/types";
@@ -279,6 +279,9 @@ export async function advanceStatus(
       throw new Error(
         "Use “Mark as Shipped” — a courier and tracking number are required."
       );
+    }
+    if (target === "out_for_delivery") {
+      throw new Error("Use “Out for Delivery” — it texts the customer.");
     }
     if (target === "delivered") {
       throw new Error("Use “Mark as Delivered” to record COD collection.");
@@ -611,6 +614,58 @@ export async function markShipped(
   });
 }
 
+/**
+ * The rider has it today.
+ *
+ * Deliberately its own action rather than a step on the generic "advance"
+ * button: it is the one status change the customer has to *do* something
+ * about — be in, have their phone on, have the exact COD amount ready — so it
+ * is the one that texts them. Nothing else about the order changes.
+ */
+export async function markOutForDelivery(
+  orderId: string,
+  note?: string
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    const supabase = createClient();
+
+    const { data: order, error } = await supabase
+      .from("orders")
+      .select("status")
+      .eq("id", orderId)
+      .single();
+    if (error) throw new Error(error.message);
+    if (order.status !== "shipped") {
+      throw new Error(
+        "Only a shipped order can be marked out for delivery."
+      );
+    }
+
+    const { error: upErr } = await supabase
+      .from("orders")
+      .update({
+        status: "out_for_delivery",
+        out_for_delivery_at: new Date().toISOString(),
+      })
+      .eq("id", orderId);
+    if (upErr) throw new Error(upErr.message);
+
+    await supabase.from("order_status_history").insert({
+      order_id: orderId,
+      status: "out_for_delivery",
+      event_type: "status_change",
+      note: note?.trim() || null,
+      changed_by: staff.id,
+    });
+
+    await notifyOrder("out_for_delivery", orderId);
+
+    revalidatePath(`/orders/${orderId}`);
+    revalidatePath("/orders");
+  });
+}
+
 /** Expected delivery = ship date + max(shipping_days_estimate) across items. */
 async function computeShippingEstimate(orderId: string, from: Date) {
   const supabase = createClient();
@@ -647,8 +702,10 @@ export async function logFailedAttempt(
       .eq("id", orderId)
       .single();
     if (error) throw new Error(error.message);
-    if (order.status !== "shipped") {
-      throw new Error("Failed attempts can only be logged while shipped.");
+    if (!withCourier(order.status as StatusCode)) {
+      throw new Error(
+        "Failed attempts can only be logged while the parcel is with the courier."
+      );
     }
     if (order.delivery_attempts >= 3) {
       throw new Error(
@@ -701,8 +758,10 @@ export async function markDelivered(
       .eq("id", orderId)
       .single();
     if (error) throw new Error(error.message);
-    if (order.status !== "shipped") {
-      throw new Error("Only a shipped order can be marked as delivered.");
+    if (!withCourier(order.status as StatusCode)) {
+      throw new Error(
+        "Only an order that is with the courier can be marked as delivered."
+      );
     }
 
     const { error: upErr } = await supabase
@@ -782,8 +841,10 @@ export async function markReturned(
       .eq("id", orderId)
       .single();
     if (error) throw new Error(error.message);
-    if (order.status !== "shipped") {
-      throw new Error("Only a shipped order can be returned to sender.");
+    if (!withCourier(order.status as StatusCode)) {
+      throw new Error(
+        "Only an order that is with the courier can be returned to sender."
+      );
     }
 
     const { error: upErr } = await supabase
@@ -833,7 +894,7 @@ export async function requestReship(
       .eq("id", orderId)
       .single();
     if (error) throw new Error(error.message);
-    if (order.status !== "shipped" && order.status !== "returned") {
+    if (!withCourier(order.status as StatusCode) && order.status !== "returned") {
       throw new Error(
         "A reship can only be requested on an order that is out for delivery or has come back."
       );
@@ -1248,7 +1309,9 @@ export async function combineOrders(
     // shipping is arranged: after that there is a courier and a tracking
     // number per parcel, and the parcels are already separate.
     const tooLate = rows.filter((r: any) =>
-      ["shipped", "delivered", "returned", "cancelled"].includes(r.status)
+      ["shipped", "out_for_delivery", "delivered", "returned", "cancelled"].includes(
+        r.status
+      )
     );
     if (tooLate.length > 0) {
       throw new Error(

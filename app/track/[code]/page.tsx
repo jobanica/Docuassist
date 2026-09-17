@@ -25,6 +25,7 @@ import {
   NO_CANCELLATION,
 } from "@/lib/publicCopy";
 import { peso } from "@/lib/money";
+import { withCourier } from "@/lib/status";
 
 export const dynamic = "force-dynamic";
 
@@ -109,7 +110,7 @@ export default async function TrackPage({
   const helper = statusHelper(info);
   const notice = attemptNotice(info);
   const showCod =
-    (info.status === "shipped" || info.status === "delivered") &&
+    (withCourier(info.status) || info.status === "delivered") &&
     info.payment_status !== "paid";
 
   return (

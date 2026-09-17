@@ -8,10 +8,27 @@ export const PIPELINE: StatusCode[] = [
   "processing",
   "released",
   "shipped",
+  "out_for_delivery",
   "delivered",
 ];
 
 export const TERMINAL: StatusCode[] = ["delivered", "cancelled", "returned"];
+
+/**
+ * The stages where the parcel is out of our hands and in the courier's.
+ *
+ * Everything that can happen to a parcel on the road — a failed attempt, a
+ * return, a delivery, a customer asking for a reship — can happen at either
+ * of these, so the guards ask this rather than naming one stage. Before this
+ * existed they all said `status === "shipped"`, which quietly meant marking an
+ * order Out for Delivery would have disabled every button that matters.
+ */
+export const WITH_COURIER: StatusCode[] = ["shipped", "out_for_delivery"];
+
+/** Is the parcel on the road right now? */
+export function withCourier(code: StatusCode): boolean {
+  return WITH_COURIER.includes(code);
+}
 
 /** Next status in the pipeline, or null if there is none / status is terminal. */
 export function nextStatus(code: StatusCode): StatusCode | null {
@@ -83,6 +100,10 @@ export function statusBadgeClasses(code: StatusCode): string {
       return "bg-violet-100 text-violet-700";
     case "shipped":
       return "bg-blue-100 text-blue-700";
+    // A shade further along than shipped, a shade short of delivered — the
+    // board should be able to tell them apart at a glance.
+    case "out_for_delivery":
+      return "bg-cyan-100 text-cyan-800";
     case "delivered":
       return "bg-emerald-100 text-emerald-700";
     case "cancelled":

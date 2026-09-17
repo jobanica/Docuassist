@@ -10,6 +10,7 @@ const SEMAPHORE_ENDPOINT = "https://api.semaphore.co/api/v4/messages";
 export type SmsEvent =
   | "details_received"
   | "shipped"
+  | "out_for_delivery"
   | "failed_attempt"
   | "delivered"
   | "otp";

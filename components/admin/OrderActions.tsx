@@ -24,6 +24,7 @@ import {
   correctStatusBackward,
   cancelOrder,
   markShipped,
+  markOutForDelivery,
   logFailedAttempt,
   markDelivered,
   markReturned,
@@ -35,6 +36,7 @@ import { fmtDate } from "@/lib/dates";
 import {
   nextStatus,
   canCancel,
+  withCourier,
   PIPELINE,
   FAILED_ATTEMPT_REASONS,
 } from "@/lib/status";
@@ -46,6 +48,7 @@ type Panel =
   | "correct"
   | "cancel"
   | "ship"
+  | "outfordelivery"
   | "attempt"
   | "deliver"
   | "return"
@@ -121,7 +124,7 @@ export function OrderActions({
   }
 
   const canRequestReship =
-    (status === "shipped" || status === "returned") && !reshipRequestedAt;
+    (withCourier(status) || status === "returned") && !reshipRequestedAt;
 
   return (
     <div className="space-y-3">
@@ -153,7 +156,10 @@ export function OrderActions({
 
       <div className="flex flex-wrap gap-2">
         {/* Plain forward advance (up to released) */}
-        {upcoming && upcoming !== "shipped" && upcoming !== "delivered" && (
+        {upcoming &&
+          upcoming !== "shipped" &&
+          upcoming !== "out_for_delivery" &&
+          upcoming !== "delivered" && (
           <Button size="sm" onClick={() => toggle("advance")}>
             <ArrowRight className="h-4 w-4" /> Advance to {labelOf(upcoming)}
           </Button>
@@ -166,8 +172,17 @@ export function OrderActions({
           </Button>
         )}
 
-        {/* shipped: attempts / delivered / returned */}
+        {/* The rider has it today. Its own button because it is the one
+            status change the customer must act on — be in, phone on, exact
+            COD amount ready — so it is the one that texts them. */}
         {status === "shipped" && (
+          <Button size="sm" onClick={() => toggle("outfordelivery")}>
+            <Truck className="h-4 w-4" /> Out for delivery
+          </Button>
+        )}
+
+        {/* With the courier: attempts / delivered / returned */}
+        {withCourier(status) && (
           <>
             <Button size="sm" onClick={() => toggle("deliver")}>
               <PackageCheck className="h-4 w-4" /> Mark as Delivered
@@ -219,11 +234,34 @@ export function OrderActions({
         )}
       </div>
 
-      {atMax && status === "shipped" && (
+      {atMax && withCourier(status) && (
         <p className="rounded-md bg-red-50 p-2 text-xs text-red-700">
           3 of 3 delivery attempts failed. The courier will return this parcel —
           mark it as Returned once it&apos;s back.
         </p>
+      )}
+
+      {/* --- Out for delivery --- */}
+      {panel === "outfordelivery" && (
+        <Box>
+          <p className="text-xs text-muted-foreground">
+            Marks the parcel as out with the rider today, and sends the
+            out-for-delivery text if that notification is switched on.
+          </p>
+          <Label>Optional note</Label>
+          <Textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+          />
+          <Button
+            size="sm"
+            disabled={pending}
+            onClick={() => run(() => markOutForDelivery(orderId, note))}
+          >
+            {pending ? "Saving…" : "Confirm → Out for Delivery"}
+          </Button>
+        </Box>
       )}
 
       {/* --- Advance --- */}
@@ -387,7 +425,7 @@ export function OrderActions({
         <Box>
           <p className="text-sm text-muted-foreground">
             Flags that the customer wants this sent again. Nothing moves yet —
-            {status === "shipped"
+            {withCourier(status)
               ? " the parcel is still on its way back."
               : " use Reship when you're ready to send it out."}{" "}
             When it's received, the order will show the request so it can be
