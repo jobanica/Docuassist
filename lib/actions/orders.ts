@@ -15,7 +15,13 @@ import { shippingFee } from "@/lib/actions/settings";
 import { nameCheckKey } from "@/lib/parse/surname";
 import { missingIdNumber, verificationCount } from "@/lib/id-verification";
 import { idVerificationFee } from "@/lib/actions/settings";
-import { nextStatus, canCancel, withCourier, PIPELINE } from "@/lib/status";
+import {
+  nextStatus,
+  canCancel,
+  withCourier,
+  PIPELINE,
+  TERMINAL,
+} from "@/lib/status";
 import { addDaysISO } from "@/lib/dates";
 import { notifyOrder } from "@/lib/sms/notify";
 import type { StatusCode } from "@/lib/types";
@@ -611,6 +617,71 @@ export async function markShipped(
 
     revalidatePath(`/orders/${orderId}`);
     revalidatePath("/orders");
+  });
+}
+
+/**
+ * Write the order off because the customer has gone unreachable.
+ *
+ * The case this exists for: the document is already filed and paid for, and
+ * the customer then blocks us on Messenger — or changes number, or simply
+ * stops replying. The PSA fee is spent and no revenue is ever coming, which
+ * is the same hole in the same pocket as a parcel coming back, so it lands in
+ * the RTS losses.
+ *
+ * What it is deliberately NOT is a courier failure. The delivery-failure rate
+ * and the per-courier table both stay keyed on 'returned', because blaming
+ * J&T for a customer who stopped answering would quietly make a good courier
+ * look bad — and that number is used to decide who we ship with.
+ *
+ * Allowed from any live stage. Being blocked before the parcel ever shipped
+ * is the common case; being blocked after it shipped and before it comes back
+ * is rarer but real.
+ */
+export async function markBlocked(
+  orderId: string,
+  reason: string
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    if (!reason.trim()) {
+      throw new Error("Say what happened — it is the record of the write-off.");
+    }
+
+    const supabase = createClient();
+    const { data: order, error } = await supabase
+      .from("orders")
+      .select("status")
+      .eq("id", orderId)
+      .single();
+    if (error) throw new Error(error.message);
+    if (TERMINAL.includes(order.status as StatusCode)) {
+      throw new Error("This order is already closed.");
+    }
+
+    const { error: upErr } = await supabase
+      .from("orders")
+      .update({
+        status: "blocked",
+        blocked_at: new Date().toISOString(),
+        return_reason: reason.trim(),
+        // Nobody is waiting on a reship for an order we cannot deliver.
+        reship_requested_at: null,
+      })
+      .eq("id", orderId);
+    if (upErr) throw new Error(upErr.message);
+
+    await supabase.from("order_status_history").insert({
+      order_id: orderId,
+      status: "blocked",
+      event_type: "status_change",
+      note: reason.trim(),
+      changed_by: staff.id,
+    });
+
+    revalidatePath(`/orders/${orderId}`);
+    revalidatePath("/orders");
+    revalidatePath("/sales");
   });
 }
 

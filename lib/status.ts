@@ -12,7 +12,12 @@ export const PIPELINE: StatusCode[] = [
   "delivered",
 ];
 
-export const TERMINAL: StatusCode[] = ["delivered", "cancelled", "returned"];
+export const TERMINAL: StatusCode[] = [
+  "delivered",
+  "cancelled",
+  "returned",
+  "blocked",
+];
 
 /**
  * The stages where the parcel is out of our hands and in the courier's.
@@ -60,9 +65,7 @@ export const PROCESSING_ALERT_DAYS = 14;
  * with the agreed thresholds — the others keep a softer nudge.
  */
 export function aging(code: StatusCode, statusSince: string): Aging {
-  if (TERMINAL.includes(code) || code === "cancelled" || code === "returned") {
-    return "none";
-  }
+  if (TERMINAL.includes(code)) return "none";
   const days = daysSince(statusSince);
   const alertAt = code === "processing" ? PROCESSING_ALERT_DAYS : 10;
   const warnAt = code === "processing" ? PROCESSING_WARN_DAYS : 6;
@@ -110,6 +113,10 @@ export function statusBadgeClasses(code: StatusCode): string {
       return "bg-gray-200 text-gray-600";
     case "returned":
       return "bg-red-100 text-red-700";
+    // Lost like a return, but for a different reason — a different red so the
+    // board can tell "the parcel came back" from "we lost the customer".
+    case "blocked":
+      return "bg-rose-200 text-rose-900";
     default:
       return "bg-slate-100 text-slate-700";
   }
@@ -121,6 +128,21 @@ export function attemptBadgeClasses(attempts: number): string {
   if (attempts === 2) return "bg-amber-100 text-amber-800";
   return "bg-slate-100 text-slate-700";
 }
+
+/**
+ * Why an order was written off as unreachable.
+ *
+ * Offered as a list rather than a free-text box so the losses can be counted
+ * by cause later — "blocked us" and "number no longer working" are different
+ * problems, and only one of them is about the customer changing their mind.
+ */
+export const BLOCKED_REASONS = [
+  "Blocked us on Messenger",
+  "Not replying / seen-zoned",
+  "Mobile number unreachable",
+  "Refused the order after processing",
+  "Wrong or fake contact details",
+];
 
 /** Common failed-delivery reasons offered to staff (§4). */
 export const FAILED_ATTEMPT_REASONS = [

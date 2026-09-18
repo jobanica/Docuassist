@@ -9,7 +9,8 @@ export type StatusCode =
   | "out_for_delivery"
   | "delivered"
   | "cancelled"
-  | "returned";
+  | "returned"
+  | "blocked";
 
 /** A supplier is an outside partner who processes some documents for us. They
  *  are not staff: the database's is_staff() excludes them, so they can read no

@@ -102,7 +102,7 @@ export default async function DashboardPage({
               ? `${s?.rts_docs} document${s?.rts_docs === 1 ? "" : "s"} × ${peso(
                   s?.rts_cost_per_doc ?? 0
                 )}`
-              : "nothing returned"
+              : "nothing lost"
           }
           tone="bad"
         />
@@ -112,8 +112,8 @@ export default async function DashboardPage({
           value={peso(s?.net_amount ?? 0)}
           sub={
             (s?.rts_count ?? 0) > 0
-              ? `booked less ${s?.rts_count} returned`
-              : "nothing returned to deduct"
+              ? `booked less ${s?.rts_count} lost`
+              : "nothing lost to deduct"
           }
         />
       </div>
@@ -222,22 +222,25 @@ export default async function DashboardPage({
       {/* Returned orders */}
       <Card>
         <h2 className="mb-1 font-semibold text-slate-900">
-          Returned orders ({sales.returned.length})
+          Lost orders ({sales.returned.length})
         </h2>
         <p className="mb-3 text-xs text-slate-500">
-          Reasons and destinations, so patterns show up
+          Parcels that came back, and customers we could not reach — reasons and
+          destinations, so patterns show up
         </p>
         <Table
-          head={["Customer", "Courier", "Reason", "Lost", "Returned"]}
+          head={["Customer", "How", "Reason", "Lost", "Date"]}
           rows={sales.returned.map((r) => [
             r.customer_name + (r.city ? ` · ${r.city}` : ""),
-            r.courier_name ?? "—",
+            // A blocked order has no courier to name, and saying "—" there
+            // would read as missing data rather than as the actual answer.
+            r.blocked ? "Blocked" : r.courier_name ?? "—",
             (r.return_reason ?? "—") +
               (r.delivery_attempts > 0 ? ` (${r.delivery_attempts}/3)` : ""),
             `− ${peso(r.loss_amount)}`,
             fmtDate(r.returned_at),
           ])}
-          empty="No returns in this range. 🎉"
+          empty="Nothing lost in this range. 🎉"
           redIndex={3}
         />
       </Card>

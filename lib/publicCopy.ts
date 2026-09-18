@@ -83,6 +83,7 @@ export function statusPillClasses(code: string): string {
     case "processing":
       return "bg-amber-50 text-amber-800 ring-amber-100";
     case "returned":
+    case "blocked":
       return "bg-rose-50 text-rose-700 ring-rose-100";
     case "cancelled":
       return "bg-slate-100 text-slate-600 ring-slate-200";

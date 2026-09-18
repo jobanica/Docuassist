@@ -67,6 +67,9 @@ export interface ReturnedOrderRow {
   delivery_attempts: number;
   return_reason: string | null;
   returned_at: string;
+  /** True when the customer went unreachable rather than the parcel coming
+   *  back. Same money, different remedy — and no courier to blame. */
+  blocked: boolean;
 }
 
 /** Named ranges offered on the dashboard, plus a custom range. */

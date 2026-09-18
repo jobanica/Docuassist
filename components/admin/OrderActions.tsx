@@ -13,6 +13,7 @@ import {
   RefreshCw,
   PackagePlus,
   CheckCircle2,
+  UserX,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toMessage, type ActionResult, unwrap } from "@/lib/action-result";
@@ -25,6 +26,7 @@ import {
   cancelOrder,
   markShipped,
   markOutForDelivery,
+  markBlocked,
   logFailedAttempt,
   markDelivered,
   markReturned,
@@ -38,7 +40,9 @@ import {
   canCancel,
   withCourier,
   PIPELINE,
+  TERMINAL,
   FAILED_ATTEMPT_REASONS,
+  BLOCKED_REASONS,
 } from "@/lib/status";
 import { peso } from "@/lib/money";
 import type { Courier, OrderStatus, StatusCode } from "@/lib/types";
@@ -49,6 +53,7 @@ type Panel =
   | "cancel"
   | "ship"
   | "outfordelivery"
+  | "blocked"
   | "attempt"
   | "deliver"
   | "return"
@@ -232,6 +237,14 @@ export function OrderActions({
             <Ban className="h-4 w-4" /> Cancel
           </Button>
         )}
+        {/* The customer has gone unreachable on an order already paid for and
+            filed. Available at every live stage, because being blocked before
+            the parcel ships is the common case. */}
+        {!TERMINAL.includes(status) && (
+          <Button size="sm" variant="outline" onClick={() => toggle("blocked")}>
+            <UserX className="h-4 w-4" /> Blocked
+          </Button>
+        )}
       </div>
 
       {atMax && withCourier(status) && (
@@ -239,6 +252,52 @@ export function OrderActions({
           3 of 3 delivery attempts failed. The courier will return this parcel —
           mark it as Returned once it&apos;s back.
         </p>
+      )}
+
+      {/* --- Blocked by the customer --- */}
+      {panel === "blocked" && (
+        <Box>
+          <p className="text-sm text-muted-foreground">
+            Closes this order as a lost sale. The fee is already spent, so it
+            goes into the RTS losses on the sales page alongside the parcels
+            that came back — but never against the courier, who had nothing to
+            do with it.
+          </p>
+          <Label>What happened? *</Label>
+          <select
+            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          >
+            <option value="">Pick a reason…</option>
+            {BLOCKED_REASONS.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
+          <Textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+            placeholder="Anything else worth recording (optional)"
+          />
+          <Button
+            size="sm"
+            variant="destructive"
+            disabled={pending || !reason}
+            onClick={() =>
+              run(() =>
+                markBlocked(
+                  orderId,
+                  note.trim() ? `${reason} — ${note.trim()}` : reason
+                )
+              )
+            }
+          >
+            {pending ? "Saving…" : "Confirm — write off as lost"}
+          </Button>
+        </Box>
       )}
 
       {/* --- Out for delivery --- */}
