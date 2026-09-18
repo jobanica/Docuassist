@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { peso } from "@/lib/money";
 import { fmtDate, fmtDateTime } from "@/lib/dates";
 import {
+  ageLabel,
   aging,
   attemptBadgeClasses,
   nextStatus,
@@ -970,6 +971,7 @@ export function OrdersTable({
               <th className="px-4 py-3 font-medium">
                 {onCallList ? "Last attempt" : "Created"}
               </th>
+              <th className="px-4 py-3 font-medium">Updated</th>
               <th className="px-4 py-3 font-medium">Code</th>
             </tr>
           </thead>
@@ -1141,13 +1143,35 @@ export function OrdersTable({
                       </div>
                     )}
                   </td>
+                  {/* How long it has sat where it is. The relative figure
+                      leads because that is what a board is scanned for — an
+                      order stuck three weeks at Processing is the one to open,
+                      and "3 weeks" says that at a glance where a date makes
+                      you do the arithmetic. It carries the same amber/red the
+                      row already uses, so the two never disagree. */}
+                  <td className="px-4 py-3">
+                    <span
+                      className={
+                        age === "alert"
+                          ? "font-semibold text-red-700"
+                          : age === "warn"
+                            ? "font-medium text-amber-800"
+                            : "text-muted-foreground"
+                      }
+                    >
+                      {ageLabel(o.status_since)}
+                    </span>
+                    <div className="text-xs text-muted-foreground/80">
+                      {fmtDate(o.status_since)}
+                    </div>
+                  </td>
                   <td className="px-4 py-3 font-mono text-xs">{o.tracking_code}</td>
                 </tr>
               );
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
+                <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
                   {onCallList
                   ? "No failed deliveries right now — nothing to chase."
                   : "No orders match your filters."}
