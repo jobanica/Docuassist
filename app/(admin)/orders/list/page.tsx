@@ -103,6 +103,29 @@ export default async function OrderListPrintPage({
     })
   );
 
+  /**
+   * Alphabetical by the name printed on the line.
+   *
+   * A muster list is read by looking someone up, not by scanning it top to
+   * bottom — so it sorts on the name in the Name column, which is the person
+   * on the certificate where that differs from the customer.
+   *
+   * Case- and accent-insensitive, because half these names are entered in
+   * capitals and half in title case: a plain string sort would put every
+   * SANCHEZ before every Abad. `numeric` keeps a "Jose 2nd" next to a
+   * "Jose 10th" rather than between "Jose 1st" and "Jose 3rd".
+   *
+   * Sorted as written, first name first, which is how the names are entered
+   * and how staff will look for them. Guessing which word is the surname
+   * breaks on Dela Cruz and on Jr.
+   */
+  lines.sort((a, b) =>
+    (a.owner ?? a.customer).localeCompare(b.owner ?? b.customer, "en", {
+      sensitivity: "base",
+      numeric: true,
+    })
+  );
+
   const title = (searchParams.title ?? "").trim().slice(0, 60);
   const printedOn = fmtDate(new Date().toISOString());
 
