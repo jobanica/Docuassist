@@ -8,6 +8,7 @@ import {
   Search,
   PhoneCall,
   Printer,
+  ListChecks,
   X,
   ArrowRight,
   AlertCircle,
@@ -703,7 +704,7 @@ export function OrdersTable({
               <strong>
                 {picked.size} order{picked.size === 1 ? "" : "s"} selected
               </strong>{" "}
-              — print their PSA forms, or move them all to the next stage.
+              — print their PSA forms or a list of them, or move them all to the next stage.
             </span>
             <button
               type="button"
@@ -744,6 +745,21 @@ export function OrdersTable({
                 <Combine className="h-4 w-4" /> Combine into one
               </button>
             )}
+            {/* The list that travels with the stack, as opposed to the forms
+                that go in it. Carries the batch name through so the printed
+                sheet says which batch it is, not just how many. */}
+            <button
+              type="button"
+              onClick={() => {
+                const name = tagById.get(tagFilter)?.name;
+                const q = new URLSearchParams({ ids: Array.from(picked).join(",") });
+                if (name) q.set("title", name);
+                router.push(`/orders/list?${q}`);
+              }}
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-[#8a6100]/30 bg-white px-3 text-sm font-semibold text-[#8a6100] shadow-sm hover:bg-[#eda100]/10"
+            >
+              <ListChecks className="h-4 w-4" /> Print list
+            </button>
             <button
               type="button"
               onClick={() =>
