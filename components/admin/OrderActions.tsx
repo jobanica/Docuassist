@@ -27,6 +27,7 @@ import {
   markShipped,
   markOutForDelivery,
   markBlocked,
+  unblockOrder,
   logFailedAttempt,
   markDelivered,
   markReturned,
@@ -54,6 +55,7 @@ type Panel =
   | "ship"
   | "outfordelivery"
   | "blocked"
+  | "unblock"
   | "attempt"
   | "deliver"
   | "return"
@@ -69,6 +71,7 @@ export function OrderActions({
   deliveryAttempts,
   totalAmount,
   reshipRequestedAt,
+  stageBeforeBlocked,
 }: {
   orderId: string;
   status: StatusCode;
@@ -78,6 +81,9 @@ export function OrderActions({
   totalAmount: number;
   /** Set when the customer asked for a reship, maybe before the parcel is back. */
   reshipRequestedAt: string | null;
+  /** The stage this order held before it was written off, so the undo opens
+   *  on the right answer instead of making someone remember it. */
+  stageBeforeBlocked?: StatusCode | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -245,6 +251,14 @@ export function OrderActions({
             <UserX className="h-4 w-4" /> Blocked
           </Button>
         )}
+        {/* Every write-off needs a way back. Marking the wrong order Blocked
+            is a two-second slip, and without this the only way out was a
+            developer with SQL. */}
+        {status === "blocked" && (
+          <Button size="sm" onClick={() => toggle("unblock")}>
+            <RotateCcw className="h-4 w-4" /> Not blocked after all
+          </Button>
+        )}
       </div>
 
       {atMax && withCourier(status) && (
@@ -252,6 +266,52 @@ export function OrderActions({
           3 of 3 delivery attempts failed. The courier will return this parcel —
           mark it as Returned once it&apos;s back.
         </p>
+      )}
+
+      {/* --- Undo the write-off --- */}
+      {panel === "unblock" && (
+        <Box>
+          <p className="text-sm text-muted-foreground">
+            Reopens this order and takes it back out of the RTS losses. It
+            returns to the stage below, keeping the date it originally reached
+            it — so the board still shows how long it has really been there.
+          </p>
+          <Label>Send it back to</Label>
+          <select
+            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            value={target || stageBeforeBlocked || "processing"}
+            onChange={(e) => setTarget(e.target.value as StatusCode)}
+          >
+            {PIPELINE.filter((c) => c !== "delivered").map((c) => (
+              <option key={c} value={c}>
+                {labelOf(c)}
+                {c === stageBeforeBlocked ? " — where it was" : ""}
+              </option>
+            ))}
+          </select>
+          <Label>Reason *</Label>
+          <Textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+            placeholder="e.g. Wrong order — meant to block a different one"
+          />
+          <Button
+            size="sm"
+            disabled={pending || !note.trim()}
+            onClick={() =>
+              run(() =>
+                unblockOrder(
+                  orderId,
+                  (target || stageBeforeBlocked || "processing") as StatusCode,
+                  note
+                )
+              )
+            }
+          >
+            {pending ? "Saving…" : "Confirm — reopen this order"}
+          </Button>
+        </Box>
       )}
 
       {/* --- Blocked by the customer --- */}

@@ -686,6 +686,88 @@ export async function markBlocked(
 }
 
 /**
+ * Undo a write-off: this order was not blocked after all.
+ *
+ * Mistaking one order for another is a two-second slip, and before this the
+ * only way out was a developer with SQL — "Correct status" cannot reach a
+ * blocked order, because blocked is not on the pipeline it walks backwards
+ * along. An action with no undo is a trap, and this one closed a live order
+ * and moved money into the loss column.
+ *
+ * Restores status_since to when the order first reached the stage it is going
+ * back to. Without that the ageing clock resets on every undo, and a job that
+ * has been sitting at Processing for three weeks would come back looking like
+ * it arrived today — which is the one thing the board is watched for.
+ */
+export async function unblockOrder(
+  orderId: string,
+  target: StatusCode,
+  reason: string
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    if (!reason.trim()) throw new Error("A reason is required for corrections.");
+    if (!PIPELINE.includes(target) || target === "delivered") {
+      throw new Error("Pick a live stage to send this order back to.");
+    }
+
+    const supabase = createClient();
+    const { data: order, error } = await supabase
+      .from("orders")
+      .select("status")
+      .eq("id", orderId)
+      .single();
+    if (error) throw new Error(error.message);
+    if (order.status !== "blocked") {
+      throw new Error("This order is not marked as blocked.");
+    }
+
+    // When it first reached the stage it is going back to, if it ever did.
+    const { data: prior } = await supabase
+      .from("order_status_history")
+      .select("created_at")
+      .eq("order_id", orderId)
+      .eq("status", target)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    const { error: upErr } = await supabase
+      .from("orders")
+      .update({
+        status: target,
+        // Cleared, so the order drops out of the loss figures completely
+        // rather than lingering with a write-off date attached.
+        blocked_at: null,
+        return_reason: null,
+      })
+      .eq("id", orderId);
+    if (upErr) throw new Error(upErr.message);
+
+    // Second update on purpose: the status trigger stamps status_since = now()
+    // on any status change, so the original date can only be put back after.
+    if (prior?.created_at) {
+      await supabase
+        .from("orders")
+        .update({ status_since: prior.created_at })
+        .eq("id", orderId);
+    }
+
+    await supabase.from("order_status_history").insert({
+      order_id: orderId,
+      status: target,
+      event_type: "backward_correction",
+      note: reason.trim(),
+      changed_by: staff.id,
+    });
+
+    revalidatePath(`/orders/${orderId}`);
+    revalidatePath("/orders");
+    revalidatePath("/dashboard");
+  });
+}
+
+/**
  * The rider has it today.
  *
  * Deliberately its own action rather than a step on the generic "advance"

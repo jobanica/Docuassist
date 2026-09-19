@@ -244,6 +244,15 @@ export default async function OrderDetailPage({
                   deliveryAttempts={o.delivery_attempts}
                   totalAmount={Number(o.total_amount)}
                   reshipRequestedAt={o.reship_requested_at ?? null}
+                  // The stage it held before the write-off, so the undo opens
+                  // on the right answer rather than a guess.
+                  stageBeforeBlocked={
+                    ((history ?? [])
+                      .filter(
+                        (h: any) => h.status && h.status !== "blocked"
+                      )
+                      .at(-1)?.status ?? null) as StatusCode | null
+                  }
                 />
               </div>
             </CardContent>
