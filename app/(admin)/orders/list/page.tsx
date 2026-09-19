@@ -10,6 +10,24 @@ import { fmtDate } from "@/lib/dates";
 export const dynamic = "force-dynamic";
 
 /**
+ * The order the piles are stacked in at the counter, so the sheet reads down
+ * the same way the stack does: birth first because it is most of every batch,
+ * then CENOMAR, marriage, death, and anything else after.
+ *
+ * Matched on a keyword rather than the exact service name, so renaming
+ * "PSA Birth Certificate" to "PSA Birth Certificate (SECPA)" in Settings does
+ * not silently drop that pile to the bottom of every list. CENOMAR is tested
+ * before marriage on purpose — "CENOMAR (No Marriage Record)" contains the
+ * word marriage, and the wrong order here would file every CENOMAR under it.
+ */
+const DOC_ORDER = [/birth/i, /cenomar|no marriage record/i, /marriage/i, /death/i];
+
+function docRank(name: string): number {
+  const i = DOC_ORDER.findIndex((re) => re.test(name));
+  return i === -1 ? DOC_ORDER.length : i;
+}
+
+/**
  * A muster list: one line per document, on paper.
  *
  * Distinct from /orders/print, which prints the PSA forms themselves. This is
@@ -104,27 +122,42 @@ export default async function OrderListPrintPage({
   );
 
   /**
-   * Alphabetical by the name printed on the line.
+   * Grouped by document, then alphabetical by the name printed on the line.
    *
-   * A muster list is read by looking someone up, not by scanning it top to
-   * bottom — so it sorts on the name in the Name column, which is the person
-   * on the certificate where that differs from the customer.
+   * The counter works one pile at a time — all the birth certificates, then
+   * all the CENOMARs — so a list that interleaves them makes you scan the
+   * whole sheet for every piece of paper you pick up.
    *
-   * Case- and accent-insensitive, because half these names are entered in
-   * capitals and half in title case: a plain string sort would put every
-   * SANCHEZ before every Abad. `numeric` keeps a "Jose 2nd" next to a
-   * "Jose 10th" rather than between "Jose 1st" and "Jose 3rd".
+   * Within a pile, alphabetical: a muster list is read by looking someone up,
+   * not by scanning it top to bottom. Case- and accent-insensitive, because
+   * half these names are entered in capitals and half in title case, and a
+   * plain string sort would put every SANCHEZ before every Abad. `numeric`
+   * keeps a "Jose 2nd" next to a "Jose 10th" rather than between "Jose 1st"
+   * and "Jose 3rd".
    *
    * Sorted as written, first name first, which is how the names are entered
    * and how staff will look for them. Guessing which word is the surname
    * breaks on Dela Cruz and on Jr.
    */
-  lines.sort((a, b) =>
-    (a.owner ?? a.customer).localeCompare(b.owner ?? b.customer, "en", {
-      sensitivity: "base",
-      numeric: true,
-    })
+  lines.sort(
+    (a, b) =>
+      docRank(a.document) - docRank(b.document) ||
+      a.document.localeCompare(b.document, "en", { sensitivity: "base" }) ||
+      (a.owner ?? a.customer).localeCompare(b.owner ?? b.customer, "en", {
+        sensitivity: "base",
+        numeric: true,
+      })
   );
+
+  // One block per document type, in the order just sorted. Each carries its
+  // own count, because the question at the counter is "how many birth
+  // certificates should be in this pile?" and not "how many in total?".
+  const sections: { document: string; lines: typeof lines }[] = [];
+  for (const l of lines) {
+    const last = sections[sections.length - 1];
+    if (last && last.document === l.document) last.lines.push(l);
+    else sections.push({ document: l.document, lines: [l] });
+  }
 
   const title = (searchParams.title ?? "").trim().slice(0, 60);
   const printedOn = fmtDate(new Date().toISOString());
@@ -157,9 +190,10 @@ export default async function OrderListPrintPage({
             <span>
               <strong>Set paper to Letter (8.5 × 11), layout Portrait.</strong>{" "}
               One line per document — an order with two certificates takes two
-              lines, so the list counts the same as the stack. &ldquo;Date
-              filed&rdquo; is the day the order reached Processing; a dash means
-              it has not been filed yet.
+              lines, so the list counts the same as the stack. Grouped by
+              document with its own count and numbering per block, so each pile
+              reconciles on its own. &ldquo;Date filed&rdquo; is the day the
+              order reached Processing; a dash means it has not been filed yet.
             </span>
           </p>
         </div>
@@ -196,45 +230,58 @@ export default async function OrderListPrintPage({
             <tr className="border-b border-slate-400 text-left uppercase tracking-wide text-slate-600">
               <th className="w-8 py-1.5 pr-2 font-semibold">#</th>
               <th className="py-1.5 pr-2 font-semibold">Name</th>
-              <th className="py-1.5 pr-2 font-semibold">Document</th>
               <th className="w-24 py-1.5 pr-2 font-semibold">Date filed</th>
               <th className="w-24 py-1.5 pr-2 font-semibold">Code</th>
               <th className="w-8 py-1.5 font-semibold">✓</th>
             </tr>
           </thead>
-          <tbody>
-            {lines.map((l, i) => (
-              <tr
-                key={`${l.code}-${i}`}
-                className="break-inside-avoid border-b border-slate-200 align-top"
-              >
-                <td className="py-1.5 pr-2 tabular-nums text-slate-500">
-                  {i + 1}
-                </td>
-                <td className="py-1.5 pr-2 font-medium text-slate-900">
-                  {/* The certificate's own person leads when it is not the
-                      customer — the counter is handing over that person's
-                      document, not the person who ordered it. */}
-                  {l.owner ?? l.customer}
-                  {l.owner && (
-                    <span className="block text-[10px] font-normal text-slate-500">
-                      ordered by {l.customer}
-                    </span>
-                  )}
-                </td>
-                <td className="py-1.5 pr-2 text-slate-700">{l.document}</td>
-                <td className="py-1.5 pr-2 tabular-nums text-slate-700">
-                  {l.filed ? fmtDate(l.filed) : "—"}
-                </td>
-                <td className="py-1.5 pr-2 font-mono text-[10px] text-slate-600">
-                  {l.code}
-                </td>
-                <td className="py-1.5">
-                  <span className="block h-3 w-3 border border-slate-400" />
+          {/* A tbody per document type. The kind is named once at the head of
+              its block instead of repeated on every line, which gives the
+              names the width they need and makes each pile countable on its
+              own. Numbering restarts per block for the same reason. */}
+          {sections.map((sec) => (
+            <tbody key={sec.document}>
+              <tr className="break-inside-avoid">
+                <td
+                  colSpan={5}
+                  className="border-b border-slate-900 pb-1 pt-5 text-[12px] font-bold uppercase tracking-wide text-slate-900 first:pt-2"
+                >
+                  {sec.document}
+                  <span className="ml-2 font-normal normal-case tracking-normal text-slate-600">
+                    — {sec.lines.length} document
+                    {sec.lines.length === 1 ? "" : "s"}
+                  </span>
                 </td>
               </tr>
-            ))}
-          </tbody>
+              {sec.lines.map((l, i) => (
+                <tr
+                  key={`${l.code}-${i}`}
+                  className="break-inside-avoid border-b border-slate-200 align-top"
+                >
+                  <td className="py-1.5 pr-2 tabular-nums text-slate-500">
+                    {i + 1}
+                  </td>
+                  <td className="py-1.5 pr-2 font-medium text-slate-900">
+                    {/* The certificate's own person, when that is not the
+                        customer — the counter is handing over that person's
+                        document, not the person who ordered it. The tracking
+                        code on the same line finds the customer when someone
+                        needs them. */}
+                    {l.owner ?? l.customer}
+                  </td>
+                  <td className="py-1.5 pr-2 tabular-nums text-slate-700">
+                    {l.filed ? fmtDate(l.filed) : "—"}
+                  </td>
+                  <td className="py-1.5 pr-2 font-mono text-[10px] text-slate-600">
+                    {l.code}
+                  </td>
+                  <td className="py-1.5">
+                    <span className="block h-3 w-3 border border-slate-400" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          ))}
         </table>
 
         {lines.length === 0 && (
