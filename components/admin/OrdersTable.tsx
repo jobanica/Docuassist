@@ -40,6 +40,10 @@ import { cn } from "@/lib/utils";
 export interface OrderRow {
   id: string;
   tracking_code: string;
+  /** The courier's own waybill number (J&T and the rest). Null until booked.
+   *  Searchable, because when a courier or a customer rings up about a parcel
+   *  the waybill is the only number either of them is holding. */
+  courier_tracking_number: string | null;
   status: StatusCode;
   status_label: string;
   total_amount: number;
@@ -93,6 +97,15 @@ export interface OrderRow {
  * haven't been returned yet. These are the ones worth phoning: every one
  * recovered before the third attempt is a sale that would otherwise come back.
  */
+/**
+ * Strip a string down to its letters and digits.
+ *
+ * Waybill numbers get written on the parcel with spaces or dashes in them and
+ * read back out without, or the other way round. Comparing both sides bare
+ * means a search for "1234-5678" still finds a waybill stored as "12345678".
+ */
+const squash = (s: string) => s.replace(/[^a-z0-9]/gi, "").toLowerCase();
+
 export const FAILED_ATTEMPTS = "__failed_attempts";
 
 /**
@@ -232,10 +245,22 @@ export function OrdersTable({
         // The document names are searchable too, so an order booked under one
         // customer is found by whoever each certificate is actually for.
         const hay =
-          `${o.customer_name} ${o.customer_phone ?? ""} ${o.tracking_code} ${o.document_search}`.toLowerCase();
+          `${o.customer_name} ${o.customer_phone ?? ""} ${o.tracking_code} ${
+            o.courier_tracking_number ?? ""
+          } ${o.document_search}`.toLowerCase();
+        // Both tracking numbers again with their separators taken out, so a
+        // waybill pasted from the courier's app matches one typed by hand.
+        const bare = squash(
+          `${o.tracking_code} ${o.courier_tracking_number ?? ""}`
+        );
         // Match on any word typed, so "hayana nardo" still finds a row that
         // holds the name — the words can sit in different fields.
-        if (!needle.split(/\s+/).every((w) => hay.includes(w))) return false;
+        if (
+          !needle
+            .split(/\s+/)
+            .every((w) => hay.includes(w) || bare.includes(squash(w)))
+        )
+          return false;
       }
       return true;
     });
@@ -550,7 +575,7 @@ export function OrdersTable({
         <div className="relative min-w-[220px] flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search name, phone, or tracking code"
+            placeholder="Search name, phone, tracking code, or waybill #"
             className="pl-9"
             value={q}
             onChange={(e) => setQ(e.target.value)}

@@ -42,6 +42,7 @@ export default async function OrdersPage() {
           `id, tracking_code, status, total_amount, discount_amount, created_at, status_since,
            delayed_at, delay_reason, supplier_shipped_at, reship_count, reship_requested_at,
            payment_status, payment_submitted_at,
+           courier_tracking_number,
            delivery_attempts, source, created_by,
            customers ( id, full_name, phone, customer_tags ( tag_id ) ),
            staff_users!orders_created_by_fkey ( name ),
@@ -111,6 +112,7 @@ export default async function OrdersPage() {
     return {
       id: o.id,
       tracking_code: o.tracking_code,
+      courier_tracking_number: o.courier_tracking_number ?? null,
       status: o.status,
       status_label: statusLabel.get(o.status) ?? o.status,
       total_amount: Number(o.total_amount),
