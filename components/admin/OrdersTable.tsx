@@ -1013,7 +1013,9 @@ export function OrdersTable({
                 {onCallList ? "Last attempt" : "Created"}
               </th>
               <th className="px-4 py-3 font-medium">Updated</th>
-              <th className="px-4 py-3 font-medium">Code</th>
+              {/* Labelled for both, so the second line under a code is not
+                  a mystery number. */}
+              <th className="px-4 py-3 font-medium">Code / waybill</th>
             </tr>
           </thead>
           <tbody>
@@ -1206,7 +1208,19 @@ export function OrdersTable({
                       {fmtDate(o.status_since)}
                     </div>
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs">{o.tracking_code}</td>
+                  {/* Our code above, the courier's waybill under it. Both
+                      are on the board because they are asked for by different
+                      people: the customer quotes ours, the courier quotes
+                      theirs. Nothing shows until a parcel is booked, which is
+                      the honest answer for an order still being processed. */}
+                  <td className="px-4 py-3 font-mono text-xs">
+                    {o.tracking_code}
+                    {o.courier_tracking_number && (
+                      <div className="text-[11px] text-muted-foreground">
+                        {o.courier_tracking_number}
+                      </div>
+                    )}
+                  </td>
                 </tr>
               );
             })}
