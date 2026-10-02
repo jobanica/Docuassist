@@ -225,16 +225,21 @@ export default async function DashboardPage({
           Lost orders ({sales.returned.length})
         </h2>
         <p className="mb-3 text-xs text-slate-500">
-          Parcels that came back, and customers we could not reach — reasons and
-          destinations, so patterns show up
+          Parcels that came back, customers we could not reach, and deliveries
+          refused at the door — reasons and destinations, so patterns show up
         </p>
         <Table
           head={["Customer", "How", "Reason", "Lost", "Date"]}
           rows={sales.returned.map((r) => [
             r.customer_name + (r.city ? ` · ${r.city}` : ""),
-            // A blocked order has no courier to name, and saying "—" there
-            // would read as missing data rather than as the actual answer.
-            r.blocked ? "Blocked" : r.courier_name ?? "—",
+            // Neither a blocked nor a refused order is the courier's doing,
+            // so naming one would point the finger at the wrong party — and
+            // "—" would read as missing data rather than as the real answer.
+            r.blocked
+              ? "Blocked"
+              : r.rejected
+                ? "Refused"
+                : r.courier_name ?? "—",
             (r.return_reason ?? "—") +
               (r.delivery_attempts > 0 ? ` (${r.delivery_attempts}/3)` : ""),
             `− ${peso(r.loss_amount)}`,

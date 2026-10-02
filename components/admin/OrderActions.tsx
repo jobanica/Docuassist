@@ -9,6 +9,7 @@ import {
   Truck,
   PackageCheck,
   PackageX,
+  ThumbsDown,
   AlertTriangle,
   RefreshCw,
   PackagePlus,
@@ -27,6 +28,7 @@ import {
   markShipped,
   markOutForDelivery,
   markBlocked,
+  markRejected,
   unblockOrder,
   logFailedAttempt,
   markDelivered,
@@ -44,6 +46,7 @@ import {
   TERMINAL,
   FAILED_ATTEMPT_REASONS,
   BLOCKED_REASONS,
+  REJECTED_REASONS,
 } from "@/lib/status";
 import { peso } from "@/lib/money";
 import type { Courier, OrderStatus, StatusCode } from "@/lib/types";
@@ -55,6 +58,7 @@ type Panel =
   | "ship"
   | "outfordelivery"
   | "blocked"
+  | "rejected"
   | "unblock"
   | "attempt"
   | "deliver"
@@ -251,12 +255,20 @@ export function OrderActions({
             <UserX className="h-4 w-4" /> Blocked
           </Button>
         )}
+        {/* Only while the parcel is actually out: a customer cannot refuse
+            something that never reached their door. */}
+        {withCourier(status) && (
+          <Button size="sm" variant="outline" onClick={() => toggle("rejected")}>
+            <ThumbsDown className="h-4 w-4" /> Rejected
+          </Button>
+        )}
         {/* Every write-off needs a way back. Marking the wrong order Blocked
-            is a two-second slip, and without this the only way out was a
-            developer with SQL. */}
-        {status === "blocked" && (
+            or Rejected is a two-second slip, and without this the only way out
+            was a developer with SQL. */}
+        {(status === "blocked" || status === "rejected") && (
           <Button size="sm" onClick={() => toggle("unblock")}>
-            <RotateCcw className="h-4 w-4" /> Not blocked after all
+            <RotateCcw className="h-4 w-4" />{" "}
+            {status === "rejected" ? "Not rejected after all" : "Not blocked after all"}
           </Button>
         )}
       </div>
@@ -310,6 +322,52 @@ export function OrderActions({
             }
           >
             {pending ? "Saving…" : "Confirm — reopen this order"}
+          </Button>
+        </Box>
+      )}
+
+      {/* --- Refused at the door --- */}
+      {panel === "rejected" && (
+        <Box>
+          <p className="text-sm text-muted-foreground">
+            The rider got there and the customer would not take it. Closes this
+            order as a lost sale: the fee is already spent, so it joins the RTS
+            losses alongside the parcels that came back — but never against the
+            courier, who did turn up.
+          </p>
+          <Label>What happened? *</Label>
+          <select
+            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          >
+            <option value="">Pick a reason…</option>
+            {REJECTED_REASONS.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
+          <Textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+            placeholder="Anything else worth recording (optional)"
+          />
+          <Button
+            size="sm"
+            variant="destructive"
+            disabled={pending || !reason}
+            onClick={() =>
+              run(() =>
+                markRejected(
+                  orderId,
+                  note.trim() ? `${reason} — ${note.trim()}` : reason
+                )
+              )
+            }
+          >
+            {pending ? "Saving…" : "Confirm — refused, write off as lost"}
           </Button>
         </Box>
       )}

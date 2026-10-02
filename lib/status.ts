@@ -17,6 +17,7 @@ export const TERMINAL: StatusCode[] = [
   "cancelled",
   "returned",
   "blocked",
+  "rejected",
 ];
 
 /**
@@ -117,6 +118,11 @@ export function statusBadgeClasses(code: StatusCode): string {
     // board can tell "the parcel came back" from "we lost the customer".
     case "blocked":
       return "bg-rose-200 text-rose-900";
+    // The third way a sale dies. Orange rather than another red, because the
+    // one thing the board must never do is make a refusal look like a courier
+    // failure — they are read off the same screen and chased differently.
+    case "rejected":
+      return "bg-orange-100 text-orange-800";
     default:
       return "bg-slate-100 text-slate-700";
   }
@@ -142,6 +148,21 @@ export const BLOCKED_REASONS = [
   "Mobile number unreachable",
   "Refused the order after processing",
   "Wrong or fake contact details",
+];
+
+/**
+ * Why the customer refused the parcel at the door.
+ *
+ * A list rather than free text for the same reason as the write-off reasons
+ * above: "no cash on hand" and "changed their mind" are different problems,
+ * and only one of them is fixed by ringing ahead before the rider sets off.
+ */
+export const REJECTED_REASONS = [
+  "Refused at the door",
+  "No cash for the COD",
+  "Changed their mind",
+  "Says they did not order it",
+  "Not the person who ordered",
 ];
 
 /** Common failed-delivery reasons offered to staff (§4). */

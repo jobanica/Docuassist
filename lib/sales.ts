@@ -70,6 +70,9 @@ export interface ReturnedOrderRow {
   /** True when the customer went unreachable rather than the parcel coming
    *  back. Same money, different remedy — and no courier to blame. */
   blocked: boolean;
+  /** True when the rider got there and the customer refused the parcel.
+   *  Also no courier to blame: the delivery itself worked. */
+  rejected: boolean;
 }
 
 /** Named ranges offered on the dashboard, plus a custom range. */

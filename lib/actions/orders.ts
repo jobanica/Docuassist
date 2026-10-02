@@ -686,13 +686,77 @@ export async function markBlocked(
 }
 
 /**
+ * The customer refused the parcel at the door.
+ *
+ * Different from a failed attempt, which expects the courier to try again,
+ * and from a return, which only says a parcel came back. This one is the
+ * customer saying no to our face: the rider got there, and the sale died
+ * anyway. It closes the order and the money joins the RTS losses — but never
+ * the RTS rate, because a courier that turned up did not fail.
+ *
+ * Only offered while the parcel is actually with the courier. A customer
+ * cannot refuse something that has not left the office, and allowing it
+ * earlier would just be a second, vaguer way of cancelling.
+ */
+export async function markRejected(
+  orderId: string,
+  reason: string
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    if (!reason.trim()) {
+      throw new Error("Say what happened — it is the record of the refusal.");
+    }
+
+    const supabase = createClient();
+    const { data: order, error } = await supabase
+      .from("orders")
+      .select("status")
+      .eq("id", orderId)
+      .single();
+    if (error) throw new Error(error.message);
+    if (!withCourier(order.status as StatusCode)) {
+      throw new Error(
+        "Only a parcel that is out with the courier can be refused."
+      );
+    }
+
+    const { error: upErr } = await supabase
+      .from("orders")
+      .update({
+        status: "rejected",
+        rejected_at: new Date().toISOString(),
+        return_reason: reason.trim(),
+        // Nobody is waiting on a reship for an order that was turned away.
+        reship_requested_at: null,
+      })
+      .eq("id", orderId);
+    if (upErr) throw new Error(upErr.message);
+
+    await supabase.from("order_status_history").insert({
+      order_id: orderId,
+      status: "rejected",
+      event_type: "status_change",
+      note: reason.trim(),
+      changed_by: staff.id,
+    });
+
+    revalidatePath(`/orders/${orderId}`);
+    revalidatePath("/orders");
+    revalidatePath("/sales");
+  });
+}
+
+/**
  * Undo a write-off: this order was not blocked after all.
+ *
+ * Covers a refusal too, which is the same mistake with a different button.
  *
  * Mistaking one order for another is a two-second slip, and before this the
  * only way out was a developer with SQL — "Correct status" cannot reach a
- * blocked order, because blocked is not on the pipeline it walks backwards
- * along. An action with no undo is a trap, and this one closed a live order
- * and moved money into the loss column.
+ * written-off order, because neither ending is on the pipeline it walks
+ * backwards along. An action with no undo is a trap, and these close a live
+ * order and move money into the loss column.
  *
  * Restores status_since to when the order first reached the stage it is going
  * back to. Without that the ageing clock resets on every undo, and a job that
@@ -718,8 +782,8 @@ export async function unblockOrder(
       .eq("id", orderId)
       .single();
     if (error) throw new Error(error.message);
-    if (order.status !== "blocked") {
-      throw new Error("This order is not marked as blocked.");
+    if (order.status !== "blocked" && order.status !== "rejected") {
+      throw new Error("This order is not written off.");
     }
 
     // When it first reached the stage it is going back to, if it ever did.
@@ -736,9 +800,11 @@ export async function unblockOrder(
       .from("orders")
       .update({
         status: target,
-        // Cleared, so the order drops out of the loss figures completely
-        // rather than lingering with a write-off date attached.
+        // Both cleared, whichever one put the order here, so it drops out of
+        // the loss figures completely rather than lingering with a write-off
+        // date attached.
         blocked_at: null,
+        rejected_at: null,
         return_reason: null,
       })
       .eq("id", orderId);
