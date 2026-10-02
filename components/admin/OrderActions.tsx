@@ -75,7 +75,7 @@ export function OrderActions({
   deliveryAttempts,
   totalAmount,
   reshipRequestedAt,
-  stageBeforeBlocked,
+  stageBeforeWriteOff,
 }: {
   orderId: string;
   status: StatusCode;
@@ -85,9 +85,10 @@ export function OrderActions({
   totalAmount: number;
   /** Set when the customer asked for a reship, maybe before the parcel is back. */
   reshipRequestedAt: string | null;
-  /** The stage this order held before it was written off, so the undo opens
-   *  on the right answer instead of making someone remember it. */
-  stageBeforeBlocked?: StatusCode | null;
+  /** The last live stage this order held before it was written off — blocked
+   *  or rejected — so the undo opens on the right answer instead of making
+   *  someone remember it. */
+  stageBeforeWriteOff?: StatusCode | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -291,13 +292,13 @@ export function OrderActions({
           <Label>Send it back to</Label>
           <select
             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-            value={target || stageBeforeBlocked || "processing"}
+            value={target || stageBeforeWriteOff || "processing"}
             onChange={(e) => setTarget(e.target.value as StatusCode)}
           >
             {PIPELINE.filter((c) => c !== "delivered").map((c) => (
               <option key={c} value={c}>
                 {labelOf(c)}
-                {c === stageBeforeBlocked ? " — where it was" : ""}
+                {c === stageBeforeWriteOff ? " — where it was" : ""}
               </option>
             ))}
           </select>
@@ -315,7 +316,7 @@ export function OrderActions({
               run(() =>
                 unblockOrder(
                   orderId,
-                  (target || stageBeforeBlocked || "processing") as StatusCode,
+                  (target || stageBeforeWriteOff || "processing") as StatusCode,
                   note
                 )
               )

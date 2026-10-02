@@ -27,7 +27,7 @@ import { supplierNotesForOrder } from "@/lib/actions/supplier";
 import { receiptsForOrder } from "@/lib/actions/payments";
 import { PaymentVerification } from "@/components/admin/PaymentVerification";
 import { fmtDate, fmtDateTime, daysSince } from "@/lib/dates";
-import { aging, attemptBadgeClasses } from "@/lib/status";
+import { aging, attemptBadgeClasses, PIPELINE } from "@/lib/status";
 import type {
   Courier,
   OrderStatus,
@@ -244,12 +244,17 @@ export default async function OrderDetailPage({
                   deliveryAttempts={o.delivery_attempts}
                   totalAmount={Number(o.total_amount)}
                   reshipRequestedAt={o.reship_requested_at ?? null}
-                  // The stage it held before the write-off, so the undo opens
-                  // on the right answer rather than a guess.
-                  stageBeforeBlocked={
+                  // The last live stage it held before the write-off, so the
+                  // undo opens on the right answer rather than a guess.
+                  //
+                  // Keeps only stages that are actually on the pipeline rather
+                  // than naming the endings to skip. Excluding just "blocked"
+                  // meant a rejected order picked its own write-off row as the
+                  // stage to go back to, and the undo then refused it.
+                  stageBeforeWriteOff={
                     ((history ?? [])
-                      .filter(
-                        (h: any) => h.status && h.status !== "blocked"
+                      .filter((h: any) =>
+                        PIPELINE.includes(h.status as StatusCode)
                       )
                       .at(-1)?.status ?? null) as StatusCode | null
                   }
