@@ -16,7 +16,7 @@ export const contentType = "image/png";
 /**
  * Fetch a subset of Noto Sans covering exactly the characters on the card.
  *
- * The renderer's default font has no ₱ (U+20B1), so "₱365" came out as a tofu
+ * The renderer's default font has no ₱ (U+20B1), so the peso price came out as a tofu
  * box — on the first thing a prospect sees in an ad, that reads as broken.
  * Subsetting by `text=` keeps the download to a few KB. Returns null rather
  * than throwing: a font that fails to load must not take the whole card with

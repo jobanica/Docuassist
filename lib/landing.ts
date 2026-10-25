@@ -27,16 +27,17 @@ export const FACEBOOK_URL = "https://www.facebook.com/docuassistphil";
    column in Settings → Services, which is what the order form actually
    charges; these constants only paint the page.
 
-   The cash-on-delivery price staff quote when they encode an order by hand is
-   a separate, higher figure (Settings → Services, "Price — cash on delivery"),
-   because a COD order carries the risk of a parcel that is never accepted.
-   Do not put the COD figure here — this page sells the prepaid one. */
-export const PRICE_STANDARD = 365;
-export const PRICE_CENOMAR = 420;
+   The online price can be set below the cash-on-delivery figure (Settings →
+   Services, "Price — cash on delivery"), because a COD order carries the risk
+   of a parcel that is never accepted. The PSA certificates currently charge
+   the same either way; the IDs are cheaper online. Whatever the two columns
+   say, this page must quote the online one — it is what the form charges. */
+export const PRICE_STANDARD = 685;
+export const PRICE_CENOMAR = 735;
 /** TIN ID and PhilHealth ID — no PSA fee behind these, so they cost less. */
 export const PRICE_ID = 275;
 
-/** "from ₱365" — used in the headline, buttons, title tag and OG card. */
+/** "from ₱685" — used in the headline, buttons, title tag and OG card. */
 export const PRICE_FROM = `₱${PRICE_STANDARD}`;
 
 /* --- Social proof ---------------------------------------------------------
