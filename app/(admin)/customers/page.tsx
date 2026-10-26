@@ -1,18 +1,26 @@
 import { createClient } from "@/lib/supabase/server";
 import { CustomersList, type CustomerRow } from "@/components/admin/CustomersList";
 import { listTags } from "@/lib/actions/tags";
+import { fetchAll } from "@/lib/supabase/fetch-all";
 
 export const dynamic = "force-dynamic";
 
 export default async function CustomersPage() {
   const supabase = createClient();
   const [{ data: customers }, tags] = await Promise.all([
-    supabase
-      .from("customers")
-      .select(
-        "id, full_name, phone, city, province, created_at, orders ( id ), customer_tags ( tag_id )"
-      )
-      .order("created_at", { ascending: false }),
+    // Paged: PostgREST hands back at most 1000 rows per response and keeps
+    // quiet about the remainder, so the list stopped at its newest thousand.
+    fetchAll<any>((from, to) =>
+      supabase
+        .from("customers")
+        .select(
+          "id, full_name, phone, city, province, created_at, orders ( id ), customer_tags ( tag_id )",
+          { count: "exact" }
+        )
+        .order("created_at", { ascending: false })
+        .order("id")
+        .range(from, to)
+    ),
     listTags(),
   ]);
 

@@ -4,6 +4,7 @@ import { getStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { buttonVariants } from "@/components/ui/button";
 import { OrdersTable, type OrderRow } from "@/components/admin/OrdersTable";
+import { fetchAll } from "@/lib/supabase/fetch-all";
 import { surnameIssues, nameCheckAccepted } from "@/lib/parse/surname";
 import {
   documentOwnerNames,
@@ -36,31 +37,50 @@ export default async function OrdersPage() {
       // staff_users twice (who encoded the order, and who verified its
       // payment), and left ambiguous PostgREST refuses the whole query —
       // which the page would quietly render as an empty board.
-      supabase
-        .from("orders")
-        .select(
-          `id, tracking_code, status, total_amount, discount_amount, created_at, status_since,
-           delayed_at, delay_reason, supplier_shipped_at, reship_count, reship_requested_at,
-           payment_status, payment_submitted_at,
-           courier_tracking_number,
-           delivery_attempts, source, created_by,
-           customers ( id, full_name, phone, customer_tags ( tag_id ) ),
-           staff_users!orders_created_by_fkey ( name ),
-           supplier_notes ( id, addressed_at ),
-           order_items ( form_details, quantity, name_check_ack_key,
-                         services ( code, name ) )`
-        )
-        // An order combined into another has no documents and no money left on
-        // it — the board would just be showing the same job twice.
-        .is("merged_into", null)
-        .order("created_at", { ascending: false }),
+      // Paged, because PostgREST caps a single response at 1000 rows and says
+      // nothing about the rest: past a thousand orders the board silently
+      // stopped at its oldest 34 and reported "1000 of 1000".
+      fetchAll<any>((from, to) =>
+        supabase
+          .from("orders")
+          .select(
+            `id, tracking_code, status, total_amount, discount_amount, created_at, status_since,
+             delayed_at, delay_reason, supplier_shipped_at, reship_count, reship_requested_at,
+             payment_status, payment_submitted_at,
+             courier_tracking_number,
+             delivery_attempts, source, created_by,
+             customers ( id, full_name, phone, customer_tags ( tag_id ) ),
+             staff_users!orders_created_by_fkey ( name ),
+             supplier_notes ( id, addressed_at ),
+             order_items ( form_details, quantity, name_check_ack_key,
+                           services ( code, name ) )`,
+            { count: "exact" }
+          )
+          // An order combined into another has no documents and no money left
+          // on it — the board would just be showing the same job twice.
+          .is("merged_into", null)
+          .order("created_at", { ascending: false })
+          // The id breaks ties. Two orders encoded in the same instant — a
+          // bulk import will do it — could otherwise land in a different
+          // arrangement per page, repeating one and losing another.
+          .order("id")
+          .range(from, to)
+      ),
       // Why each delivery failed, for the call list. Oldest first so the loop
       // below leaves the most recent attempt per order in the map.
-      supabase
-        .from("order_status_history")
-        .select("order_id, note, attempt_number, created_at")
-        .eq("event_type", "failed_attempt")
-        .order("created_at", { ascending: true }),
+      // Well under the cap today, but it grows with every failed delivery and
+      // would truncate from the far end without a word.
+      fetchAll<any>((from, to) =>
+        supabase
+          .from("order_status_history")
+          .select("order_id, note, attempt_number, created_at", {
+            count: "exact",
+          })
+          .eq("event_type", "failed_attempt")
+          .order("created_at", { ascending: true })
+          .order("id")
+          .range(from, to)
+      ),
       listTags(),
       shippingFee(),
     ]);

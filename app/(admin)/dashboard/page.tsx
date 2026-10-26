@@ -8,6 +8,7 @@ import { RangePicker } from "@/components/admin/RangePicker";
 import { MonthlyBars } from "@/components/charts/MonthlyBars";
 import { RtsDonut } from "@/components/charts/RtsDonut";
 import { loadSales, resolveRange } from "@/lib/sales";
+import { fetchAll } from "@/lib/supabase/fetch-all";
 import { peso } from "@/lib/money";
 import { fmtDate } from "@/lib/dates";
 import { aging } from "@/lib/status";
@@ -36,7 +37,16 @@ export default async function DashboardPage({
 
   const [{ data: statuses }, { data: orders }, sales] = await Promise.all([
     supabase.from("order_statuses").select("code, label, sort_order").order("sort_order"),
-    supabase.from("orders").select("id, status, status_since"),
+    // Paged. Every order counts towards the stage tallies and the "stuck too
+    // long" warning, and a capped read made both quietly understate once the
+    // table passed a thousand rows.
+    fetchAll<any>((from, to) =>
+      supabase
+        .from("orders")
+        .select("id, status, status_since", { count: "exact" })
+        .order("id")
+        .range(from, to)
+    ),
     loadSales(range.from, range.to),
   ]);
 
