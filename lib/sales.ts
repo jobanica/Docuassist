@@ -63,7 +63,14 @@ export interface BatchBreakdown {
   collected_amount: number;
   /** Documents x cost per document — spent the moment each one was filed. */
   cost_amount: number;
-  /** Cash position: collected less what the batch cost to file and ship. */
+  /** Documents on orders that came back, were blocked, or were refused. */
+  lost_docs: number;
+  /** Cost of the documents that delivered or are still on their way. */
+  doc_cost_amount: number;
+  /** Cost sunk into documents that earned nothing. Part of cost_amount, not
+   *  on top of it — the split exists so the damage is visible in the row. */
+  rts_cost_amount: number;
+  /** Cash position: collected, less doc cost, less RTS cost. */
   profit_amount: number;
   /** Sale price never collected — returned, blocked or refused. */
   lost_amount: number;

@@ -234,9 +234,10 @@ export default async function DashboardPage({
         <h2 className="mb-1 font-semibold text-slate-900">By batch</h2>
         <p className="mb-3 text-xs text-slate-500">
           Whole-batch figures, so these ignore the date filter above — a batch
-          is a unit of work, not a window of time. Profit is money collected
-          less {peso(sales.summary?.rts_cost_per_doc ?? 0)} a document, which
-          is spent the moment a document is filed: a batch still in transit
+          is a unit of work, not a window of time. Each row subtracts across:{" "}
+          <strong>collected − doc cost − RTS cost = net profit</strong>, at{" "}
+          {peso(sales.summary?.rts_cost_per_doc ?? 0)} a document. That cost is
+          spent the moment a document is filed, so a batch still in transit
           reads as a loss and climbs as the deliveries land.
         </p>
         <div className="overflow-x-auto">
@@ -246,9 +247,10 @@ export default async function DashboardPage({
                 <th className="pb-2 font-medium">Batch</th>
                 <th className="pb-2 text-right font-medium">Docs</th>
                 <th className="pb-2 text-right font-medium">Collected</th>
-                <th className="pb-2 text-right font-medium">Cost</th>
-                <th className="pb-2 text-right font-medium">Profit</th>
-                <th className="pb-2 text-right font-medium">Lost</th>
+                <th className="pb-2 text-right font-medium">Doc cost</th>
+                <th className="pb-2 text-right font-medium">RTS cost</th>
+                <th className="pb-2 text-right font-medium">Net profit</th>
+                <th className="pb-2 text-right font-medium">Unpaid</th>
                 <th className="pb-2 text-right font-medium">RTS rate</th>
               </tr>
             </thead>
@@ -266,7 +268,19 @@ export default async function DashboardPage({
                     {peso(b.collected_amount)}
                   </td>
                   <td className="py-2.5 text-right text-slate-500">
-                    − {peso(b.cost_amount)}
+                    − {peso(b.doc_cost_amount)}
+                  </td>
+                  {/* Cash burnt on parcels that earned nothing. Carved out of
+                      the cost above rather than added to it, so the row still
+                      subtracts to the same bottom line. */}
+                  <td
+                    className={`py-2.5 text-right ${
+                      b.rts_cost_amount > 0 ? "text-red-600" : "text-slate-400"
+                    }`}
+                  >
+                    {b.rts_cost_amount > 0
+                      ? `− ${peso(b.rts_cost_amount)}`
+                      : "—"}
                   </td>
                   {/* The one figure worth colouring: whether this batch is
                       ahead or still underwater. */}
@@ -284,7 +298,7 @@ export default async function DashboardPage({
                     }`}
                   >
                     {b.lost_amount > 0
-                      ? `− ${peso(b.lost_amount)} (${b.lost_count})`
+                      ? `${peso(b.lost_amount)} (${b.lost_count})`
                       : "—"}
                   </td>
                   {/* Nothing shipped yet means no rate to quote, not 0%. */}
@@ -309,7 +323,7 @@ export default async function DashboardPage({
               ))}
               {sales.byBatch.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-400">
+                  <td colSpan={8} className="py-8 text-center text-slate-400">
                     No batches tagged yet. Tag a customer on the orders board
                     and their orders land here.
                   </td>
@@ -321,6 +335,12 @@ export default async function DashboardPage({
         {/* Said once, here, rather than left for someone to discover by
             adding the columns up and finding they overshoot. */}
         <p className="mt-3 text-[11px] leading-relaxed text-slate-400">
+          <strong>Unpaid</strong> is the sale price those lost orders would
+          have fetched. It sits outside the subtraction on purpose: the money
+          never arrived, so it was never in Collected, and taking it off again
+          would charge the business twice for one return — the cash those
+          parcels actually burnt is the RTS cost column.
+          <br />
           Batches are tags on customers, so a customer in two batches has their
           order counted under both — these rows will not sum to the figures
           above. Newest 24 batches.
