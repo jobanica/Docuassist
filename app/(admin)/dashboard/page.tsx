@@ -267,8 +267,24 @@ export default async function DashboardPage({
                   <td className="py-2.5 text-right text-slate-600">
                     {peso(b.collected_amount)}
                   </td>
+                  {/* Prices the documents that are still earning or already
+                      earned — the written-off ones are the column to its
+                      right. Spelled out because "119 docs" beside a cost for
+                      103 of them is a fair thing to be puzzled by. */}
                   <td className="py-2.5 text-right text-slate-500">
                     − {peso(b.doc_cost_amount)}
+                    <span className="block text-[10px] text-slate-400">
+                      {[
+                        b.delivered_docs > 0
+                          ? `${b.delivered_docs} delivered`
+                          : null,
+                        b.inflight_docs > 0
+                          ? `${b.inflight_docs} in transit`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ") || "—"}
+                    </span>
                   </td>
                   {/* Cash burnt on documents that earned nothing, whatever
                       killed the sale. Carved out of the cost above rather
@@ -358,6 +374,12 @@ export default async function DashboardPage({
         {/* Said once, here, rather than left for someone to discover by
             adding the columns up and finding they overshoot. */}
         <p className="mt-3 text-[11px] leading-relaxed text-slate-400">
+          <strong>Docs</strong> is every document the batch is charged for, and
+          it splits across the two cost columns: Doc cost prices the delivered
+          and in-transit ones, Lost cost the written-off ones. Together they
+          are the whole batch. Cancelled orders are charged to neither, the
+          same way they are left out of revenue everywhere else.
+          <br />
           <strong>Lost cost</strong> and <strong>Unpaid</strong> count all
           three ways a sale dies — the parcel came back, the customer blocked
           us, or they refused it at the door. A document costs its{" "}

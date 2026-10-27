@@ -65,6 +65,13 @@ export interface BatchBreakdown {
   cost_amount: number;
   /** Documents on orders that came back, were blocked, or were refused. */
   lost_docs: number;
+  /** Delivered, and still on their way — what Doc cost actually prices. */
+  delivered_docs: number;
+  inflight_docs: number;
+  /** Documents on cancelled orders. Charged to nothing: the rest of the
+   *  dashboard leaves cancelled out of revenue, so it leaves it out of cost
+   *  too. Reported only so the number is not silently missing. */
+  cancelled_docs: number;
   /** Cost of the documents that delivered or are still on their way. */
   doc_cost_amount: number;
   /** Cost sunk into documents that earned nothing — returned, blocked or
