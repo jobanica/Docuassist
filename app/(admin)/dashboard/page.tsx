@@ -109,9 +109,9 @@ export default async function DashboardPage({
           value={`− ${peso(s?.rts_loss_amount ?? 0)}`}
           sub={
             (s?.rts_docs ?? 0) > 0
-              ? `${s?.rts_docs} document${s?.rts_docs === 1 ? "" : "s"} × ${peso(
-                  s?.rts_cost_per_doc ?? 0
-                )}`
+              ? `${s?.rts_docs} document${
+                  s?.rts_docs === 1 ? "" : "s"
+                } in ${s?.rts_count} parcel${s?.rts_count === 1 ? "" : "s"}`
               : "nothing lost"
           }
           tone="bad"
@@ -156,7 +156,11 @@ export default async function DashboardPage({
             returned={s?.shipped_returned_count ?? 0}
             shipped={s?.shipped_count ?? 0}
             docs={s?.rts_docs ?? 0}
-            costPerDoc={s?.rts_cost_per_doc ?? 0}
+            costPerDoc={
+              (s?.rts_docs ?? 0) > 0
+                ? (s?.rts_loss_amount ?? 0) / (s?.rts_docs ?? 1)
+                : 0
+            }
             lostAmount={s?.rts_loss_amount ?? 0}
             uncollected={s?.rts_amount ?? 0}
           />
@@ -236,9 +240,11 @@ export default async function DashboardPage({
           Whole-batch figures, so these ignore the date filter above — a batch
           is a unit of work, not a window of time. Each row subtracts across:{" "}
           <strong>collected − doc cost − lost cost = net profit</strong>, at{" "}
-          {peso(sales.summary?.rts_cost_per_doc ?? 0)} a document. That cost is
-          spent the moment a document is filed, so a batch still in transit
-          reads as a loss and climbs as the deliveries land.
+          {peso(sales.summary?.cost_per_doc ?? 0)} a document plus{" "}
+          {peso(sales.summary?.cost_per_order ?? 0)} an order — the PSA fee and
+          commission are per certificate, the postage and the ad are per
+          parcel. That cost is spent the moment a document is filed, so a batch
+          still in transit reads as a loss and climbs as the deliveries land.
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -403,8 +409,8 @@ export default async function DashboardPage({
           <br />
           <strong>Lost cost</strong> and <strong>Unpaid</strong> count all
           three ways a sale dies — the parcel came back, the customer blocked
-          us, or they refused it at the door. A document costs its{" "}
-          {peso(sales.summary?.rts_cost_per_doc ?? 0)} either way.{" "}
+          us, or they refused it at the door. A document costs the same either
+          way.{" "}
           The two rates take different denominators because they measure
           different things. <strong>RTS rate</strong> is returned over{" "}
           <em>shipped</em> — whether the courier is failing.{" "}

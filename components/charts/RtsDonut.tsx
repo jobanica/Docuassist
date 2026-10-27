@@ -20,6 +20,9 @@ export function RtsDonut({
   shipped: number;
   /** Documents inside the returned parcels — what the cost is charged per. */
   docs: number;
+  /** Average cost per document in those parcels. Not a fixed rate: the
+   *  postage and the ad are charged per parcel, so a parcel of three
+   *  certificates costs less per certificate than one holding a single. */
   costPerDoc: number;
   /** Cash already spent on those documents. */
   lostAmount: number;
@@ -78,7 +81,10 @@ export function RtsDonut({
           <dt className="text-slate-500">
             Spent on them
             {costPerDoc > 0 && (
-              <span className="text-slate-400"> · {peso(costPerDoc)} each</span>
+              <span className="text-slate-400">
+                {" "}
+                · {peso(costPerDoc)} a document on average
+              </span>
             )}
           </dt>
           <dd className="font-medium text-red-600">− {peso(lostAmount)}</dd>

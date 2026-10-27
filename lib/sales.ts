@@ -13,7 +13,11 @@ export interface SalesSummary {
   rts_count: number;
   /** Documents in those orders. A parcel of three costs three times over. */
   rts_docs: number;
-  rts_cost_per_doc: number;
+  /** The two halves of the cost. A certificate carries the PSA and encoder
+   *  fee plus commission; the parcel's postage and the ad that won the order
+   *  are charged once however many certificates are in it. */
+  cost_per_doc: number;
+  cost_per_order: number;
   /** Money already spent on parcels that came back: docs x cost per doc. */
   rts_loss_amount: number;
   cancelled_amount: number;
