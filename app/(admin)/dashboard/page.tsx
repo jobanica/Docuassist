@@ -248,7 +248,7 @@ export default async function DashboardPage({
                 <th className="pb-2 text-right font-medium">Docs</th>
                 <th className="pb-2 text-right font-medium">Collected</th>
                 <th className="pb-2 text-right font-medium">Doc cost</th>
-                <th className="pb-2 text-right font-medium">RTS cost</th>
+                <th className="pb-2 text-right font-medium">Lost cost</th>
                 <th className="pb-2 text-right font-medium">Net profit</th>
                 <th className="pb-2 text-right font-medium">Unpaid</th>
                 <th className="pb-2 text-right font-medium">RTS rate</th>
@@ -270,17 +270,40 @@ export default async function DashboardPage({
                   <td className="py-2.5 text-right text-slate-500">
                     − {peso(b.doc_cost_amount)}
                   </td>
-                  {/* Cash burnt on parcels that earned nothing. Carved out of
-                      the cost above rather than added to it, so the row still
-                      subtracts to the same bottom line. */}
+                  {/* Cash burnt on documents that earned nothing, whatever
+                      killed the sale. Carved out of the cost above rather
+                      than added to it, so the row still subtracts to the same
+                      bottom line. The kinds are spelled out underneath: a
+                      batch can carry a real loss here and still show a 0%
+                      return rate, because a customer who blocked us never
+                      gave the courier a chance to fail. */}
                   <td
                     className={`py-2.5 text-right ${
                       b.rts_cost_amount > 0 ? "text-red-600" : "text-slate-400"
                     }`}
                   >
-                    {b.rts_cost_amount > 0
-                      ? `− ${peso(b.rts_cost_amount)}`
-                      : "—"}
+                    {b.rts_cost_amount > 0 ? (
+                      <>
+                        − {peso(b.rts_cost_amount)}
+                        <span className="block text-[10px] font-normal text-slate-400">
+                          {[
+                            b.returned_count > 0
+                              ? `${b.returned_count} returned`
+                              : null,
+                            b.blocked_count > 0
+                              ? `${b.blocked_count} blocked`
+                              : null,
+                            b.rejected_count > 0
+                              ? `${b.rejected_count} refused`
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      </>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   {/* The one figure worth colouring: whether this batch is
                       ahead or still underwater. */}
@@ -335,11 +358,20 @@ export default async function DashboardPage({
         {/* Said once, here, rather than left for someone to discover by
             adding the columns up and finding they overshoot. */}
         <p className="mt-3 text-[11px] leading-relaxed text-slate-400">
+          <strong>Lost cost</strong> and <strong>Unpaid</strong> count all
+          three ways a sale dies — the parcel came back, the customer blocked
+          us, or they refused it at the door. A document costs its{" "}
+          {peso(sales.summary?.rts_cost_per_doc ?? 0)} either way.{" "}
+          <strong>RTS rate</strong> is narrower on purpose: returned over
+          shipped, which answers whether the courier is failing. A batch can
+          show a real Lost cost against a 0% rate, because a customer who
+          blocked us never gave the courier a chance to fail.
+          <br />
           <strong>Unpaid</strong> is the sale price those lost orders would
           have fetched. It sits outside the subtraction on purpose: the money
           never arrived, so it was never in Collected, and taking it off again
-          would charge the business twice for one return — the cash those
-          parcels actually burnt is the RTS cost column.
+          would charge the business twice for one loss — the cash actually
+          burnt is the Lost cost column.
           <br />
           Batches are tags on customers, so a customer in two batches has their
           order counted under both — these rows will not sum to the figures

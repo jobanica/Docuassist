@@ -67,16 +67,20 @@ export interface BatchBreakdown {
   lost_docs: number;
   /** Cost of the documents that delivered or are still on their way. */
   doc_cost_amount: number;
-  /** Cost sunk into documents that earned nothing. Part of cost_amount, not
-   *  on top of it — the split exists so the damage is visible in the row. */
+  /** Cost sunk into documents that earned nothing — returned, blocked or
+   *  refused alike. Part of cost_amount, not on top of it: the split exists
+   *  so the damage is visible in the row. */
   rts_cost_amount: number;
+  /** How the lost orders were lost, so the row can say which kind it took. */
+  returned_count: number;
+  blocked_count: number;
+  rejected_count: number;
   /** Cash position: collected, less doc cost, less RTS cost. */
   profit_amount: number;
   /** Sale price never collected — returned, blocked or refused. */
   lost_amount: number;
   lost_count: number;
   shipped_count: number;
-  returned_count: number;
   /** The courier's failure rate on this batch: returned over shipped. */
   rts_rate: number;
 }
