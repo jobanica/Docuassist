@@ -90,6 +90,11 @@ export interface BatchBreakdown {
   shipped_count: number;
   /** The courier's failure rate on this batch: returned over shipped. */
   rts_rate: number;
+  /** Customers who stopped answering, over every order in the batch. A
+   *  different denominator from rts_rate on purpose: nearly all blocking
+   *  happens while the document is still being processed, before a parcel
+   *  exists, so "over shipped" would hide most of it. */
+  blocked_rate: number;
 }
 
 export interface ReturnedOrderRow {

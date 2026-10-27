@@ -252,6 +252,7 @@ export default async function DashboardPage({
                 <th className="pb-2 text-right font-medium">Net profit</th>
                 <th className="pb-2 text-right font-medium">Unpaid</th>
                 <th className="pb-2 text-right font-medium">RTS rate</th>
+                <th className="pb-2 text-right font-medium">Blocked rate</th>
               </tr>
             </thead>
             <tbody>
@@ -358,11 +359,31 @@ export default async function DashboardPage({
                       </span>
                     )}
                   </td>
+                  {/* Over orders, not over shipped: almost every customer who
+                      blocks us does it while the document is still being
+                      processed, so there is no parcel to measure against. */}
+                  <td className="py-2.5 text-right text-slate-600">
+                    {b.blocked_count === 0 ? (
+                      <span className="text-slate-400">—</span>
+                    ) : (
+                      <span
+                        className={
+                          b.blocked_rate >= 10
+                            ? "font-medium text-red-600"
+                            : b.blocked_rate >= 5
+                              ? "font-medium text-amber-700"
+                              : ""
+                        }
+                      >
+                        {b.blocked_rate}%
+                      </span>
+                    )}
+                  </td>
                 </tr>
               ))}
               {sales.byBatch.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-400">
+                  <td colSpan={9} className="py-8 text-center text-slate-400">
                     No batches tagged yet. Tag a customer on the orders board
                     and their orders land here.
                   </td>
@@ -384,10 +405,14 @@ export default async function DashboardPage({
           three ways a sale dies — the parcel came back, the customer blocked
           us, or they refused it at the door. A document costs its{" "}
           {peso(sales.summary?.rts_cost_per_doc ?? 0)} either way.{" "}
-          <strong>RTS rate</strong> is narrower on purpose: returned over
-          shipped, which answers whether the courier is failing. A batch can
-          show a real Lost cost against a 0% rate, because a customer who
-          blocked us never gave the courier a chance to fail.
+          The two rates take different denominators because they measure
+          different things. <strong>RTS rate</strong> is returned over{" "}
+          <em>shipped</em> — whether the courier is failing.{" "}
+          <strong>Blocked rate</strong> is blocked over <em>orders</em>,
+          because nearly every customer who blocks us does it while the
+          document is still being processed, before a parcel exists; over
+          shipped it would hide almost all of them. A batch can show a real
+          Lost cost against a 0% RTS rate for exactly that reason.
           <br />
           <strong>Unpaid</strong> is the sale price those lost orders would
           have fetched. It sits outside the subtraction on purpose: the money
