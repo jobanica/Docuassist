@@ -235,7 +235,7 @@ export default async function DashboardPage({
         <p className="mb-3 text-xs text-slate-500">
           Whole-batch figures, so these ignore the date filter above — a batch
           is a unit of work, not a window of time. Each row subtracts across:{" "}
-          <strong>collected − doc cost − RTS cost = net profit</strong>, at{" "}
+          <strong>collected − doc cost − lost cost = net profit</strong>, at{" "}
           {peso(sales.summary?.rts_cost_per_doc ?? 0)} a document. That cost is
           spent the moment a document is filed, so a batch still in transit
           reads as a loss and climbs as the deliveries land.
