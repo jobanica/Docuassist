@@ -54,6 +54,26 @@ export interface CourierBreakdown {
   rts_rate: number;
 }
 
+/** One tagged batch's own P&L — the unit of work the office plans around. */
+export interface BatchBreakdown {
+  batch_name: string;
+  orders: number;
+  docs: number;
+  /** Delivered and paid: money actually in hand. */
+  collected_amount: number;
+  /** Documents x cost per document — spent the moment each one was filed. */
+  cost_amount: number;
+  /** Cash position: collected less what the batch cost to file and ship. */
+  profit_amount: number;
+  /** Sale price never collected — returned, blocked or refused. */
+  lost_amount: number;
+  lost_count: number;
+  shipped_count: number;
+  returned_count: number;
+  /** The courier's failure rate on this batch: returned over shipped. */
+  rts_rate: number;
+}
+
 export interface ReturnedOrderRow {
   order_id: string;
   tracking_code: string;
@@ -119,13 +139,17 @@ export async function loadSales(from: string, to: string) {
   const supabase = createClient();
   // All issued together — the database is in Seoul, so serialising these would
   // stack a full round trip each.
-  const [summary, trend, monthly, byService, byCourier, returned] =
+  const [summary, trend, monthly, byService, byCourier, byBatch, returned] =
     await Promise.all([
       supabase.rpc("sales_summary", { p_from: from, p_to: to }),
       supabase.rpc("sales_rts_trend", { p_months: 6 }),
       supabase.rpc("sales_monthly", { p_months: 6 }),
       supabase.rpc("sales_by_service", { p_from: from, p_to: to }),
       supabase.rpc("sales_by_courier", { p_from: from, p_to: to }),
+      // Deliberately unfiltered by date: a batch is a unit of work, not a
+      // window of time, and clipping one to "this month" would show half a
+      // batch's costs against half its takings.
+      supabase.rpc("sales_by_batch"),
       supabase.rpc("returned_orders", { p_from: from, p_to: to }),
     ]);
 
@@ -135,6 +159,7 @@ export async function loadSales(from: string, to: string) {
     monthly: (monthly.data ?? []) as MonthPoint[],
     byService: (byService.data ?? []) as ServiceBreakdown[],
     byCourier: (byCourier.data ?? []) as CourierBreakdown[],
+    byBatch: (byBatch.data ?? []) as BatchBreakdown[],
     returned: (returned.data ?? []) as ReturnedOrderRow[],
   };
 }

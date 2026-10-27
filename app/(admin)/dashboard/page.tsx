@@ -229,6 +229,104 @@ export default async function DashboardPage({
         </Card>
       </div>
 
+      {/* Per batch — the unit of work the office actually plans around */}
+      <Card>
+        <h2 className="mb-1 font-semibold text-slate-900">By batch</h2>
+        <p className="mb-3 text-xs text-slate-500">
+          Whole-batch figures, so these ignore the date filter above — a batch
+          is a unit of work, not a window of time. Profit is money collected
+          less {peso(sales.summary?.rts_cost_per_doc ?? 0)} a document, which
+          is spent the moment a document is filed: a batch still in transit
+          reads as a loss and climbs as the deliveries land.
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400">
+                <th className="pb-2 font-medium">Batch</th>
+                <th className="pb-2 text-right font-medium">Docs</th>
+                <th className="pb-2 text-right font-medium">Collected</th>
+                <th className="pb-2 text-right font-medium">Cost</th>
+                <th className="pb-2 text-right font-medium">Profit</th>
+                <th className="pb-2 text-right font-medium">Lost</th>
+                <th className="pb-2 text-right font-medium">RTS rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sales.byBatch.map((b) => (
+                <tr key={b.batch_name} className="border-t border-slate-100">
+                  <td className="py-2.5 font-medium text-slate-800">
+                    {b.batch_name}
+                    <span className="ml-1.5 text-xs font-normal text-slate-400">
+                      {b.orders} order{b.orders === 1 ? "" : "s"}
+                    </span>
+                  </td>
+                  <td className="py-2.5 text-right text-slate-600">{b.docs}</td>
+                  <td className="py-2.5 text-right text-slate-600">
+                    {peso(b.collected_amount)}
+                  </td>
+                  <td className="py-2.5 text-right text-slate-500">
+                    − {peso(b.cost_amount)}
+                  </td>
+                  {/* The one figure worth colouring: whether this batch is
+                      ahead or still underwater. */}
+                  <td
+                    className={`py-2.5 text-right font-semibold ${
+                      b.profit_amount < 0 ? "text-red-600" : "text-emerald-700"
+                    }`}
+                  >
+                    {b.profit_amount < 0 ? "− " : "+ "}
+                    {peso(Math.abs(b.profit_amount))}
+                  </td>
+                  <td
+                    className={`py-2.5 text-right ${
+                      b.lost_amount > 0 ? "text-red-600" : "text-slate-400"
+                    }`}
+                  >
+                    {b.lost_amount > 0
+                      ? `− ${peso(b.lost_amount)} (${b.lost_count})`
+                      : "—"}
+                  </td>
+                  {/* Nothing shipped yet means no rate to quote, not 0%. */}
+                  <td className="py-2.5 text-right text-slate-600">
+                    {b.shipped_count === 0 ? (
+                      <span className="text-slate-400">—</span>
+                    ) : (
+                      <span
+                        className={
+                          b.rts_rate >= 10
+                            ? "font-medium text-red-600"
+                            : b.rts_rate >= 5
+                              ? "font-medium text-amber-700"
+                              : ""
+                        }
+                      >
+                        {b.rts_rate}%
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {sales.byBatch.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-slate-400">
+                    No batches tagged yet. Tag a customer on the orders board
+                    and their orders land here.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        {/* Said once, here, rather than left for someone to discover by
+            adding the columns up and finding they overshoot. */}
+        <p className="mt-3 text-[11px] leading-relaxed text-slate-400">
+          Batches are tags on customers, so a customer in two batches has their
+          order counted under both — these rows will not sum to the figures
+          above. Newest 24 batches.
+        </p>
+      </Card>
+
       {/* Returned orders */}
       <Card>
         <h2 className="mb-1 font-semibold text-slate-900">
