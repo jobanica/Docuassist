@@ -686,6 +686,113 @@ export async function markBlocked(
 }
 
 /**
+ * Remove an order encoded by mistake.
+ *
+ * Distinct from cancelling, which says a real order did not proceed and
+ * leaves it in the counts as one. This says the order should never have
+ * existed: the wrong customer, a duplicate, a test row. It leaves the board
+ * and every figure entirely.
+ *
+ * The whole order is copied into deleted_orders first — the row, its items,
+ * its history — because the foreign keys cascade and a wrong press would
+ * otherwise take the items, the receipts, the supplier notes and the audit
+ * trail with it, past recovering. The delete is real; the record of it is
+ * what makes pressing it survivable.
+ *
+ * Only before anything has shipped and before any money has arrived. Past
+ * that point there is a parcel on a van or a payment in the account, and the
+ * honest answer is a cancellation or a return, not an erasure. Admin only:
+ * staff who mis-encode can still cancel, and this is the one action in the
+ * system with nothing on the other side of it.
+ */
+export async function deleteOrder(
+  orderId: string,
+  reason: string
+): Promise<ActionResult<void>> {
+  return run(async () => {
+    const staff = await requireStaff();
+    if (staff.role !== "admin") {
+      throw new Error("Only an admin can delete an order.");
+    }
+    if (!reason.trim()) {
+      throw new Error("Say why — it is the only record of what was removed.");
+    }
+
+    const supabase = createClient();
+    const { data: order, error } = await supabase
+      .from("orders")
+      .select(
+        `*, customers ( full_name, phone ),
+         order_items ( * ),
+         payment_receipts ( id )`
+      )
+      .eq("id", orderId)
+      .single();
+    if (error) throw new Error(error.message);
+
+    // A parcel has left the office; there is a real thing in the world now.
+    if (order.shipped_at) {
+      throw new Error(
+        "This order has already shipped. Mark it returned or cancelled instead of deleting it."
+      );
+    }
+    // Money has arrived, or a customer has sent proof that it has. Erasing
+    // the order would erase the only record of a payment we are holding.
+    if (order.payment_status === "paid") {
+      throw new Error(
+        "This order is marked paid. Deleting it would erase the payment record — refund and cancel it instead."
+      );
+    }
+    if ((order.payment_receipts ?? []).length > 0) {
+      throw new Error(
+        "A customer has uploaded a receipt against this order. Reject the payment first, or cancel the order instead."
+      );
+    }
+    // Another order was merged into this one and points at it. Deleting the
+    // keeper would null that link and strand the merged order with no home.
+    const { count: mergedIn } = await supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("merged_into", orderId);
+    if ((mergedIn ?? 0) > 0) {
+      throw new Error(
+        "Other orders were merged into this one. Deleting it would strand them."
+      );
+    }
+
+    const { data: history } = await supabase
+      .from("order_status_history")
+      .select("*")
+      .eq("order_id", orderId)
+      .order("created_at", { ascending: true });
+
+    // Written before the delete, not after: if this insert fails the order is
+    // still there, which is the safe way round to lose the race.
+    const { error: snapErr } = await supabase.from("deleted_orders").insert({
+      order_id: order.id,
+      tracking_code: order.tracking_code,
+      customer_name: order.customers?.full_name ?? null,
+      status: order.status,
+      total_amount: order.total_amount,
+      snapshot: { order, history: history ?? [] },
+      reason: reason.trim(),
+      deleted_by: staff.id,
+    });
+    if (snapErr) throw new Error(snapErr.message);
+
+    const { error: delErr } = await supabase
+      .from("orders")
+      .delete()
+      .eq("id", orderId);
+    if (delErr) throw new Error(delErr.message);
+
+    revalidatePath("/orders");
+    revalidatePath("/dashboard");
+    revalidatePath("/customers");
+  });
+}
+
+/**
  * The customer refused the parcel at the door.
  *
  * Different from a failed attempt, which expects the courier to try again,

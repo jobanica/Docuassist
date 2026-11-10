@@ -18,6 +18,8 @@ import { DiscountPanel } from "@/components/admin/DiscountPanel";
 import { DelayNotice } from "@/components/admin/DelayNotice";
 import { SupplierNoteNotice } from "@/components/admin/SupplierNoteNotice";
 import { CustomerCard } from "@/components/admin/CustomerCard";
+import { DeleteOrder } from "@/components/admin/DeleteOrder";
+import { getStaff } from "@/lib/auth";
 import { listMessengerPages } from "@/lib/actions/messenger-pages";
 import { qrDataUrl, trackingUrl } from "@/lib/qr";
 import { peso } from "@/lib/money";
@@ -51,6 +53,9 @@ export default async function OrderDetailPage({
   params: { id: string };
 }) {
   const supabase = createClient();
+  // Deleting is admin-only, so the page has to know who is looking before it
+  // can decide whether to offer it.
+  const viewer = await getStaff();
 
   // The staff_users embed names its foreign key: orders points at staff_users
   // twice (who encoded it, who verified its payment), and left ambiguous
@@ -520,6 +525,21 @@ export default async function OrderDetailPage({
           </Card>
         </div>
       </div>
+
+      {/* Last on the page and apart from everything else: this is not another
+          status button, and it should take a deliberate scroll to reach.
+          Hidden once an order has shipped or been paid — the action refuses
+          those anyway, and offering a button that cannot work is worse than
+          not offering it. */}
+      {viewer?.role === "admin" &&
+        !order.shipped_at &&
+        order.payment_status !== "paid" && (
+          <DeleteOrder
+            orderId={order.id}
+            trackingCode={order.tracking_code}
+            customerName={order.customers?.full_name ?? "this customer"}
+          />
+        )}
     </div>
   );
 }
