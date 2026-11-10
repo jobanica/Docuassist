@@ -47,9 +47,12 @@ export function DeleteOrder({
         setError(toMessage(res));
         return;
       }
-      // The order is gone, so there is no page left to refresh back onto.
-      router.push("/orders");
-      router.refresh();
+      // replace, not push: this page is about to 404, and leaving it in the
+      // history means the back button lands on a dead order. There is no
+      // refresh afterwards either — refreshing the route we are leaving
+      // re-renders a page whose order no longer exists, which raced the
+      // navigation and left the browser sitting on it.
+      router.replace("/orders");
     });
   }
 
