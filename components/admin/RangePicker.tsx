@@ -42,10 +42,10 @@ export function RangePicker({
       >
         This month
       </Button>
-      <div className="flex items-center gap-1.5">
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:flex-none">
         <Input
           type="date"
-          className="h-9 w-[150px]"
+          className="h-9 w-full min-w-0 sm:w-[150px]"
           value={customFrom}
           onChange={(e) => setCustomFrom(e.target.value)}
           aria-label="From date"
@@ -53,7 +53,7 @@ export function RangePicker({
         <span className="text-muted-foreground">–</span>
         <Input
           type="date"
-          className="h-9 w-[150px]"
+          className="h-9 w-full min-w-0 sm:w-[150px]"
           value={customTo}
           onChange={(e) => setCustomTo(e.target.value)}
           aria-label="To date"

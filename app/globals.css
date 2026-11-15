@@ -35,6 +35,104 @@
   }
 }
 
+/* --- Wide tables on a phone ------------------------------------------------
+   The office screens are tables of eight or nine columns, which is right at a
+   desk and unreadable on a phone: the sideways scroll hides the column you
+   are comparing against the one you are reading, and the heading row scrolls
+   away from the value underneath it.
+
+   Below md these tables become a list of cards, one per row, each value
+   carrying its own column heading. Done here rather than by writing a second
+   set of card markup next to the table, because two copies of the same row
+   drift apart the first time a column is added to one of them.
+
+   To use: put `stack-table` on the <table>, `data-label="Status"` on each
+   <td> that should show its heading, and `stack-title` on the cell that is
+   the card's heading (plus `stack-check` on a leading checkbox cell, which
+   then sits beside the title instead of above it).
+--------------------------------------------------------------------------- */
+@media (max-width: 767px) {
+  .stack-table,
+  .stack-table tbody,
+  .stack-table tr,
+  .stack-table td {
+    display: block;
+    width: 100%;
+  }
+  /* The headings move onto the cells themselves. */
+  .stack-table thead {
+    display: none;
+  }
+  .stack-table tr {
+    position: relative;
+    margin-bottom: 0.625rem;
+    border: 1px solid hsl(var(--border));
+    border-radius: 0.75rem;
+    padding: 0.75rem;
+    background: hsl(var(--card));
+  }
+  .stack-table tr:last-child {
+    margin-bottom: 0;
+  }
+  /* The heading sits in a gutter down the left, positioned out of flow, so
+     whatever the cell holds — a figure with a note under it, a row of
+     badges, two stacked codes — keeps its own layout untouched. Laying the
+     cell out as a flex or grid container instead would make every child its
+     own item and scatter them. */
+  .stack-table td {
+    position: relative;
+    min-height: 1.5rem;
+    border: 0;
+    padding: 0.25rem 0 0.25rem 6.25rem !important;
+    text-align: left !important;
+  }
+  .stack-table td[data-label]::before {
+    content: attr(data-label);
+    position: absolute;
+    left: 0;
+    top: 0.4rem;
+    width: 5.75rem;
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 1.2;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: hsl(var(--muted-foreground));
+  }
+  /* Cells with no heading of their own keep the full width. */
+  .stack-table td:not([data-label]) {
+    padding-left: 0 !important;
+  }
+  /* The card's heading: full width, no label, a little air beneath it. */
+  .stack-table td.stack-title {
+    display: block;
+    padding-bottom: 0.5rem !important;
+  }
+  /* A leading checkbox sits beside the heading rather than costing a line of
+     its own. Taken out of flow and placed against the card's own corner:
+     inline-block leaves the newline between the two tags as a space wide
+     enough to wrap the heading, and a float did not shrink the heading
+     beside it once the table parts were all re-displayed as blocks. */
+  .stack-table td.stack-check {
+    position: absolute;
+    top: 0.75rem;
+    left: 0.75rem;
+    width: auto;
+    padding: 0 !important;
+  }
+  .stack-table td.stack-check + td.stack-title {
+    padding-left: 1.75rem !important;
+  }
+  /* An empty-state or footer row is a message, not a card. */
+  .stack-table td[colspan] {
+    display: block;
+    text-align: center !important;
+  }
+  .stack-table td[colspan]::before {
+    content: none;
+  }
+}
+
 /* --- Printing the PSA application forms -----------------------------------
    Only the .psa-pair blocks reach the paper: the admin chrome (sidebar, nav,
    buttons, notes) is hidden, each sheet carries two forms, and colours

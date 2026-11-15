@@ -175,8 +175,8 @@ export function CustomersList({
 
       {note && <p className="text-xs text-emerald-700">{note}</p>}
 
-      <div className="overflow-x-auto rounded-lg border bg-card">
-        <table className="w-full text-sm">
+      <div className="rounded-lg md:overflow-x-auto md:border md:bg-card">
+        <table className="stack-table w-full text-sm">
           <thead className="border-b bg-muted/50 text-left text-xs uppercase text-muted-foreground">
             <tr>
               <th className="w-10 px-3 py-3">
@@ -206,7 +206,7 @@ export function CustomersList({
           <tbody>
             {filtered.map((c) => (
               <tr key={c.id} className="border-b last:border-0 hover:bg-accent/40">
-                <td className="px-3 py-3">
+                <td className="stack-check px-3 py-3">
                   <input
                     type="checkbox"
                     aria-label={`Select ${c.full_name}`}
@@ -215,12 +215,12 @@ export function CustomersList({
                     onChange={() => toggle(c.id)}
                   />
                 </td>
-                <td className="px-4 py-3">
+                <td className="stack-title px-4 py-3">
                   <Link href={`/customers/${c.id}`} className="font-medium hover:underline">
                     {c.full_name}
                   </Link>
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3" data-label="Tags">
                   <span className="flex flex-wrap gap-1">
                     {c.tag_ids.map((id) => {
                       const t = byId.get(id);
@@ -233,12 +233,16 @@ export function CustomersList({
                     )}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-muted-foreground">{c.phone ?? "—"}</td>
-                <td className="px-4 py-3 text-muted-foreground">
+                <td className="px-4 py-3 text-muted-foreground" data-label="Phone">
+                  {c.phone ?? "—"}
+                </td>
+                <td className="px-4 py-3 text-muted-foreground" data-label="Location">
                   {[c.city, c.province].filter(Boolean).join(", ") || "—"}
                 </td>
-                <td className="px-4 py-3">{c.order_count}</td>
-                <td className="px-4 py-3 text-muted-foreground">
+                <td className="px-4 py-3" data-label="Orders">
+                  {c.order_count}
+                </td>
+                <td className="px-4 py-3 text-muted-foreground" data-label="Since">
                   {fmtDate(c.created_at)}
                 </td>
               </tr>

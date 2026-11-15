@@ -206,8 +206,8 @@ export function StaffSettings({
       {/* overflow-x-auto, not overflow-hidden: this table is wider than the
           card on a laptop, and hidden meant the Actions column was simply
           unreachable — no scrollbar, no way to drag to it. */}
-      <div className="overflow-x-auto rounded-2xl bg-white shadow-[0_1px_3px_rgba(16,24,40,0.06)]">
-        <table className="w-full text-sm">
+      <div className="rounded-2xl md:overflow-x-auto md:bg-white md:shadow-[0_1px_3px_rgba(16,24,40,0.06)]">
+        <table className="stack-table w-full text-sm">
           <thead className="border-b bg-slate-50 text-left text-xs uppercase text-slate-500">
             <tr>
               <th className="px-3 py-3 font-medium">Name</th>
@@ -225,7 +225,7 @@ export function StaffSettings({
               const isMe = s.id === meId;
               return (
                 <tr key={s.id} className="border-b last:border-0">
-                  <td className="px-3 py-3">
+                  <td className="stack-title px-3 py-3">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-slate-900">
                         {s.name}
@@ -243,7 +243,7 @@ export function StaffSettings({
                     </div>
                     <div className="text-xs text-slate-500">{s.email ?? "—"}</div>
                   </td>
-                  <td className="px-3 py-3">
+                  <td className="px-3 py-3" data-label="Role">
                     <select
                       className="h-9 rounded-md border border-input bg-background px-2 text-sm disabled:opacity-60"
                       value={s.role}
@@ -265,7 +265,7 @@ export function StaffSettings({
                       <option value="supplier">Supplier</option>
                     </select>
                   </td>
-                  <td className="px-3 py-3">
+                  <td className="px-3 py-3" data-label="Documents">
                     <ScopeCell
                       staff={s}
                       services={services}
@@ -275,7 +275,7 @@ export function StaffSettings({
                     />
                   </td>
                   {messengerPages.length > 1 && (
-                    <td className="px-3 py-3">
+                    <td className="px-3 py-3" data-label="Facebook page">
                       <select
                         className="h-9 max-w-[190px] rounded-md border border-input bg-background px-2 text-sm disabled:opacity-60"
                         value={s.default_messenger_page_id ?? ""}
@@ -295,10 +295,10 @@ export function StaffSettings({
                       </select>
                     </td>
                   )}
-                  <td className="px-3 py-3 text-slate-500">
+                  <td className="px-3 py-3 text-slate-500" data-label="Added">
                     {fmtDate(s.created_at)}
                   </td>
-                  <td className="px-3 py-3">
+                  <td className="px-3 py-3" data-label="Actions">
                     <div className="flex flex-wrap justify-end gap-2">
                       <Button
                         size="sm"

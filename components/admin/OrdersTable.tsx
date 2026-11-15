@@ -641,10 +641,10 @@ export function OrdersTable({
             </option>
           ))}
         </select>
-        <div className="flex items-center gap-2 text-sm">
+        <div className="flex min-w-0 flex-1 items-center gap-2 text-sm sm:flex-none">
           <Input
             type="date"
-            className="w-[150px]"
+            className="w-full min-w-0 sm:w-[150px]"
             value={from}
             onChange={(e) => setFrom(e.target.value)}
             aria-label="From date"
@@ -652,7 +652,7 @@ export function OrdersTable({
           <span className="text-muted-foreground">–</span>
           <Input
             type="date"
-            className="w-[150px]"
+            className="w-full min-w-0 sm:w-[150px]"
             value={to}
             onChange={(e) => setTo(e.target.value)}
             aria-label="To date"
@@ -989,8 +989,10 @@ export function OrdersTable({
           : `${filtered.length} of ${orders.length} orders`}
       </p>
 
-      <div className="overflow-x-auto rounded-lg border bg-card">
-        <table className="w-full text-sm">
+      {/* The border and background belong to the cards below md, so the
+          wrapper drops both and stops scrolling sideways. */}
+      <div className="rounded-lg md:overflow-x-auto md:border md:bg-card">
+        <table className="stack-table w-full text-sm">
           <thead className="border-b bg-muted/50 text-left text-xs uppercase text-muted-foreground">
             <tr>
               <th className="w-10 px-3 py-3">
@@ -1033,7 +1035,7 @@ export function OrdersTable({
                   key={o.id}
                   className={cn("border-b last:border-0 hover:bg-accent/40", tone)}
                 >
-                  <td className="px-3 py-3">
+                  <td className="stack-check px-3 py-3">
                     <input
                       type="checkbox"
                       className="h-4 w-4 cursor-pointer align-middle"
@@ -1042,7 +1044,7 @@ export function OrdersTable({
                       onChange={() => toggle(o.id)}
                     />
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="stack-title px-4 py-3">
                     <Link href={`/orders/${o.id}`} className="font-medium hover:underline">
                       {o.customer_name}
                     </Link>
@@ -1077,13 +1079,16 @@ export function OrdersTable({
                       </div>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">
+                  <td
+                    className="px-4 py-3 text-muted-foreground"
+                    data-label={onCallList ? "Why" : "Services"}
+                  >
                     {onCallList
                       ? o.last_attempt_note || "no reason logged"
                       : o.service_names.join(", ")}
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
+                  <td className="px-4 py-3" data-label="Status">
+                    <div className="flex flex-wrap items-center gap-2">
                       <StatusBadge code={o.status} label={o.status_label} />
                       {o.source === "public" && (
                         <Badge
@@ -1162,7 +1167,7 @@ export function OrdersTable({
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" data-label="Total">
                     {peso(o.total_amount)}
                     {o.discount_amount > 0 && (
                       <span className="block text-[11px] text-emerald-700">
@@ -1170,7 +1175,10 @@ export function OrdersTable({
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">
+                  <td
+                    className="px-4 py-3 text-muted-foreground"
+                    data-label={onCallList ? "Last attempt" : "Created"}
+                  >
                     {onCallList
                       ? fmtDateTime(o.last_attempt_at ?? o.status_since)
                       : fmtDate(o.created_at)}
@@ -1192,7 +1200,7 @@ export function OrdersTable({
                       and "3 weeks" says that at a glance where a date makes
                       you do the arithmetic. It carries the same amber/red the
                       row already uses, so the two never disagree. */}
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" data-label="Updated">
                     <span
                       className={
                         age === "alert"
@@ -1213,7 +1221,7 @@ export function OrdersTable({
                       people: the customer quotes ours, the courier quotes
                       theirs. Nothing shows until a parcel is booked, which is
                       the honest answer for an order still being processed. */}
-                  <td className="px-4 py-3 font-mono text-xs">
+                  <td className="px-4 py-3 font-mono text-xs" data-label="Code">
                     {o.tracking_code}
                     {o.courier_tracking_number && (
                       <div className="text-[11px] text-muted-foreground">

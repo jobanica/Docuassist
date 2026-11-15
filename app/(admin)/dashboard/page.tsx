@@ -246,8 +246,8 @@ export default async function DashboardPage({
           parcel. That cost is spent the moment a document is filed, so a batch
           still in transit reads as a loss and climbs as the deliveries land.
         </p>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="md:overflow-x-auto">
+          <table className="stack-table w-full text-sm">
             <thead>
               <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400">
                 <th className="pb-2 font-medium">Batch</th>
@@ -264,21 +264,23 @@ export default async function DashboardPage({
             <tbody>
               {sales.byBatch.map((b) => (
                 <tr key={b.batch_name} className="border-t border-slate-100">
-                  <td className="py-2.5 font-medium text-slate-800">
+                  <td className="stack-title py-2.5 font-medium text-slate-800">
                     {b.batch_name}
                     <span className="ml-1.5 text-xs font-normal text-slate-400">
                       {b.orders} order{b.orders === 1 ? "" : "s"}
                     </span>
                   </td>
-                  <td className="py-2.5 text-right text-slate-600">{b.docs}</td>
-                  <td className="py-2.5 text-right text-slate-600">
+                  <td className="py-2.5 text-right text-slate-600" data-label="Docs">
+                    {b.docs}
+                  </td>
+                  <td className="py-2.5 text-right text-slate-600" data-label="Collected">
                     {peso(b.collected_amount)}
                   </td>
                   {/* Prices the documents that are still earning or already
                       earned — the written-off ones are the column to its
                       right. Spelled out because "119 docs" beside a cost for
                       103 of them is a fair thing to be puzzled by. */}
-                  <td className="py-2.5 text-right text-slate-500">
+                  <td className="py-2.5 text-right text-slate-500" data-label="Doc cost">
                     − {peso(b.doc_cost_amount)}
                     <span className="block text-[10px] text-slate-400">
                       {[
@@ -304,6 +306,7 @@ export default async function DashboardPage({
                     className={`py-2.5 text-right ${
                       b.rts_cost_amount > 0 ? "text-red-600" : "text-slate-400"
                     }`}
+                    data-label="Lost cost"
                   >
                     {b.rts_cost_amount > 0 ? (
                       <>
@@ -334,6 +337,7 @@ export default async function DashboardPage({
                     className={`py-2.5 text-right font-semibold ${
                       b.profit_amount < 0 ? "text-red-600" : "text-emerald-700"
                     }`}
+                    data-label="Net profit"
                   >
                     {b.profit_amount < 0 ? "− " : "+ "}
                     {peso(Math.abs(b.profit_amount))}
@@ -342,13 +346,14 @@ export default async function DashboardPage({
                     className={`py-2.5 text-right ${
                       b.lost_amount > 0 ? "text-red-600" : "text-slate-400"
                     }`}
+                    data-label="Unpaid"
                   >
                     {b.lost_amount > 0
                       ? `${peso(b.lost_amount)} (${b.lost_count})`
                       : "—"}
                   </td>
                   {/* Nothing shipped yet means no rate to quote, not 0%. */}
-                  <td className="py-2.5 text-right text-slate-600">
+                  <td className="py-2.5 text-right text-slate-600" data-label="RTS rate">
                     {b.shipped_count === 0 ? (
                       <span className="text-slate-400">—</span>
                     ) : (
@@ -368,7 +373,7 @@ export default async function DashboardPage({
                   {/* Over orders, not over shipped: almost every customer who
                       blocks us does it while the document is still being
                       processed, so there is no parcel to measure against. */}
-                  <td className="py-2.5 text-right text-slate-600">
+                  <td className="py-2.5 text-right text-slate-600" data-label="Blocked rate">
                     {b.blocked_count === 0 ? (
                       <span className="text-slate-400">—</span>
                     ) : (
@@ -550,8 +555,8 @@ function Table({
 }) {
   const redCol = redIndex ?? (redLast ? head.length - 1 : -1);
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+    <div className="md:overflow-x-auto">
+      <table className="stack-table w-full text-sm">
         <thead>
           <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400">
             {head.map((h, i) => (
@@ -567,9 +572,12 @@ function Table({
               {r.map((c, ci) => (
                 <td
                   key={ci}
-                  className={`py-2.5 ${ci > 0 ? "text-right" : "font-medium text-slate-800"} ${
+                  // The first column is the row's name, so it becomes the
+                  // card's heading; the rest carry their own column heading.
+                  className={`py-2.5 ${ci === 0 ? "stack-title font-medium text-slate-800" : "text-right"} ${
                     ci === redCol && c !== "—" ? "text-red-600" : "text-slate-600"
                   }`}
+                  data-label={ci === 0 ? undefined : head[ci]}
                 >
                   {c}
                 </td>
